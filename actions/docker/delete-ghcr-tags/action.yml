@@ -1,0 +1,71 @@
+name: "Delete GitHub registry image tags"
+description: "Action to delete docker image tags from GitHub OCI registry"
+branding:
+  icon: delete
+  color: gray-dark
+
+inputs:
+  image:
+    description: "Image name"
+    required: false
+  tag-prefix:
+    description: "Tag prefix to delete"
+    required: false
+  github-token:
+    description: 'Github token to authenticate against Github API. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/actions/github-script'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
+
+    - id: image-name
+      uses: ./self-actions/docker/get-image-name
+      with:
+        image: ${{ inputs.image }}
+
+    - id: delete-images
+      uses: actions/github-script@v6.4.0
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const packageName = `${{ steps.image-name.outputs.image-name }}`.replace(`${context.repo.owner}/`, '');
+          const packagePayload = {
+            package_type: 'container',
+            package_name: packageName,
+            org: context.repo.owner,
+          };
+          core.debug('Package payload: ' + JSON.stringify(packagePayload));
+
+          const packageVersions = await github.paginate(
+            github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
+          );
+          core.debug('Package versions: ' + JSON.stringify(packageVersions));
+
+          // FIXME: as we cannot delete tags, we can check that a version is stricly related to matching prefix tags (https://github.com/orgs/community/discussions/26267)
+
+          const tagPrefix = `${{ inputs.tag-prefix }}`;
+          const tagPrefixMatcher = tagPrefix ? new RegExp(`^${tagPrefix}(-|$)`) : null;
+
+          const packageVersionsToDelete = packageVersions.filter(
+            ({ metadata }) => metadata.container.tags.length && metadata.container.tags.every(
+              tag => !tagPrefixMatcher || tag.match(tagPrefixMatcher)
+            )
+          );
+
+          core.debug('Package versions to delete: ' + JSON.stringify(packageVersionsToDelete));
+
+          await Promise.all(
+            packageVersionsToDelete.map(
+              ({ id }) => github.rest.packages.deletePackageVersionForOrg({
+                ...packagePayload,
+                package_version_id: id,
+              })
+            )
+          );
+
+          const deletedTags = packageVersionsToDelete.map(({name}) => name);
+          core.setOutput('deleted-tags',JSON.stringify(deletedTags));

@@ -1,0 +1,125 @@
+name: "Release Helm Chart"
+description: "Action to release a Helm chart to OCI registry"
+branding:
+  icon: upload-cloud
+  color: gray-dark
+
+inputs:
+  github-token:
+    description: "Github token to log-in to registry"
+    required: true
+  tag:
+    description: "The release tag to set to chart"
+    required: true
+  oci-registry:
+    description: "OCI registry where to push chart. See https://github.com/appany/helm-oci-chart-releaser#usage"
+    required: true
+  username:
+    required: true
+    description: "OCI registry username. See https://github.com/appany/helm-oci-chart-releaser#usage"
+    default: ${{ github.repository_owner }}
+  password:
+    required: true
+    description: "OCI registry password. See https://github.com/appany/helm-oci-chart-releaser#usage"
+  chart:
+    description: "Chart name to release"
+    required: true
+  path:
+    description: "Path to the chart to release"
+    required: true
+  values:
+    description: 'Define charts values to be filled. [{ path, value }]. Example: [{ "path": ".image.registry", "value": "ghcr.io" }]. See https://mikefarah.gitbook.io/yq/'
+    required: false
+  helm-repositories:
+    description: "List of Helm repositories to add before release charts. See https://helm.sh/docs/helm/helm_repo_add/"
+    required: false
+
+outputs:
+  image:
+    value: ${{ steps.chart-releaser.outputs.image }}
+    description: Chart image (Default '{registry}/{repository}/{image}:{tag}'). See https://github.com/appany/helm-oci-chart-releaser
+
+runs:
+  using: "composite"
+  steps:
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@v0.3.0
+
+    - id: chart-values-updates
+      uses: actions/github-script@v6.4.0
+      with:
+        script: |
+          const chartValuesInput = `${{ inputs.values }}`;
+          if(!chartValuesInput) {
+            return;
+          }
+
+          // Check if is valid Json
+          let chartValues = null;
+          try {
+            chartValues = JSON.parse(chartValuesInput);
+          } catch (error) {
+            throw new Error(`"values" input is not a valid JSON: ${error}`);
+          }
+
+          // Check if is an array
+          if (!Array.isArray(chartValues)) {
+            throw new Error(`"values" input is not an array`);
+          }
+
+          if (!chartValues.length) {
+            return;
+          }
+
+          // Check each item
+          const yqUpdates = [];
+          for (const key in chartValues) {
+            const chartValue = chartValues[key];
+            if (typeof chartValue !== 'object') {
+              throw new Error(`"values[${key}]" input is not an object`);
+            }
+
+            // Check mandatory properties
+            for (const property of ['path', 'value']) {
+              if (!chartValue.hasOwnProperty(property)) {
+                throw new Error(`"values[${key}].${property}" input is missing`);
+              }
+            }
+            yqUpdates.push(`${chartValue.path} = "${chartValue.value}"`);
+          }
+
+          const yqCommand = `yq -i '${yqUpdates.join(' | ')}' ${{ inputs.path }}/values.yaml`;
+
+          core.setOutput('yq-command', yqCommand);
+
+    - uses: mikefarah/yq@v4.31.2
+      with:
+        cmd: |
+          yq -i '.name = "${{ github.event.repository.name }}" | .version = "${{ inputs.tag }}" | .appVersion = "${{ inputs.tag }}"' ${{ inputs.path }}/Chart.yaml
+          ${{ steps.chart-values-updates.outputs.yq-command }}
+
+    - uses: azure/setup-helm@v3.5
+      with:
+        token: ${{ inputs.github-token }}
+
+    - shell: bash
+      run: |
+        # For each line in the input, add the Helm repository
+        echo "${{ inputs.helm-repositories }}" | while read -r line; do
+          if [ -z "$line" ]; then
+            continue
+          fi
+
+          # shellcheck disable=SC2086
+          helm repo add $line
+        done
+
+    - id: chart-releaser
+      uses: appany/helm-oci-chart-releaser@v0.4.0
+      with:
+        name: ${{ github.event.repository.name }}
+        repository: ${{ github.repository }}/charts/${{ inputs.chart }}
+        tag: ${{ inputs.tag }}
+        path: ${{ inputs.path }}
+        registry: ${{ inputs.oci-registry }}
+        registry_username: ${{ inputs.username }}
+        registry_password: ${{ inputs.password }}
