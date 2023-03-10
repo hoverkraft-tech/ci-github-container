@@ -1,0 +1,38 @@
+name: "Get image name"
+description: "Action to forge the name of a given image including registry, repository and given input image name"
+author: Hoverkraft
+branding:
+  icon: tag
+  color: gray-dark
+
+outputs:
+  image-name:
+    description: 'Forged image name. Example: "my-org/my-repo/application"'
+    value: ${{ steps.image-name-generator.outputs.image-name }}
+  image-name-with-registry:
+    description: 'Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application"'
+    value: ${{ steps.image-name-generator.outputs.image-name-with-registry }}
+
+inputs:
+  oci-registry:
+    description: "OCI registry to prefix the image full name"
+  image:
+    description: "Additional Image name"
+
+runs:
+  using: "composite"
+  steps:
+    - id: image-name-generator
+      shell: bash
+      run: |
+        IMAGE_BASE_NAME="$(echo "${{ github.repository }}" | awk '{print tolower($0)}')"
+
+        IMAGE="${{ inputs.image }}"
+        if [ -n "$IMAGE" ]; then IMAGE_BASE_NAME="$IMAGE_BASE_NAME/$IMAGE"; fi
+
+        echo "image-name=$IMAGE_BASE_NAME" >> $GITHUB_OUTPUT
+
+        OCI_REGISTRY="${{ inputs.oci-registry }}"
+        if [ -n "$OCI_REGISTRY" ]; then IMAGE_BASE_NAME="$OCI_REGISTRY/$IMAGE_BASE_NAME"; fi
+
+        echo "image-name-with-registry=$IMAGE_BASE_NAME" >> $GITHUB_OUTPUT
