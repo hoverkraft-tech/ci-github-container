@@ -1,0 +1,14 @@
+name: Internal - Common Continuous Integration tasks
+
+on:
+  workflow_call:
+    secrets:
+      github-token:
+        description: 'Token for marking the status of linter run in the Checks section. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/github/super-linter#how-to-use'
+        required: true
+
+jobs:
+  linter:
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.3.0
+    secrets:
+      github-token: ${{ secrets.github-token }}

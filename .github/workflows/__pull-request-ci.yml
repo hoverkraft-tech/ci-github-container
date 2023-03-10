@@ -1,0 +1,12 @@
+name: Internal - Pull request - Continuous Integration
+
+on:
+  merge_group:
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/__shared-ci.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
