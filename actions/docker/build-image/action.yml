@@ -15,7 +15,7 @@ outputs:
 
 inputs:
   oci-registry:
-    description: "OCI registry where to push the built image"
+    description: "OCI registry where to pull and push images"
     required: true
   username:
     description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"

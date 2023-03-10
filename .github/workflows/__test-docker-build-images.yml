@@ -1,0 +1,114 @@
+name: Internal - Common Continuous Integration tasks
+
+on:
+  workflow_call:
+    secrets:
+      github-token:
+        description: 'Token for marking the status of linter run in the Checks section. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/github/super-linter#how-to-use'
+        required: true
+
+jobs:
+  docker-build-two-images:
+    uses: ./.github/workflows/docker-build-images.yml
+    secrets:
+      password: ${{ secrets.github-token }}
+    with:
+      oci-registry: ghcr.io
+      images: |
+        [
+          {
+            "name": "application-1",
+            "context": ".",
+            "dockerfile": "./tests/application-1/Dockerfile",
+            "build-args": { "PROD_MODE": "true" },
+            "target": "prod",
+            "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
+          },
+          {
+            "name": "application-2",
+            "context": ".",
+            "dockerfile": "./tests/application-2/Dockerfile",
+            "build-args": { "PROD_MODE": "true" },
+            "target": "prod",
+            "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
+          }
+        ]
+
+  checks:
+    continue-on-error: true
+    needs: docker-build-two-images
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Check built images ouput
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const assert = require("assert");
+
+            const builtImagesOutput = `${{ needs.docker-build-two-images.outputs.built-images }}`;
+            assert(builtImagesOutput.length, `"built-images" output is empty`);
+
+            // Check if is valid Json
+            let builtImages = null;
+            try {
+              builtImages = JSON.parse(builtImagesOutput);
+            } catch (error) {
+              throw new Error(`"built-images" output is not a valid JSON: ${error}`);
+            }
+
+            assert(typeof builtImages === "object" && !Array.isArray(builtImages), `"built-images" output is not an object`);
+            assert.equal(Object.keys(builtImages).length, 2, `"built-images" output does not contain 2 images`);
+
+            assert(builtImages["application-1"], `"built-images" output does not contain "application-1" image`);
+
+            const application1Image = builtImages["application-1"];
+            assert.equal(application1Image.name, "application-1");
+            assert.equal(application1Image.registry, "ghcr.io");
+            assert.equal(application1Image.repository,"hoverkraft-tech/ci-github-container/application-1");
+            assert(application1Image.tags.length);
+            assert(application1Image.images.length);
+            application1Image.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-1:[\.a-z0-9-]+$/));
+
+            const application2Image = builtImages["application-2"];
+            assert.equal(application2Image.name, "application-2");
+            assert.equal(application2Image.registry, "ghcr.io");
+            assert.equal(application2Image.repository,"hoverkraft-tech/ci-github-container/application-2");
+            assert(application2Image.tags.length);
+            assert(application2Image.images.length);
+            application2Image.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-2:[\.a-z0-9-]+$/));
+
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.github-token }}
+
+      - name: Check docker images
+        run: |
+          docker manifest inspect "${{ fromJson(needs.docker-build-two-images.outputs.built-images).application-1.images[0] }}"
+          docker manifest inspect "${{ fromJson(needs.docker-build-two-images.outputs.built-images).application-2.images[0] }}"
+
+  cleanup:
+    needs: checks
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v3
+
+      - id: get-issue-number
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.1
+
+      - name: Cleanup application-1 images
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: ./actions/docker/delete-ghcr-tags
+        with:
+          image: "application-1"
+          tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
+          github-token: ${{ secrets.github-token }}
+
+      - name: Cleanup application-2 images
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: ./actions/docker/delete-ghcr-tags
+        with:
+          image: "application-2"
+          tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
+          github-token: ${{ secrets.github-token }}
