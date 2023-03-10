@@ -1,0 +1,18 @@
+name: Internal - Main - Continuous Integration
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/__shared-ci.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    needs: ci
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/release-actions.yml@0.3.0
+    secrets:
+      private-access-token: ${{ secrets.GH_PAT }}
