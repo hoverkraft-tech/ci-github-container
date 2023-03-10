@@ -13,6 +13,6 @@ jobs:
 
   release:
     needs: ci
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/release-actions.yml@0.3.0
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/release-actions.yml@0.3.1
     secrets:
       private-access-token: ${{ secrets.GH_PAT }}
