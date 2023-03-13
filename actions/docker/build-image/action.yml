@@ -104,17 +104,24 @@ runs:
             return `type=semver,pattern={{raw}},value=${tagInput}${{ steps.prepare-variables.outputs.tag-suffix }}`;
           }
 
+          const suffixOption = `suffix=${{ steps.prepare-variables.outputs.tag-suffix }}`;
+
           const isPullRequestOrIssueComment = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'issue_comment';
           if(isPullRequestOrIssueComment) {
             return [
-              `type=sha,prefix=pr-${{ steps.get-issue-number.outputs.issue-number }}-,suffix=${{ steps.prepare-variables.outputs.tag-suffix }}`,
-              `type=ref,event=pr,suffix=${{ steps.prepare-variables.outputs.tag-suffix }}`,
+              `type=sha,prefix=pr-${{ steps.get-issue-number.outputs.issue-number }}-,${suffixOption}`,
+              `type=ref,event=pr,${suffixOption}`,
             ].join("\n");
           }
 
           const isPushOrWorkflowDispatch = context.eventName === 'push' || context.eventName === 'workflow_dispatch';
           if(isPushOrWorkflowDispatch) {
-            return `type=ref,event=branch,suffix=${{ steps.prepare-variables.outputs.tag-suffix }}`;
+            // If is tag, use tag name
+            if (context.ref.startsWith('refs/tags/')) {
+              return `type=ref,event=tag,${suffixOption}`;
+            }
+
+            return `type=ref,event=branch,${suffixOption}`;
           }
 
           core.setFailed(`No tags found for the current event: ${context.eventName}`);
