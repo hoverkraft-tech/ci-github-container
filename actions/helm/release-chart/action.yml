@@ -42,7 +42,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.3
 
     - id: chart-values-updates
       uses: actions/github-script@v6.4.0

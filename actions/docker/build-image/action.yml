@@ -17,11 +17,11 @@ inputs:
   oci-registry:
     description: "OCI registry where to pull and push images"
     required: true
-  username:
+  oci-registry-username:
     description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"
     required: false
     default: ${{ github.repository_owner }}
-  password:
+  oci-registry-password:
     description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage'
     required: false
   platform:
@@ -63,7 +63,7 @@ runs:
         oci-registry: ${{ inputs.oci-registry }}
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.3.2
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.3.3
       with:
         value: ${{ inputs.platform }}
 
@@ -80,9 +80,9 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.2
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.3
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.3
 
     - shell: bash
       run: git lfs pull
@@ -143,8 +143,8 @@ runs:
     - uses: docker/login-action@v2
       with:
         registry: ${{ inputs.oci-registry }}
-        username: ${{ inputs.username }}
-        password: ${{ inputs.password }}
+        username: ${{ inputs.oci-registry-username }}
+        password: ${{ inputs.oci-registry-password }}
 
     - id: built-and-push
       uses: docker/build-push-action@v4

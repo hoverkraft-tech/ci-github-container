@@ -9,13 +9,13 @@ on:
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.3.1
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.3.3
     secrets:
       github-token: ${{ secrets.github-token }}
 
   test-docker-build-images:
     name: Test docker build images
     needs: linter
-    uses: ./.github/workflows/__test-docker-build-images.yml
+    uses: ./.github/workflows/__test-workflow-docker-build-images.yml
     secrets:
       github-token: ${{ secrets.github-token }}

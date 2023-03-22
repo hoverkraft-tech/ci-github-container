@@ -25,6 +25,11 @@ on:
         description: "OCI registry where to pull and push images"
         type: string
         required: true
+      oci-registry-username:
+        description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"
+        required: false
+        type: string
+        default: ${{ github.repository_owner }}
       images:
         description: 'Images to build parameters. Example: [{
           "name": "application",
@@ -36,18 +41,8 @@ on:
           }]'
         type: string
         required: true
-      platforms:
-        type: string
-        description: "Platforms to build for. See https://github.com/docker/build-push-action#inputs"
-        default: '["linux/amd64","linux/arm64","linux/arm/v7"]'
-        required: false
-      username:
-        description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"
-        required: false
-        type: string
-        default: ${{ github.repository_owner }}
     secrets:
-      password:
+      oci-registry-password:
         description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage'
         required: false
 
@@ -77,6 +72,7 @@ jobs:
             }
 
             // Check each item
+            const imagesByPlatform = [];
             for (const key in images) {
               const image = images[key];
               if (typeof image !== 'object') {
@@ -84,7 +80,7 @@ jobs:
               }
 
               // Check mandatory properties
-              for (const property of ['name']) {
+              for (const property of ['name', 'platforms']) {
                 if (!image.hasOwnProperty(property)) {
                   throw new Error(`"images[${key}].${property}" input is missing`);
                 }
@@ -95,9 +91,18 @@ jobs:
                 const buildArgs = Object.keys(image['build-args']).map(key => `${key}=${image['build-args'][key]}`).join('\n');
                 image['build-args'] = buildArgs;
               }
+
+              // Add image for each platform
+              for (const platform of image['platforms']) {
+                const imageByPlatform = {
+                  ...image,
+                  platform: platform
+                };
+                imagesByPlatform.push(imageByPlatform);
+              }
             }
 
-            core.setOutput('images', JSON.stringify(images));
+            core.setOutput('images', JSON.stringify(imagesByPlatform));
 
   build-images:
     name: Build images
@@ -107,21 +112,20 @@ jobs:
       fail-fast: false
       matrix:
         image: ${{ fromJson(needs.prepare-variables.outputs.images) }}
-        platform: ${{ fromJson(inputs.platforms) }}
     steps:
       - id: build
         uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@main
         with:
           oci-registry: ${{ inputs.oci-registry }}
-          username: ${{ inputs.username }}
-          password: ${{ secrets.password }}
+          oci-registry-username: ${{ inputs.oci-registry-username }}
+          oci-registry-password: ${{ secrets.oci-registry-password }}
           tag: ${{ matrix.image.tag }}
           image: ${{ matrix.image.name }}
           context: ${{ matrix.image.context }}
           dockerfile: ${{ matrix.image.dockerfile }}
           build-args: ${{ matrix.image.build-args }}
           target: ${{ matrix.image.target }}
-          platform: ${{ matrix.platform }}
+          platform: ${{ matrix.image.platform }}
 
       - id: outputs-built-image
         uses: actions/github-script@v6.4.0
@@ -131,13 +135,13 @@ jobs:
               "name": "${{ matrix.image.name }}",
               "images": ${{ steps.build.outputs.images }},
               "tagSuffix": "${{ steps.build.outputs.tag-suffix }}",
-              "platform": "${{ matrix.platform }}"
+              "platform": "${{ matrix.image.platform }}"
             };
             core.setOutput("built-image", JSON.stringify(builtImage));
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.3.2
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.3.3
         with:
           artifact-name: "built-images"
           value: ${{ steps.outputs-built-image.outputs.built-image }}
@@ -149,7 +153,7 @@ jobs:
       built-images: ${{ steps.generate-outputs.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.3.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.3.3
         with:
           artifact-name: "built-images"
 
@@ -159,19 +163,17 @@ jobs:
           script: |
             const registry = `${{ inputs.oci-registry }}`;
             const images = ${{ inputs.images }};
-            const platforms = ${{ inputs.platforms }};
-            const firstPlatform = platforms[0];
-
             const allBuiltImages = ${{ steps.get-matrix-outputs.outputs.result }};
 
             const builtImages = {};
-            images.forEach(({ name }) => {
+            images.forEach(({ name, platforms }) => {
               // Get built images for current image
               const platformBuiltImages = allBuiltImages.filter(({ name: builtImageName }) => builtImageName === name);
               if (!platformBuiltImages.length) {
                 throw new Error(`No built image found for image "${name}"`);
               }
 
+              const firstPlatform = platforms[0];
               const firstPlatformImage = platformBuiltImages.find(({ platform }) => platform === firstPlatform);
               if (!firstPlatformImage) {
                 throw new Error(`No built image found for platform "${firstPlatform}"`);
@@ -203,8 +205,8 @@ jobs:
       - uses: docker/login-action@v2
         with:
           registry: ${{ inputs.oci-registry }}
-          username: ${{ inputs.username }}
-          password: ${{ secrets.password }}
+          username: ${{ inputs.oci-registry-username }}
+          password: ${{ secrets.oci-registry-password }}
 
       - name: Create SHA manifest and push
         uses: actions/github-script@v6.4.0
