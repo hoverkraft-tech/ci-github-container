@@ -46,6 +46,10 @@ on:
         description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage'
         required: true
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   prepare-variables:
     outputs:
@@ -108,9 +112,6 @@ jobs:
     name: Build images
     needs: prepare-variables
     runs-on: "ubuntu-latest"
-    permissions:
-      contents: read
-      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -152,9 +153,6 @@ jobs:
   outputs-built-images:
     needs: build-images
     runs-on: "ubuntu-latest"
-    permissions:
-      contents: read
-      packages: write
     outputs:
       built-images: ${{ steps.generate-outputs.outputs.built-images }}
     steps:

@@ -29,7 +29,7 @@ jobs:
       # Password or personal access token used to log against the OCI registry.
       # Can be passed in using "secrets.GITHUB_TOKEN".
       # See https://github.com/docker/login-action#usage.
-      password: ${{ secrets.GITHUB_TOKEN }}
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
     # Optional customizations.
     with:
