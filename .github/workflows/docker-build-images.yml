@@ -109,6 +109,7 @@ jobs:
     needs: prepare-variables
     runs-on: "ubuntu-latest"
     permissions:
+      contents: read
       packages: write
     strategy:
       fail-fast: false
@@ -152,6 +153,7 @@ jobs:
     needs: build-images
     runs-on: "ubuntu-latest"
     permissions:
+      contents: read
       packages: write
     outputs:
       built-images: ${{ steps.generate-outputs.outputs.built-images }}
