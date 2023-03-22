@@ -108,6 +108,8 @@ jobs:
     name: Build images
     needs: prepare-variables
     runs-on: "ubuntu-latest"
+    permissions:
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -149,6 +151,8 @@ jobs:
   outputs-built-images:
     needs: build-images
     runs-on: "ubuntu-latest"
+    permissions:
+      packages: write
     outputs:
       built-images: ${{ steps.generate-outputs.outputs.built-images }}
     steps:
