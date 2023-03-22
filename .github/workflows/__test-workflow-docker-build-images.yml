@@ -8,10 +8,10 @@ on:
         required: true
 
 jobs:
-  docker-build-two-images:
+  tests:
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
-      password: ${{ secrets.github-token }}
+      oci-registry-password: ${{ secrets.github-token }}
     with:
       oci-registry: ghcr.io
       images: |
@@ -36,7 +36,7 @@ jobs:
 
   checks:
     continue-on-error: true
-    needs: docker-build-two-images
+    needs: tests
     runs-on: "ubuntu-latest"
     steps:
       - name: Check built images ouput
@@ -45,7 +45,7 @@ jobs:
           script: |
             const assert = require("assert");
 
-            const builtImagesOutput = `${{ needs.docker-build-two-images.outputs.built-images }}`;
+            const builtImagesOutput = `${{ needs.tests.outputs.built-images }}`;
             assert(builtImagesOutput.length, `"built-images" output is empty`);
 
             // Check if is valid Json
@@ -85,8 +85,8 @@ jobs:
 
       - name: Check docker images
         run: |
-          docker manifest inspect "${{ fromJson(needs.docker-build-two-images.outputs.built-images).application-1.images[0] }}"
-          docker manifest inspect "${{ fromJson(needs.docker-build-two-images.outputs.built-images).application-2.images[0] }}"
+          docker manifest inspect "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
+          docker manifest inspect "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
 
   cleanup:
     needs: checks
@@ -96,7 +96,7 @@ jobs:
 
       - id: get-issue-number
         if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.3
 
       - name: Cleanup application-1 images
         if: ${{ github.event_name == 'pull_request' }}

@@ -4,6 +4,11 @@ branding:
   icon: delete
   color: gray-dark
 
+outputs:
+  deleted-image-tags:
+    description: 'The list of deleted tags for given image. Example: { "image": "my-org/my-repo/application", "tags": ["1.0.0", "1.0.1"] }'
+    value: ${{ steps.generate-outputs.outputs.images }}
+
 inputs:
   image:
     description: "Image name"

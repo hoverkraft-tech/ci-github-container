@@ -36,6 +36,10 @@ jobs:
       # OCI registry where to pull and push images.
       oci-registry: ""
 
+      # Username used to log against the OCI registry. See https://github.com/docker/login-action#usage
+      # Default: "${{ github.repository_owner }}"
+      oci-registry-username: ""
+
       # Images to build parameters.
       # Example: [{
       #    "image": "application",
@@ -45,25 +49,23 @@ jobs:
       #    "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
       # }]
       images: ""
-
-      # Username used to log against the OCI registry. See https://github.com/docker/login-action#usage
-      # Default: "${{ github.repository_owner }}"
-      username: ""
 ```
 
 <!-- end usage -->
 <!-- start secrets -->
 
-| **Secret**                | **Description**                                                                                                                                                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **<code>password</code>** | Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage). |
+| **Secret**                             | **Description**                                                                                                                                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **<code>oci-registry-password</code>** | Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage). |
 
 <!-- end secrets -->
 <!-- start inputs -->
 
-| **Input**                      | **Description**                                 | **Default**                                                                   | **Required** |
-| ------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------- | ------------ |
-| **<code>issue-message</code>** | Comment to post on an individual's first issue. | <code>Hi, thank for reporting an issue, we will check it out very soon</code> | **false**    |
+| **Input**                              | **Description**                                                                                                                                                                                                                                                                           | **Default**                                 | **Required** |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
+| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                                |                                             | **true**     |
+| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                                                                                           | <code>${{ github.repository_owner }}</code> | **false**    |
+| **<code>images</code>**                | Images to build parameters. Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]}]</code> | <code>${{ github.repository_owner }}</code> | **true**     |
 
 <!-- end inputs -->
 

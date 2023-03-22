@@ -6,6 +6,8 @@ help: ## Display help
 lint: ## Execute linting (https://github.com/github/super-linter)
 	DEFAULT_WORKSPACE="$(CURDIR)"; \
 	VOLUME="$$DEFAULT_WORKSPACE:$$DEFAULT_WORKSPACE"; \
+	LINTER_IMAGE="github/super-linter:slim-v4"; \
+	docker pull $$LINTER_IMAGE; \
 	docker run \
 		-e RUN_LOCAL=true -e USE_FIND_ALGORITHM=true \
 		-e LOG_LEVEL=WARN -e LOG_FILE="../logs" \
@@ -13,7 +15,7 @@ lint: ## Execute linting (https://github.com/github/super-linter)
 		-e FILTER_REGEX_INCLUDE="$(filter-out $@,$(MAKECMDGOALS))" \
 		-v $$VOLUME \
 		--rm \
-		github/super-linter:slim-v4
+		$$LINTER_IMAGE
 
 #############################
 # Argument fix workaround
