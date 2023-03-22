@@ -5,20 +5,14 @@ branding:
   color: gray-dark
 
 inputs:
-  github-token:
-    description: "Github token to log-in to registry"
-    required: true
-  tag:
-    description: "The release tag to set to chart"
-    required: true
   oci-registry:
     description: "OCI registry where to push chart. See https://github.com/appany/helm-oci-chart-releaser#usage"
     required: true
-  username:
+  oci-registry-username:
     required: true
     description: "OCI registry username. See https://github.com/appany/helm-oci-chart-releaser#usage"
     default: ${{ github.repository_owner }}
-  password:
+  oci-registry-password:
     required: true
     description: "OCI registry password. See https://github.com/appany/helm-oci-chart-releaser#usage"
   chart:
@@ -33,6 +27,12 @@ inputs:
   helm-repositories:
     description: "List of Helm repositories to add before release charts. See https://helm.sh/docs/helm/helm_repo_add/"
     required: false
+  github-token:
+    description: 'Github token to use latest version of helm. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/Azure/setup-helm'
+    required: true
+  tag:
+    description: "The release tag to set to chart"
+    required: true
 
 outputs:
   image:
@@ -42,7 +42,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.3
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.4
 
     - id: chart-values-updates
       uses: actions/github-script@v6.4.0
@@ -121,5 +121,5 @@ runs:
         tag: ${{ inputs.tag }}
         path: ${{ inputs.path }}
         registry: ${{ inputs.oci-registry }}
-        registry_username: ${{ inputs.username }}
-        registry_password: ${{ inputs.password }}
+        registry_username: ${{ inputs.oci-registry-username }}
+        registry_password: ${{ inputs.oci-registry-password }}
