@@ -99,8 +99,8 @@ runs:
       with:
         result-encoding: string
         script: |
-          const tagInput = core.getInput('tag');
-          if (tagInput) {
+          const tagInput = `${{ inputs.tag }}`
+          if (tagInput.length) {
             return `type=semver,pattern={{raw}},value=${tagInput}${{ steps.prepare-variables.outputs.tag-suffix }}`;
           }
 
