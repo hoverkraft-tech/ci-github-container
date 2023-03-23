@@ -1,0 +1,65 @@
+name: Internal - Test for docker/build-image action
+
+on:
+  workflow_call:
+    secrets:
+      github-token:
+        description: 'Token for marking the status of linter run in the Checks section. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/github/super-linter#how-to-use'
+        required: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - id: build-image-with-tag
+        uses: ./actions/docker/build-image
+        with:
+          oci-registry: ghcr.io
+          oci-registry-password: ${{ secrets.github-token }}
+          context: "."
+          dockerfile: "./tests/application-1/Dockerfile"
+          target: "prod"
+          platform: "linux/amd64"
+          image: application-1
+          tag: 0.1.0
+
+      - name: Check images ouput
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const assert = require("assert");
+
+            const imagesOutput = `${{ steps.build-image-with-tag.outputs.images }}`;
+            assert(imagesOutput.length, `"images" output is empty`);
+
+            // Check if is valid Json
+            let images = null;
+            try {
+              images = JSON.parse(imagesOutput);
+            } catch (error) {
+              throw new Error(`"images" output is not a valid JSON: ${error}`);
+            }
+
+            assert(Array.isArray(images), `"images" output is not an array`);
+            assert.equal(images.length, 1, `"images" output does not contain 1 image`);
+            assert.equal(images[0], `ghcr.io/hoverkraft-tech/ci-github-container/application-1:0.1.0-linux-amd64`);
+
+
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.github-token }}
+
+      - name: Check docker images
+        run: |
+          docker manifest inspect "${{ fromJson(steps.build-image-with-tag.outputs.images)[0] }}"
+
+      - name: Cleanup docker images
+        uses: ./actions/docker/delete-ghcr-tags
+        with:
+          image: "application-1"
+          tag-prefix: "0.1.0-"
+          github-token: ${{ secrets.github-token }}

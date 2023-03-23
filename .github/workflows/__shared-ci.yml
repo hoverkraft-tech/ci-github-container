@@ -13,7 +13,13 @@ jobs:
     secrets:
       github-token: ${{ secrets.github-token }}
 
-  test-docker-build-images:
+  test-action-docker-build-image:
+    needs: linter
+    uses: ./.github/workflows/__test-action-docker-build-image.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+
+  test-workflow-docker-build-images:
     name: Test docker build images
     needs: linter
     uses: ./.github/workflows/__test-workflow-docker-build-images.yml
