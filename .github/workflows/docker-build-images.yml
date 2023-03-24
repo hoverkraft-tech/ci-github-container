@@ -116,6 +116,10 @@ jobs:
       fail-fast: false
       matrix:
         image: ${{ fromJson(needs.prepare-variables.outputs.images) }}
+    permissions:
+      contents: read
+      pull-requests: read
+      packages: write
     steps:
       - id: build
         uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@main
