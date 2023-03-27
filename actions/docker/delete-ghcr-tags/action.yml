@@ -16,9 +16,9 @@ inputs:
   tag-prefix:
     description: "Tag prefix to delete"
     required: false
-  private-access-token:
-    description: "Private Access Token with the packages:read and packages:delete scopes. See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries"
-    required: true
+  github-token:
+    description: "GitHub token with the packages:read and packages:delete scopes. See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries"
+    default: ${{ github.token }}
 
 runs:
   using: "composite"
@@ -32,10 +32,15 @@ runs:
       with:
         image: ${{ inputs.image }}
 
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: |
+        rm -fr ./self-actions
+
     - id: delete-images
       uses: actions/github-script@v6.4.0
       with:
-        private-access-token: ${{ inputs.private-access-token }}
+        github-token: ${{ inputs.github-token }}
         script: |
           const packageName = `${{ steps.image-name.outputs.image-name }}`.replace(`${context.repo.owner}/`, '');
           const packagePayload = {

@@ -2,18 +2,22 @@ name: Internal - Common Continuous Integration tasks
 
 on:
   workflow_call:
-    secrets:
-      github-token:
-        description: 'Token for marking the status of linter run in the Checks section. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/github/super-linter#how-to-use'
-        required: true
 
 jobs:
+  setup-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ -z "${{ github.token }}" ]; then
+            echo "GitHub token is not set"
+            exit 1
+          fi
   tests:
+    needs: setup-tests
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
-      oci-registry-password: ${{ secrets.github-token }}
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
     with:
-      oci-registry: ghcr.io
       images: |
         [
           {
@@ -81,7 +85,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.github-token }}
+          password: ${{ github.token }}
 
       - name: Check docker images
         run: |
@@ -91,12 +95,14 @@ jobs:
   cleanup:
     needs: checks
     runs-on: "ubuntu-latest"
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v3
 
       - id: get-issue-number
         if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.4
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.4.0
 
       - name: Cleanup application-1 images
         if: ${{ github.event_name == 'pull_request' }}
@@ -104,7 +110,6 @@ jobs:
         with:
           image: "application-1"
           tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
-          github-token: ${{ secrets.github-token }}
 
       - name: Cleanup application-2 images
         if: ${{ github.event_name == 'pull_request' }}
@@ -112,4 +117,3 @@ jobs:
         with:
           image: "application-2"
           tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
-          github-token: ${{ secrets.github-token }}

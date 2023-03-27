@@ -8,6 +8,7 @@ inputs:
   oci-registry:
     description: "OCI registry where to push chart. See https://github.com/appany/helm-oci-chart-releaser#usage"
     required: true
+    default: "ghcr.io"
   oci-registry-username:
     required: true
     description: "OCI registry username. See https://github.com/appany/helm-oci-chart-releaser#usage"
@@ -15,6 +16,7 @@ inputs:
   oci-registry-password:
     required: true
     description: "OCI registry password. See https://github.com/appany/helm-oci-chart-releaser#usage"
+    default: ${{ github.token }}
   chart:
     description: "Chart name to release"
     required: true
@@ -28,8 +30,9 @@ inputs:
     description: "List of Helm repositories to add before release charts. See https://helm.sh/docs/helm/helm_repo_add/"
     required: false
   github-token:
-    description: 'Github token to use latest version of helm. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/Azure/setup-helm'
+    description: "GitHub token to use latest version of helm. See https://github.com/Azure/setup-helm"
     required: true
+    default: ${{ github.token }}
   tag:
     description: "The release tag to set to chart"
     required: true
@@ -42,7 +45,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.4
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.0
 
     - id: chart-values-updates
       uses: actions/github-script@v6.4.0

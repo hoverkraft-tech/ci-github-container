@@ -26,8 +26,7 @@ jobs:
   main:
     uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@main
     secrets:
-      # Password or personal access token used to log against the OCI registry.
-      # Can be passed in using "secrets.GITHUB_TOKEN".
+      # Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -54,18 +53,18 @@ jobs:
 <!-- end usage -->
 <!-- start secrets -->
 
-| **Secret**                             | **Description**                                                                                                                                                                                                          |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **<code>oci-registry-password</code>** | Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage). |
+| **Secret**                             | **Description**                                                                                                                                                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **<code>oci-registry-password</code>** | Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage). |
 
 <!-- end secrets -->
 <!-- start inputs -->
 
 | **Input**                              | **Description**                                                                                                                                                                                                                                                                           | **Default**                                 | **Required** |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
-| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                                |                                             | **true**     |
+| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                                | <code>ghcr.io</code>                        | **false**    |
 | **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                                                                                           | <code>${{ github.repository_owner }}</code> | **false**    |
-| **<code>images</code>**                | Images to build parameters. Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]}]</code> | <code>${{ github.repository_owner }}</code> | **true**     |
+| **<code>images</code>**                | Images to build parameters. Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]}]</code> |                                             | **true**     |
 
 <!-- end inputs -->
 

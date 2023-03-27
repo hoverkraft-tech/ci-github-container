@@ -16,24 +16,27 @@ outputs:
 inputs:
   oci-registry:
     description: "OCI registry where to pull and push images"
+    default: "ghcr.io"
     required: true
   oci-registry-username:
     description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"
-    required: false
     default: ${{ github.repository_owner }}
+    required: true
   oci-registry-password:
     description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage'
-    required: false
+    default: ${{ github.token }}
+    required: true
   platform:
     description: "Platform to build for. See https://github.com/docker/build-push-action#inputs"
     required: true
   context:
     description: "Build's context is the set of files located in the specified PATH or URL. See https://github.com/docker/build-push-action#inputs"
-    required: false
     default: "."
+    required: false
   dockerfile:
     description: "Location of Dockerfile (defaults to Dockerfile). See https://github.com/docker/build-push-action#inputs"
     default: "Dockerfile"
+    required: false
   build-args:
     description: "List of build-time variables. See https://github.com/docker/build-push-action#inputs"
     required: false
@@ -62,14 +65,24 @@ runs:
         image: ${{ inputs.image }}
         oci-registry: ${{ inputs.oci-registry }}
 
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: |
+        rm -fr ./self-actions
+
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.3.4
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.4.0
       with:
         value: ${{ inputs.platform }}
 
     - id: prepare-variables
       shell: bash
       run: |
+        if [ -z "${{ inputs.oci-registry-password }}" ]; then
+          echo "Input oci-registry-password is not set"
+          exit 1
+        fi
+
         # Generate tag prefix
         if [ ! -z "${{ inputs.image }}" ]; then
           echo "tag-prefix=${{ inputs.image }}--" >> $GITHUB_OUTPUT
@@ -80,9 +93,9 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.3.4
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.4.0
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.3.4
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.0
 
     - shell: bash
       run: git lfs pull
