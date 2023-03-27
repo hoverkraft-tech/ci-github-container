@@ -2,10 +2,6 @@ name: Internal - Test for docker/build-image action
 
 on:
   workflow_call:
-    secrets:
-      github-token:
-        description: 'Token for marking the status of linter run in the Checks section. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/github/super-linter#how-to-use'
-        required: true
 
 jobs:
   tests:
@@ -13,11 +9,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - run: |
+          if [ -z "${{ github.token }}" ]; then
+            echo "GitHub token is not set"
+            exit 1
+          fi
+
       - id: build-image-with-tag
         uses: ./actions/docker/build-image
         with:
           oci-registry: ghcr.io
-          oci-registry-password: ${{ secrets.github-token }}
+          oci-registry-password: ${{ github.token }}
           context: "."
           dockerfile: "./tests/application-1/Dockerfile"
           target: "prod"
@@ -46,12 +48,11 @@ jobs:
             assert.equal(images.length, 1, `"images" output does not contain 1 image`);
             assert.equal(images[0], `ghcr.io/hoverkraft-tech/ci-github-container/application-1:0.1.0-linux-amd64`);
 
-
       - uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.github-token }}
+          password: ${{ github.token }}
 
       - name: Check docker images
         run: |
@@ -62,4 +63,3 @@ jobs:
         with:
           image: "application-1"
           tag-prefix: "0.1.0-"
-          github-token: ${{ secrets.github-token }}
