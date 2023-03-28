@@ -9,7 +9,7 @@ on:
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.3.4
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.4.0
     secrets:
       github-token: ${{ secrets.github-token }}
 
