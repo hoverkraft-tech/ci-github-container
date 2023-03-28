@@ -45,7 +45,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.1
 
     - id: chart-values-updates
       uses: actions/github-script@v6.4.0
@@ -94,7 +94,7 @@ runs:
 
           core.setOutput('yq-command', yqCommand);
 
-    - uses: mikefarah/yq@v4.32.2
+    - uses: mikefarah/yq@v4.33.1
       with:
         cmd: |
           yq -i '.name = "${{ github.event.repository.name }}" | .version = "${{ inputs.tag }}" | .appVersion = "${{ inputs.tag }}"' ${{ inputs.path }}/Chart.yaml
