@@ -7,23 +7,33 @@ updates:
     open-pull-requests-limit: 20
     schedule:
       interval: weekly
+      day: friday
+      time: '04:00'
   - package-ecosystem: github-actions
     directory: /actions/docker/build-image
     open-pull-requests-limit: 20
     schedule:
       interval: weekly
+      day: friday
+      time: '04:00'
   - package-ecosystem: github-actions
     directory: /actions/docker/delete-ghcr-tags
     open-pull-requests-limit: 20
     schedule:
       interval: weekly
+      day: friday
+      time: '04:00'
   - package-ecosystem: github-actions
     directory: /actions/docker/get-image-name
     open-pull-requests-limit: 20
     schedule:
       interval: weekly
+      day: friday
+      time: '04:00'
   - package-ecosystem: github-actions
     directory: /actions/helm/release-chart
     open-pull-requests-limit: 20
     schedule:
       interval: weekly
+      day: friday
+      time: '04:00'
