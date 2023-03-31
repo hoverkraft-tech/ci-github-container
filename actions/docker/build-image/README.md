@@ -10,6 +10,15 @@ Action to build an image with Docker
 <!-- end description -->
 <!-- start contents -->
 <!-- end contents -->
+
+If default GitHub token is used, the following permissions are required:
+
+```yml
+permissions:
+  contents: read
+  packages: write
+```
+
 <!-- start usage -->
 
 ```yaml
@@ -56,18 +65,18 @@ Action to build an image with Docker
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input**                              | **Description**                                                                                                                                                         | **Default**                                 | **Required** |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
-| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                              | <code>ghcr.io</code>                        | **true**     |
-| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See https://github.com/docker/login-action#usage                                                                         | <code>${{ github.repository_owner }}</code> | **true**     |
-| **<code>oci-registry-password</code>** | Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage | <code>${{ github.token }}</code>            | **true**     |
-| **<code>platform</code>**              | Platform to build for. See https://github.com/docker/build-push-action#inputs                                                                                           |                                             | **true**     |
-| **<code>context</code>**               | Build's context is the set of files located in the specified PATH or URL. See https://github.com/docker/build-push-action#inputs                                        | <code>.</code>                              | **false**    |
-| **<code>dockerfile</code>**            | Location of Dockerfile (defaults to Dockerfile). See https://github.com/docker/build-push-action#inputs                                                                 | <code>Dockerfile</code>                     | **false**    |
-| **<code>build-args</code>**            | List of build-time variables. See https://github.com/docker/build-push-action#inputs                                                                                    |                                             | **false**    |
-| **<code>target</code>**                | Sets the target stage to build. See https://github.com/docker/build-push-action#inputs                                                                                  |                                             | **false**    |
-| **<code>image</code>**                 | Additional Image name                                                                                                                                                   |                                             | **false**    |
-| **<code>tag</code>**                   | Force image tag to publish                                                                                                                                              |                                             | **false**    |
+| **Input**                              | **Description**                                                                                                                                                                                                         | **Default**                                 | **Required** |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
+| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                              | <code>ghcr.io</code>                        | **true**     |
+| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                         | <code>${{ github.repository_owner }}</code> | **true**     |
+| **<code>oci-registry-password</code>** | Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage) | <code>${{ github.token }}</code>            | **true**     |
+| **<code>platform</code>**              | Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                                     |                                             | **true**     |
+| **<code>context</code>**               | Build's context is the set of files located in the specified PATH or URL. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                  | <code>.</code>                              | **false**    |
+| **<code>dockerfile</code>**            | Location of Dockerfile (defaults to Dockerfile). See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                           | <code>Dockerfile</code>                     | **false**    |
+| **<code>build-args</code>**            | List of build-time variables. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                              |                                             | **false**    |
+| **<code>target</code>**                | Sets the target stage to build. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                            |                                             | **false**    |
+| **<code>image</code>**                 | Additional Image name                                                                                                                                                                                                   |                                             | **false**    |
+| **<code>tag</code>**                   | Force image tag to publish                                                                                                                                                                                              |                                             | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
