@@ -5,7 +5,7 @@ on:
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.4.1
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.4.2
 
   test-action-docker-build-image:
     needs: linter
