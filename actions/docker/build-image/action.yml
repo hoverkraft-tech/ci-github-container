@@ -19,29 +19,29 @@ inputs:
     default: "ghcr.io"
     required: true
   oci-registry-username:
-    description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"
+    description: "Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)"
     default: ${{ github.repository_owner }}
     required: true
   oci-registry-password:
-    description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage'
+    description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)'
     default: ${{ github.token }}
     required: true
   platform:
-    description: "Platform to build for. See https://github.com/docker/build-push-action#inputs"
+    description: "Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: true
   context:
-    description: "Build's context is the set of files located in the specified PATH or URL. See https://github.com/docker/build-push-action#inputs"
+    description: "Build's context is the set of files located in the specified PATH or URL. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     default: "."
     required: false
   dockerfile:
-    description: "Location of Dockerfile (defaults to Dockerfile). See https://github.com/docker/build-push-action#inputs"
+    description: "Location of Dockerfile (defaults to Dockerfile). See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     default: "Dockerfile"
     required: false
   build-args:
-    description: "List of build-time variables. See https://github.com/docker/build-push-action#inputs"
+    description: "List of build-time variables. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: false
   target:
-    description: "Sets the target stage to build. See https://github.com/docker/build-push-action#inputs"
+    description: "Sets the target stage to build. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: false
   image:
     description: "Additional Image name"
@@ -71,7 +71,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.4.1
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.4.2
       with:
         value: ${{ inputs.platform }}
 
@@ -93,9 +93,9 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.4.1
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.4.2
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.2
 
     - shell: bash
       run: git lfs pull
