@@ -22,37 +22,37 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@v0.1.6
+- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@v0.2.0
   with:
     # OCI registry where to pull and push images
     # Default: ghcr.io
     oci-registry: ""
 
-    # Username used to log against the OCI registry. See https://github.com/docker/login-action#usage
+    # Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)
     # Default: ${{ github.repository_owner }}
     oci-registry-username: ""
 
     # Password or personal access token used to log against the OCI registry. Can be
-    # passed in using "secrets.GITHUB_TOKEN". See https://github.com/docker/login-action#usage
+    # passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)
     # Default: ${{ github.token }}
     oci-registry-password: ""
 
-    # Platform to build for. See https://github.com/docker/build-push-action#inputs
+    # Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     platform: ""
 
     # Build's context is the set of files located in the specified PATH or URL. See
-    # https://github.com/docker/build-push-action#inputs
+    # [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     # Default: .
     context: ""
 
-    # Location of Dockerfile (defaults to Dockerfile). See https://github.com/docker/build-push-action#inputs
+    # Location of Dockerfile (defaults to Dockerfile). See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     # Default: Dockerfile
     dockerfile: ""
 
-    # List of build-time variables. See https://github.com/docker/build-push-action#inputs
+    # List of build-time variables. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     build-args: ""
 
-    # Sets the target stage to build. See https://github.com/docker/build-push-action#inputs
+    # Sets the target stage to build. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     target: ""
 
     # Additional Image name
