@@ -1,11 +1,11 @@
 <!-- start title -->
 
-# GitHub Action: Checkout
+# GitHub Action: Prune pull requests image tags from GitHub Packages
 
 <!-- end title -->
 <!-- start description -->
 
-Action to checkout the repository compatible for PRs, issues and push events. Workaround for [https://github.com/actions/checkout/issues/331](https://github.com/actions/checkout/issues/331)
+Action to prune existing package versions related to closed pull requests
 
 <!-- end description -->
 <!-- start contents -->
@@ -23,28 +23,38 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-common/actions/checkout@v0.4.2
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@v0.3.0
   with:
-    # Number of commits to fetch. 0 indicates all history for all branches and tags.
-    # See [https://github.com/actions/checkout#usage](https://github.com/actions/checkout#usage)
-    # Default: 1
-    fetch-depth: ""
+    # Image name
+    image: ""
 
-    # Whether to download Git-LFS files. See [https://github.com/actions/checkout#usage](https://github.com/actions/checkout#usage)
-    # Default: false
-    lfs: ""
+    # The regex to match pull request tags. Must have a capture group for the pull
+    # request number.
+    # Default: ^pr-([0-9]+)-
+    pull-request-tag-filter: ""
+
+    # GitHub token with the packages:read and packages:delete scopes. See
+    # [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries)
+    # Default: ${{ github.token }}
+    github-token: ""
 ```
 
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input**                    | **Description**                                                                                                                                                           | **Default**    | **Required** |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------ |
-| **<code>fetch-depth</code>** | Number of commits to fetch. 0 indicates all history for all branches and tags. See [https://github.com/actions/checkout#usage](https://github.com/actions/checkout#usage) | <code>1</code> | **false**    |
-| **<code>lfs</code>**         | Whether to download Git-LFS files. See [https://github.com/actions/checkout#usage](https://github.com/actions/checkout#usage)                                             |                | **false**    |
+| **Input**                                | **Description**                                                                                                                                                                                                                                                                                                                                                                | **Default**                      | **Required** |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- | ------------ |
+| **<code>image</code>**                   | Image name                                                                                                                                                                                                                                                                                                                                                                     |                                  | **false**    |
+| **<code>pull-request-tag-filter</code>** | The regex to match pull request tags. Must have a capture group for the pull request number.                                                                                                                                                                                                                                                                                   | <code>^pr-([0-9]+)-</code>       | **false**    |
+| **<code>github-token</code>**            | GitHub token with the packages:read and packages:delete scopes. See [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries) | <code>${{ github.token }}</code> | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
+
+| \***\*Output\*\***              | \***\*Description\*\***        | \***\*Default\*\*** | \***\*Required\*\*** |
+| ------------------------------- | ------------------------------ | ------------------- | -------------------- |
+| <code>deleted-image-tags</code> | The list of deleted image tags | undefined           | undefined            |
+
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
 <!-- end [.github/ghadocs/examples/] -->
