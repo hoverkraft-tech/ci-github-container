@@ -61,7 +61,7 @@ jobs:
           docker manifest inspect "${{ fromJson(steps.build-image-with-tag.outputs.images)[0] }}"
 
       - name: Cleanup docker images
-        uses: ./actions/docker/delete-ghcr-tags
+        uses: ./actions/docker/delete-image-tags
         with:
           image: "application-1"
           tag-prefix: "0.1.0-"

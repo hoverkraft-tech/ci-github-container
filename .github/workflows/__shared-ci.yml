@@ -11,6 +11,10 @@ jobs:
     needs: linter
     uses: ./.github/workflows/__test-action-docker-build-image.yml
 
+  test-action-docker-delete-image-tags:
+    needs: linter
+    uses: ./.github/workflows/__test-action-docker-delete-image-tags.yml
+
   test-action-docker-prune-pull-requests-package-version:
     needs: linter
     uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml

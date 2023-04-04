@@ -81,10 +81,10 @@ permissions:
 <!-- end inputs -->
 <!-- start outputs -->
 
-| \***\*Output\*\***      | \***\*Description\*\***                                                                                                                                 | \***\*Default\*\*** | \***\*Required\*\*** |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------- |
-| <code>images</code>     | The images tags built. Example: ["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64","ghcr.io/my-org/my-repo/application:pr-63-5222075-linux-amd64"] | undefined           | undefined            |
-| <code>tag-suffix</code> | The platform tag suffix. Example: "-linux-amd64"                                                                                                        | undefined           | undefined            |
+| **Output**              | **Description**                                                                                                                                         | **Default** | **Required** |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------ |
+| <code>images</code>     | The images tags built. Example: ["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64","ghcr.io/my-org/my-repo/application:pr-63-5222075-linux-amd64"] | undefined   | undefined    |
+| <code>tag-suffix</code> | The platform tag suffix. Example: "-linux-amd64"                                                                                                        | undefined   | undefined    |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->

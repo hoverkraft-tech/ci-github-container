@@ -33,10 +33,10 @@ Action to forge the name of a given image including registry, repository and giv
 <!-- end inputs -->
 <!-- start outputs -->
 
-| \***\*Output\*\***                    | \***\*Description\*\***                                                              | \***\*Default\*\*** | \***\*Required\*\*** |
-| ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------- | -------------------- |
-| <code>image-name</code>               | Forged image name. Example: "my-org/my-repo/application"                             | undefined           | undefined            |
-| <code>image-name-with-registry</code> | Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application" | undefined           | undefined            |
+| **Output**                            | **Description**                                                                      | **Default** | **Required** |
+| ------------------------------------- | ------------------------------------------------------------------------------------ | ----------- | ------------ |
+| <code>image-name</code>               | Forged image name. Example: "my-org/my-repo/application"                             | undefined   | undefined    |
+| <code>image-name-with-registry</code> | Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application" | undefined   | undefined    |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
