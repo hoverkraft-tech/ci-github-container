@@ -1,0 +1,71 @@
+# Prune pull requests images tags
+# ==========================
+# Workflow to performs a clean of closed pull requests images tags.
+# See [../../actions/docker/prune-pull-requests-image-tags/README.md](../../actions/docker/prune-pull-requests-image-tags/README.md) for more information.
+
+name: Prune pull requests images tags
+
+on:
+  workflow_call:
+    inputs:
+      images:
+        description: 'Images to clean. Example: ["application-1","application-2"]'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  prepare-variables:
+    outputs:
+      images: ${{ steps.validate-inputs.outputs.images }}
+    runs-on: "ubuntu-latest"
+    steps:
+      - id: validate-inputs
+        uses: actions/github-script@v6.4.0
+        with:
+          script: |
+            const imagesInput = `${{ inputs.images }}`;
+
+            // Check if is valid Json
+            let images = null;
+            try {
+              images = JSON.parse(imagesInput);
+            } catch (error) {
+              throw new Error(`"images" input is not a valid JSON: ${error}`);
+            }
+
+            // Check if is an array
+            if (!Array.isArray(images)) {
+              throw new Error(`"images" input is not an array`);
+            }
+
+            // Check each item
+            for (const key in images) {
+              const image = images[key];
+              if (typeof image !== 'string') {
+                throw new Error(`"images[${key}]" input is not a string`);
+              }
+            }
+
+            core.setOutput('images', JSON.stringify([...new Set(images)]));
+
+  prune-pull-requests-image-tags:
+    name: Prune pull requests image tags for ${{ matrix.image }}
+    needs: prepare-variables
+    runs-on: "ubuntu-latest"
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.prepare-variables.outputs.images) }}
+    permissions:
+      contents: read
+      pull-requests: read
+      packages: write
+    steps:
+      - id: build
+        uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@main
+        with:
+          image: ${{ matrix.image }}
