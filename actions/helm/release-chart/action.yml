@@ -6,16 +6,16 @@ branding:
 
 inputs:
   oci-registry:
-    description: "OCI registry where to push chart. See https://github.com/appany/helm-oci-chart-releaser#usage"
+    description: "OCI registry where to push chart. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)"
     required: true
     default: "ghcr.io"
   oci-registry-username:
     required: true
-    description: "OCI registry username. See https://github.com/appany/helm-oci-chart-releaser#usage"
+    description: "OCI registry username. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)"
     default: ${{ github.repository_owner }}
   oci-registry-password:
     required: true
-    description: "OCI registry password. See https://github.com/appany/helm-oci-chart-releaser#usage"
+    description: "OCI registry password. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)"
     default: ${{ github.token }}
   chart:
     description: "Chart name to release"
@@ -24,13 +24,13 @@ inputs:
     description: "Path to the chart to release"
     required: true
   values:
-    description: 'Define charts values to be filled. [{ path, value }]. Example: [{ "path": ".image.registry", "value": "ghcr.io" }]. See https://mikefarah.gitbook.io/yq/'
+    description: 'Define charts values to be filled. [{ path, value }]. Example: [{ "path": ".image.registry", "value": "ghcr.io" }]. See [https://mikefarah.gitbook.io/yq/](https://mikefarah.gitbook.io/yq/)'
     required: false
   helm-repositories:
-    description: "List of Helm repositories to add before release charts. See https://helm.sh/docs/helm/helm_repo_add/"
+    description: "List of Helm repositories to add before release charts. See [https://helm.sh/docs/helm/helm_repo_add/](https://helm.sh/docs/helm/helm_repo_add/)"
     required: false
   github-token:
-    description: "GitHub token to use latest version of helm. See https://github.com/Azure/setup-helm"
+    description: "GitHub token to use latest version of helm. See [https://github.com/Azure/setup-helm](https://github.com/Azure/setup-helm)"
     required: true
     default: ${{ github.token }}
   tag:
@@ -40,7 +40,7 @@ inputs:
 outputs:
   image:
     value: ${{ steps.chart-releaser.outputs.image }}
-    description: Chart image (Default '{registry}/{repository}/{image}:{tag}'). See https://github.com/appany/helm-oci-chart-releaser
+    description: Chart image (Default '{registry}/{repository}/{image}:{tag}'). See [https://github.com/appany/helm-oci-chart-releaser](https://github.com/appany/helm-oci-chart-releaser)
 
 runs:
   using: "composite"

@@ -15,7 +15,7 @@ Opinionated GitHub actions and workflows for continuous integration in container
 
 #### - [Build image](actions/docker/build-image/README.md)
 
-#### - [Delete GitHub Registry tags](actions/docker/delete-ghcr-tags/README.md)
+#### - [Delete image tags](actions/docker/delete-image-tags/README.md)
 
 #### - [Get image name](actions/docker/get-image-name/README.md)
 

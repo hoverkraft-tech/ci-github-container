@@ -8,8 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          if [ -z "${{ github.token }}" ]; then
-            echo "GitHub token is not set"
+          if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
+            echo "GitHub token secrets is not set"
             exit 1
           fi
   tests:
@@ -106,14 +106,14 @@ jobs:
 
       - name: Cleanup application-1 images
         if: ${{ github.event_name == 'pull_request' }}
-        uses: ./actions/docker/delete-ghcr-tags
+        uses: ./actions/docker/delete-image-tags
         with:
           image: "application-1"
           tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
 
       - name: Cleanup application-2 images
         if: ${{ github.event_name == 'pull_request' }}
-        uses: ./actions/docker/delete-ghcr-tags
+        uses: ./actions/docker/delete-image-tags
         with:
           image: "application-2"
           tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
