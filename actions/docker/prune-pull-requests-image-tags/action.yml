@@ -1,0 +1,152 @@
+name: "Prune pull requests image tags from GitHub Packages"
+description: "Action to prune existing package versions related to closed pull requests"
+author: Hoverkraft
+branding:
+  icon: delete
+  color: gray-dark
+
+inputs:
+  image:
+    description: "Image name"
+    required: false
+  pull-request-tag-filter:
+    description: "The regex to match pull request tags. Must have a capture group for the pull request number."
+    default: "^pr-([0-9]+)-"
+  github-token:
+    description: "GitHub token with the packages:read and packages:delete scopes. See [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries)"
+    default: ${{ github.token }}
+
+outputs:
+  deleted-image-tags:
+    description: "The list of deleted image tags"
+    value: ${{ steps.delete-image-tags.outputs.deleted-image-tags }}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
+
+    - id: image-name
+      uses: ./self-actions/docker/get-image-name
+      with:
+        image: ${{ inputs.image }}
+
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: |
+        rm -fr ./self-actions
+
+    - id: delete-image-tags
+      uses: actions/github-script@v6.4.0
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const packageName = `${{ steps.image-name.outputs.image-name }}`.replace(`${context.repo.owner}/`, '');
+          const packagePayload = {
+            package_type: 'container',
+            package_name: packageName,
+            org: context.repo.owner,
+          };
+          core.debug('Package payload: ' + JSON.stringify(packagePayload));
+
+          const packageVersions = await github.paginate(
+            github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
+          );
+
+          const pullRequestTagFilterInput = `${{ inputs.pull-request-tag-filter }}`;
+          if (!pullRequestTagFilterInput.length) {
+            core.failed('Input "pull-request-tag-filter" is undefined');
+            return;
+          }
+          // Assert that the regex has a valid capture group for the pull request number
+          const hasCaptureGroupMatch = pullRequestTagFilterInput.match(/\(([^)]+)\)/g);
+          if (!hasCaptureGroupMatch ) {
+            core.failed('Input "pull-request-tag-filter" must have a capture group for the pull request number');
+            return;
+          }
+
+          if (hasCaptureGroupMatch.length !== 1) {
+            core.failed('Input "pull-request-tag-filter" must have only one capture group for the pull request number');
+            return;
+          }
+
+          const pullRequestTagFilter = new RegExp(pullRequestTagFilterInput);
+
+          // Check that all tags are related to the same pull request
+          const getTagsUniquePullRequest = (tags) => {
+            let pullRequestNumber;
+
+            const allTagsAreUniqueToPulRequest = tags.every(tag => {
+              const matches = tag.match(pullRequestTagFilter);
+              if (!matches) {
+                return false;
+              }
+              const currentPullRequestNumber = matches[1];
+              if (!currentPullRequestNumber) {
+                return false;
+              }
+
+              if (pullRequestNumber && pullRequestNumber !== currentPullRequestNumber) {
+                return false;
+              }
+
+              pullRequestNumber = currentPullRequestNumber;
+              return true;
+            });
+
+            if (allTagsAreUniqueToPulRequest) {
+              return pullRequestNumber;
+            } else {
+              return null;
+            }
+          };
+
+          const closedPullRequests = new Map();
+          const isPullRequestClosed = async (pullRequestNumber) => {
+            if (!closedPullRequests.has(pullRequestNumber)) {
+              const { data: { state } } = await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: pullRequestNumber,
+              });
+              closedPullRequests.set(pullRequestNumber, state === 'closed');
+            }
+            return closedPullRequests.get(pullRequestNumber);
+          };
+
+          const packageVersionsToDelete = [];
+          for(const packageVersion of packageVersions) {
+            const tags = packageVersion.metadata.container.tags;
+            if (!tags.length) {
+              core.debug(`Package version ${packageVersion.name} cannot be deleted as it has no tags.` + JSON.stringify(packageVersion));
+              continue;
+            }
+
+            const pullRequestNumber = getTagsUniquePullRequest(tags);
+            if (pullRequestNumber === null) {
+              core.debug(`Package version ${packageVersion.name} cannot be deleted as it is not related to a single pull request: ${tags.join(', ')}`);
+              continue;
+            }
+
+            const currentPullRequestIsClosed = await isPullRequestClosed(pullRequestNumber);
+            if (!currentPullRequestIsClosed) {
+              core.debug(`Package version ${packageVersion.name} cannot be deleted as pull request ${pullRequestNumber} is not closed}`);
+              continue;
+            }
+            packageVersionsToDelete.push(packageVersion);
+          }
+
+          core.debug('Package versions to delete: ' + JSON.stringify(packageVersionsToDelete));
+
+          await Promise.all(
+            packageVersionsToDelete.map(
+              ({ id }) => github.rest.packages.deletePackageVersionForOrg({
+                ...packagePayload,
+                package_version_id: id,
+              })
+            )
+          );
+
+          const deletedTags = packageVersionsToDelete.map(({ metadata:{ container: { tags } } }) => tags).flat();
+          core.setOutput('deleted-image-tags',JSON.stringify([...new Set(deletedTags)]));

@@ -27,6 +27,8 @@ Opinionated GitHub actions and workflows for continuous integration in container
 
 ### - [Docker build images](.github/workflows/docker-build-images.md)
 
+### - [Prune pull requests images tags](.github/workflows/prune-pull-requests-images-tags.md)
+
 ## Contributing
 
 👍 If you wish to contribute to this project, please read the [CONTRIBUTING.md](CONTRIBUTING.md) file, PRs are Welcome !
