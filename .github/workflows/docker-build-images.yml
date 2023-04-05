@@ -47,10 +47,6 @@ on:
         description: "Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See https://github.com/docker/login-action#usage"
         required: true
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   prepare-variables:
     outputs:
@@ -125,6 +121,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      issues: read
       packages: write
     steps:
       - id: build

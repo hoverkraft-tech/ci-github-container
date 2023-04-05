@@ -140,8 +140,8 @@ runs:
           core.setFailed(`No tags found for the current event: ${context.eventName}`);
 
     - id: docker-metadata
-      # FIXME: workaround until will be merged: https://github.com/docker/metadata-action/pull/248
-      uses: escemi-tech/metadata-action@add-option-to-choose-between-git-or-workflow-context
+      # FIXME: use stable version
+      uses: docker/metadata-action@master
       with:
         images: ${{ steps.image-name.outputs.image-name-with-registry }}
         tags: ${{ steps.define-meta-tags.outputs.result }}
