@@ -11,7 +11,7 @@ inputs:
     required: false
   pull-request-tag-filter:
     description: "The regex to match pull request tags. Must have a capture group for the pull request number."
-    default: "^pr-([0-9]+)-"
+    default: "^pr-([0-9]+)(?:-|$)"
   github-token:
     description: "GitHub token with the packages:read and packages:delete scopes. See [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries)"
     default: ${{ github.token }}
@@ -57,18 +57,18 @@ runs:
 
           const pullRequestTagFilterInput = `${{ inputs.pull-request-tag-filter }}`;
           if (!pullRequestTagFilterInput.length) {
-            core.failed('Input "pull-request-tag-filter" is undefined');
+            core.setFailed('Input "pull-request-tag-filter" is undefined');
             return;
           }
           // Assert that the regex has a valid capture group for the pull request number
-          const hasCaptureGroupMatch = pullRequestTagFilterInput.match(/\(([^)]+)\)/g);
+          const hasCaptureGroupMatch = pullRequestTagFilterInput.match(/\([^?]([^)]+)\)/g);
           if (!hasCaptureGroupMatch ) {
-            core.failed('Input "pull-request-tag-filter" must have a capture group for the pull request number');
+            core.setFailed(`Input "pull-request-tag-filter" ${pullRequestTagFilterInput} must have a capture group for the pull request number`);
             return;
           }
 
           if (hasCaptureGroupMatch.length !== 1) {
-            core.failed('Input "pull-request-tag-filter" must have only one capture group for the pull request number');
+            core.setFailed(`Input "pull-request-tag-filter" ${pullRequestTagFilterInput} must have only one capture group for the pull request number`);
             return;
           }
 
