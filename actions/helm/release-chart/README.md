@@ -15,15 +15,15 @@ Action to release a Helm chart to OCI registry
 ```yaml
 - uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@v0.3.0
   with:
-    # OCI registry where to push chart. See https://github.com/appany/helm-oci-chart-releaser#usage
+    # OCI registry where to push chart. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)
     # Default: ghcr.io
     oci-registry: ""
 
-    # OCI registry username. See https://github.com/appany/helm-oci-chart-releaser#usage
+    # OCI registry username. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)
     # Default: ${{ github.repository_owner }}
     oci-registry-username: ""
 
-    # OCI registry password. See https://github.com/appany/helm-oci-chart-releaser#usage
+    # OCI registry password. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)
     # Default: ${{ github.token }}
     oci-registry-password: ""
 
@@ -34,14 +34,14 @@ Action to release a Helm chart to OCI registry
     path: ""
 
     # Define charts values to be filled. [{ path, value }]. Example: [{ "path":
-    # ".image.registry", "value": "ghcr.io" }]. See https://mikefarah.gitbook.io/yq/
+    # ".image.registry", "value": "ghcr.io" }]. See [https://mikefarah.gitbook.io/yq/](https://mikefarah.gitbook.io/yq/)
     values: ""
 
     # List of Helm repositories to add before release charts. See
-    # https://helm.sh/docs/helm/helm_repo_add/
+    # [https://helm.sh/docs/helm/helm_repo_add/](https://helm.sh/docs/helm/helm_repo_add/)
     helm-repositories: ""
 
-    # GitHub token to use latest version of helm. See https://github.com/Azure/setup-helm
+    # GitHub token to use latest version of helm. See [https://github.com/Azure/setup-helm](https://github.com/Azure/setup-helm)
     # Default: ${{ github.token }}
     github-token: ""
 
@@ -67,9 +67,9 @@ Action to release a Helm chart to OCI registry
 <!-- end inputs -->
 <!-- start outputs -->
 
-| **Output**         | **Description**                                                                                                                                                           | **Default** | **Required** |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------ |
-| <code>image</code> | Chart image (Default '{registry}/{repository}/{image}:{tag}'). See [https://github.com/appany/helm-oci-chart-releaser](https://github.com/appany/helm-oci-chart-releaser) | undefined   | undefined    |
+| \***\*Output\*\*** | \***\*Description\*\***                                                                                                                                                   | \***\*Default\*\*** | \***\*Required\*\*** |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------- |
+| <code>image</code> | Chart image (Default '{registry}/{repository}/{image}:{tag}'). See [https://github.com/appany/helm-oci-chart-releaser](https://github.com/appany/helm-oci-chart-releaser) | undefined           | undefined            |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
