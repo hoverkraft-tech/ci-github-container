@@ -48,7 +48,7 @@ runs:
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.4.3
 
     - id: chart-values-updates
-      uses: actions/github-script@v6.4.0
+      uses: actions/github-script@v6.4.1
       with:
         script: |
           const chartValuesInput = `${{ inputs.values }}`;
