@@ -64,8 +64,19 @@ jobs:
       contents: read
       pull-requests: read
       packages: write
+      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+      id-token: write
     steps:
+      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+      - id: oidc
+        uses: ChristopherHX/oidc@v2
+      - uses: actions/checkout@v3
+        with:
+          path: ./self-workflow
+          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
+          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+
       - id: build
-        uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@main
+        uses: ./self-workflow/actions/docker/prune-pull-requests-image-tags
         with:
           image: ${{ matrix.image }}

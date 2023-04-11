@@ -16,7 +16,11 @@ on:
           "registry": "ghcr.io",
           "repository": "my-org/my-repo/application",
           "tags": ["pr-63", "pr-63-5222075"],
-          "images": ["ghcr.io/my-org/my-repo/application:pr-63","ghcr.io/my-org/my-repo/application:pr-63-5222075"]
+          "images": ["ghcr.io/my-org/my-repo/application:pr-63","ghcr.io/my-org/my-repo/application:pr-63-5222075"],
+          "platforms":[
+          {"name":"application","images":["ghcr.io/my-org/my-repo/application:pr-63-linux-arm64"],"tagSuffix":"-linux-arm64","platform":"linux/arm64"},
+          {"name":"application","images":["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64"],"tagSuffix":"-linux-amd64","platform":"linux/amd64"}]
+          }
           }
           }'
         value: ${{ jobs.outputs-built-images.outputs.built-images }}
@@ -123,9 +127,24 @@ jobs:
       pull-requests: read
       issues: read
       packages: write
+      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+      id-token: write
     steps:
+
+      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+      - id: oidc
+        uses: ChristopherHX/oidc@v2
+      - uses: actions/checkout@v3
+        with:
+          path: ./self-workflow
+          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
+          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+      - run: |
+          echo "self-workflow" >> .gitignore
+          echo "self-workflow" >> .dockerignore
+
       - id: build
-        uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@main
+        uses: ./self-workflow/actions/docker/build-image
         with:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -157,11 +176,23 @@ jobs:
           artifact-name: "built-images"
           value: ${{ steps.outputs-built-image.outputs.built-image }}
 
+      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+      - uses: actions/checkout@v3
+        with:
+          path: ./self-workflow
+          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
+          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+
   outputs-built-images:
     needs: build-images
     runs-on: "ubuntu-latest"
     outputs:
       built-images: ${{ steps.generate-outputs.outputs.built-images }}
+    permissions:
+      contents: read
+      packages: write
+      # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
+      id-token: write
     steps:
       - id: get-matrix-outputs
         uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.4.3
@@ -211,43 +242,23 @@ jobs:
 
             core.setOutput('built-images', JSON.stringify(builtImages));
 
-      - uses: docker/setup-qemu-action@v2
 
-      - uses: docker/login-action@v2
+        # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
+      - id: oidc
+        uses: ChristopherHX/oidc@v2
+      - uses: actions/checkout@v3 # checks out called workflow
         with:
-          registry: ${{ inputs.oci-registry }}
-          username: ${{ inputs.oci-registry-username }}
-          password: ${{ secrets.oci-registry-password }}
+          path: ./self-workflow
+          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
+          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+      - name: ignore self-worfklow changes
+        run: |
+          echo "self-workflow" >> .gitignore
+          echo "self-workflow" >> .dockerignore
 
-      - name: Create SHA manifest and push
-        uses: actions/github-script@v6.4.0
+      - uses: ./self-workflow/actions/docker/create-images-manifests
         with:
-          script: |
-            const builtImages = ${{ steps.generate-outputs.outputs.built-images }};
-
-            const createAndPushCommands = [];
-            for (const builtImage of Object.values(builtImages)) {
-              const createAndPushCommandsForImage = builtImage.images.map((image, key) => {
-                const manifestsToAmmend = builtImage.platforms.map(({ images }) => `--amend ${images[key]}`);
-
-                const createManifestCommand = `docker manifest create ${image} ${manifestsToAmmend.join(' ')}`;
-                const pushManifestCommand = `docker manifest push ${image}`;
-
-                return new Promise(async (resolve, reject)  => {
-                  try {
-                    await exec.exec(createManifestCommand);
-                    core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
-                    await exec.exec(pushManifestCommand);
-                    core.debug(`Push manifest for "${builtImage.name}" ("${pushManifestCommand}") executed`);
-                    resolve();
-                  } catch(error){
-                    reject(error);
-                  }
-                });
-              });
-
-              createAndPushCommands.push(...createAndPushCommandsForImage);
-            }
-
-            await Promise.all(createAndPushCommands);
-            core.debug("All manifests created and pushed");
+          oci-registry: ${{ inputs.oci-registry }}
+          oci-registry-username: ${{ inputs.oci-registry-username }}
+          oci-registry-password: ${{ secrets.oci-registry-password }}
+          built-images: ${{ steps.generate-outputs.outputs.built-images }}
