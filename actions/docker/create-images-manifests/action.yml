@@ -1,0 +1,93 @@
+name: "Create images manifests"
+description: "Action to create built images manifests"
+author: Hoverkraft
+branding:
+  icon: package
+  color: gray-dark
+
+outputs:
+  images:
+    description: 'The images tags built. Example: ["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64","ghcr.io/my-org/my-repo/application:pr-63-5222075-linux-amd64"]'
+    value: ${{ steps.generate-outputs.outputs.images }}
+  tag-suffix:
+    description: 'The platform tag suffix. Example: "-linux-amd64"'
+    value: ${{ steps.prepare-variables.outputs.tag-suffix }}
+
+inputs:
+  oci-registry:
+    description: "OCI registry where to pull and push images"
+    default: "ghcr.io"
+    required: true
+  oci-registry-username:
+    description: "Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)"
+    default: ${{ github.repository_owner }}
+    required: true
+  oci-registry-password:
+    description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)'
+    default: ${{ github.token }}
+    required: true
+  built-images:
+    description: 'Built images names and tags. Example: {
+      "application": {
+      "name": "application",
+      "registry": "ghcr.io",
+      "repository": "my-org/my-repo/application",
+      "tags": ["pr-63", "pr-63-5222075"],
+      "images": ["ghcr.io/my-org/my-repo/application:pr-63","ghcr.io/my-org/my-repo/application:pr-63-5222075"],
+      "platforms":[
+      {"name":"application","images":["ghcr.io/my-org/my-repo/application:pr-63-linux-arm64"],"tagSuffix":"-linux-arm64","platform":"linux/arm64"},
+      {"name":"application","images":["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64"],"tagSuffix":"-linux-amd64","platform":"linux/amd64"}]
+      }
+      }
+      }'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: docker/setup-qemu-action@v2
+
+    - uses: docker/login-action@v2
+      with:
+        registry: ${{ inputs.oci-registry }}
+        username: ${{ inputs.oci-registry-username }}
+        password: ${{ inputs.oci-registry-password }}
+
+    - name: Create SHA manifest and push
+      uses: actions/github-script@v6.4.0
+      with:
+        script: |
+          const builtImagesInput = `${{ inputs.built-images }}`;
+          let builtImages = null;
+          try {
+            builtImages = JSON.parse(builtImagesInput);
+          } catch (error) {
+            throw new Error(`"built-images" input is not a valid JSON: ${error}`);
+          }
+
+          const createAndPushCommands = [];
+          for (const builtImage of Object.values(builtImages)) {
+            const createAndPushCommandsForImage = builtImage.images.map((image, key) => {
+              const manifestsToAmmend = builtImage.platforms.map(({ images }) => `--amend ${images[key]}`);
+
+              const createManifestCommand = `docker manifest create ${image} ${manifestsToAmmend.join(' ')}`;
+              const pushManifestCommand = `docker manifest push ${image}`;
+
+              return new Promise(async (resolve, reject)  => {
+                try {
+                  await exec.exec(createManifestCommand);
+                  core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+                  await exec.exec(pushManifestCommand);
+                  core.debug(`Push manifest for "${builtImage.name}" ("${pushManifestCommand}") executed`);
+                  resolve();
+                } catch(error){
+                  reject(error);
+                }
+              });
+            });
+
+            createAndPushCommands.push(...createAndPushCommandsForImage);
+          }
+
+          await Promise.all(createAndPushCommands);
+          core.debug("All manifests created and pushed");
