@@ -17,6 +17,13 @@ updates:
       day: friday
       time: '04:00'
   - package-ecosystem: github-actions
+    directory: /actions/docker/create-images-manifests
+    open-pull-requests-limit: 20
+    schedule:
+      interval: weekly
+      day: friday
+      time: '04:00'
+  - package-ecosystem: github-actions
     directory: /actions/docker/delete-image-tags
     open-pull-requests-limit: 20
     schedule:
