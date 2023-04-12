@@ -13,7 +13,7 @@ Action to delete docker image tags from GitHub OCI registry
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/delete-image-tags@v0.4.1
+- uses: hoverkraft-tech/ci-github-container/actions/docker/delete-image-tags@v0.5.0
   with:
     # Image name
     image: ""
