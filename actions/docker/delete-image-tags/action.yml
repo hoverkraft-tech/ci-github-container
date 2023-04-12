@@ -38,7 +38,7 @@ runs:
         rm -fr ./self-actions
 
     - id: delete-image-tags
-      uses: actions/github-script@v6.4.0
+      uses: actions/github-script@v6.4.1
       with:
         github-token: ${{ inputs.github-token }}
         script: |
