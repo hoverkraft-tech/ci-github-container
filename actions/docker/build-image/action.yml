@@ -108,7 +108,7 @@ runs:
         tag-suffix: ${{ steps.prepare-variables.outputs.tag-suffix }}
 
     - id: define-meta-tags
-      uses: actions/github-script@v6.4.0
+      uses: actions/github-script@v6.4.1
       with:
         result-encoding: string
         script: |
@@ -175,7 +175,7 @@ runs:
         platforms: ${{ inputs.platform }}
 
     - id: generate-outputs
-      uses: actions/github-script@v6.4.0
+      uses: actions/github-script@v6.4.1
       with:
         script: |
           const builtMetadata = ${{ steps.built-and-push.outputs.metadata }};
