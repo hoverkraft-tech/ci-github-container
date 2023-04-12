@@ -10,7 +10,7 @@ inputs:
     description: "Image name"
     required: false
   pull-request-tag-filter:
-    description: "The regex to match pull request tags. Must have a capture group for the pull request number."
+    description: "The regular expression to match pull request tags. Must have a capture group for the pull request number."
     default: "^pr-([0-9]+)(?:-|$)"
   github-token:
     description: "GitHub token with the packages:read and packages:delete scopes. See [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries)"
@@ -141,10 +141,20 @@ runs:
 
           await Promise.all(
             packageVersionsToDelete.map(
-              ({ id }) => github.rest.packages.deletePackageVersionForOrg({
-                ...packagePayload,
-                package_version_id: id,
-              })
+              async ({ id }) => {
+                try{
+                  await github.rest.packages.deletePackageVersionForOrg({
+                    ...packagePayload,
+                    package_version_id: id,
+                  });
+                } catch(error){
+                  if (error.status === 404) {
+                    core.warning(`Image version ${id} not found`);
+                  } else {
+                    throw error;
+                  }
+                }
+              }
             )
           );
 
