@@ -28,8 +28,8 @@ permissions:
     # Image name
     image: ""
 
-    # The regex to match pull request tags. Must have a capture group for the pull
-    # request number.
+    # The regular expression to match pull request tags. Must have a capture group for
+    # the pull request number.
     # Default: ^pr-([0-9]+)(?:-|$)
     pull-request-tag-filter: ""
 
@@ -45,7 +45,7 @@ permissions:
 | **Input**                                | **Description**                                                                                                                                                                                                                                                                                                                                                                | **Default**                       | **Required** |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | ------------ |
 | **<code>image</code>**                   | Image name                                                                                                                                                                                                                                                                                                                                                                     |                                   | **false**    |
-| **<code>pull-request-tag-filter</code>** | The regex to match pull request tags. Must have a capture group for the pull request number.                                                                                                                                                                                                                                                                                   | <code>^pr-([0-9]+)(?:-\|$)</code> | **false**    |
+| **<code>pull-request-tag-filter</code>** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                                                                                                                                                                                                                                      | <code>^pr-([0-9]+)(?:-\|$)</code> | **false**    |
 | **<code>github-token</code>**            | GitHub token with the packages:read and packages:delete scopes. See [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries) | <code>${{ github.token }}</code>  | **false**    |
 
 <!-- end inputs -->
