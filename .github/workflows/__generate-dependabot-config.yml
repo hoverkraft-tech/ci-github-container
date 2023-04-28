@@ -6,7 +6,7 @@ on:
       - main
 jobs:
   generate-dependabot-config:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/generate-dependabot-config.yml@0.4.3
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/generate-dependabot-config.yml@0.4.4
     with:
       github-app-id: ${{ vars.CI_BOT_APP_ID }}
     secrets:
