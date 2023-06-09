@@ -22,7 +22,7 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@v0.5.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@v0.6.0
   with:
     # OCI registry where to pull and push images
     # Default: ghcr.io
