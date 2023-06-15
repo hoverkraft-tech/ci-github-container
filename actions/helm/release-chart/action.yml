@@ -117,7 +117,7 @@ runs:
         done
 
     - id: chart-releaser
-      uses: appany/helm-oci-chart-releaser@v0.4.0
+      uses: appany/helm-oci-chart-releaser@v0.4.1
       with:
         name: ${{ github.event.repository.name }}
         repository: ${{ github.repository }}/charts/${{ inputs.chart }}
@@ -126,3 +126,4 @@ runs:
         registry: ${{ inputs.oci-registry }}
         registry_username: ${{ inputs.oci-registry-username }}
         registry_password: ${{ inputs.oci-registry-password }}
+        update_dependencies: "true"
