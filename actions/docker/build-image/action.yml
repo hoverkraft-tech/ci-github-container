@@ -83,13 +83,18 @@ runs:
           exit 1
         fi
 
-        # Generate tag prefix
+        TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
+        echo "tag-suffix=$TAG_SUFFIX" >> $GITHUB_OUTPUT
+
+        # Add tag suffix flavor
+        FLAVOR="suffix=$TAG_SUFFIX"
+
+        # Add tag prefix flavor
         if [ ! -z "${{ inputs.image }}" ]; then
-          echo "tag-prefix=${{ inputs.image }}--" >> $GITHUB_OUTPUT
+          FLAVOR="$FLAVOR,prefix=${{ inputs.image }}--"
         fi
 
-        # Generate tag suffix
-        echo "tag-suffix=-${{ steps.slugify-platform.outputs.result }}" >> $GITHUB_OUTPUT
+        echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
@@ -104,8 +109,7 @@ runs:
       uses: int128/docker-build-cache-config-action@v1
       with:
         image: ${{ steps.image-name.outputs.image-name-with-registry }}/cache
-        tag-prefix: ${{ steps.prepare-variables.outputs.tag-prefix }}
-        tag-suffix: ${{ steps.prepare-variables.outputs.tag-suffix }}
+        flavor: ${{ steps.prepare-variables.outputs.flavor }}
 
     - id: define-meta-tags
       uses: actions/github-script@v6.4.1
