@@ -1,17 +1,17 @@
 name: "Build image"
-description: "Action to build an image with Docker"
+description: "Action to build an image with Docker for a specific platform"
 author: Hoverkraft
 branding:
   icon: package
   color: gray-dark
 
 outputs:
-  images:
-    description: 'The images tags built. Example: ["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64","ghcr.io/my-org/my-repo/application:pr-63-5222075-linux-amd64"]'
-    value: ${{ steps.generate-outputs.outputs.images }}
-  tag-suffix:
-    description: 'The platform tag suffix. Example: "-linux-amd64"'
-    value: ${{ steps.prepare-variables.outputs.tag-suffix }}
+  image:
+    description: 'Name of the built image. Example: "ghcr.io/my-org/my-repo/application"'
+    value: ${{ steps.get-built-image.outputs.image }}
+  digest:
+    description: 'Digest of the built image. Example: "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"'
+    value: ${{ steps.get-built-image.outputs.digest }}
 
 inputs:
   oci-registry:
@@ -25,6 +25,9 @@ inputs:
   oci-registry-password:
     description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)'
     default: ${{ github.token }}
+    required: true
+  image:
+    description: 'Image name. Example: "ghcr.io/my-org/my-repo/application"'
     required: true
   platform:
     description: "Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
@@ -43,11 +46,8 @@ inputs:
   target:
     description: "Sets the target stage to build. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: false
-  image:
-    description: "Additional Image name"
-    required: false
-  tag:
-    description: "Force image tag to publish"
+  labels:
+    description: "Labels to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: false
 
 runs:
@@ -59,12 +59,6 @@ runs:
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
 
-    - id: image-name
-      uses: ./self-actions/docker/get-image-name
-      with:
-        image: ${{ inputs.image }}
-        oci-registry: ${{ inputs.oci-registry }}
-
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: |
@@ -75,30 +69,21 @@ runs:
       with:
         value: ${{ inputs.platform }}
 
-    - id: prepare-variables
+    - id: get-cache-flavor
       shell: bash
       run: |
-        if [ -z "${{ inputs.oci-registry-password }}" ]; then
-          echo "Input oci-registry-password is not set"
-          exit 1
-        fi
-
         TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
-        echo "tag-suffix=$TAG_SUFFIX" >> $GITHUB_OUTPUT
 
         # Add tag suffix flavor
         FLAVOR="suffix=$TAG_SUFFIX"
 
-        # Add tag prefix flavor
-        if [ ! -z "${{ inputs.image }}" ]; then
-          FLAVOR="$FLAVOR,prefix=${{ inputs.image }}--"
-        fi
-
         echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
 
-    - id: get-issue-number
-      if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.7.5
+    - id: cache
+      uses: int128/docker-build-cache-config-action@v1
+      with:
+        image: ${{ inputs.image }}/cache
+        flavor: ${{ steps.get-cache-flavor.outputs.flavor }}
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.7.5
       with:
@@ -107,78 +92,10 @@ runs:
     - shell: bash
       run: git lfs pull
 
-    - id: cache
-      uses: int128/docker-build-cache-config-action@v1
-      with:
-        image: ${{ steps.image-name.outputs.image-name-with-registry }}/cache
-        flavor: ${{ steps.prepare-variables.outputs.flavor }}
-
-    - id: define-meta-tags
-      uses: actions/github-script@v6.4.1
-      with:
-        result-encoding: string
-        script: |
-          const tagInput = `${{ inputs.tag }}`
-          if (tagInput.length) {
-            return `type=semver,pattern={{raw}},value=${tagInput}${{ steps.prepare-variables.outputs.tag-suffix }}`;
-          }
-
-          const suffixOption = `suffix=${{ steps.prepare-variables.outputs.tag-suffix }}`;
-
-          const isPullRequestOrIssueComment = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'issue_comment';
-          if(isPullRequestOrIssueComment) {
-            return [
-              `type=sha,prefix=pr-${{ steps.get-issue-number.outputs.issue-number }}-,${suffixOption}`,
-              `type=ref,event=pr,${suffixOption}`,
-            ].join("\n");
-          }
-
-          const isPushOrWorkflowDispatch = context.eventName === 'push' || context.eventName === 'workflow_dispatch';
-          if(isPushOrWorkflowDispatch) {
-            // If is tag, use tag name
-            if (context.ref.startsWith('refs/tags/')) {
-              return `type=ref,event=tag,${suffixOption}`;
-            }
-
-            return `type=ref,event=branch,${suffixOption}`;
-          }
-
-          core.setFailed(`No tags found for the current event: ${context.eventName}`);
-
-    - id: tmp-docker-metadata
+    - id: docker-metadata
       uses: docker/metadata-action@v5.0.0
       with:
-        images: ${{ steps.image-name.outputs.image-name-with-registry }}
-        tags: ${{ steps.define-meta-tags.outputs.result }}
-
-    # FIXME: workaround until will be merged: https://github.com/docker/actions-toolkit/pull/173
-    - id: docker-metadata
-      uses: actions/github-script@v6.4.1
-      with:
-        script: |
-          const tags = `${{ steps.tmp-docker-metadata.outputs.tags }}`;
-
-          const isIssueComment = context.eventName === 'issue_comment';
-          if(!isIssueComment) {
-            core.setOutput('tags', tags);
-            return;
-          }
-
-          // Get short commit sha from detached head
-          const { stdout } = await exec.getExecOutput(`git rev-parse --short HEAD`);
-          const shortCommitSha = stdout.trim();
-          core.debug("shortCommitSha: " + shortCommitSha);
-
-          const commitShaMatcher = /(pr-${{ steps.get-issue-number.outputs.issue-number }}-)([0-9a-f]{7,40})(-)/;
-          const fixedTags = tags.split("\n").map(tag => {
-            return tag.replace(commitShaMatcher, "$1"+shortCommitSha+"$3");
-          }).join("\n");
-
-          core.setOutput('tags', fixedTags);
-
-    # #endregion
-
-    # #region Build image
+        images: ${{ inputs.image }}
 
     - uses: docker/setup-qemu-action@v3
     - uses: docker/setup-buildx-action@v3
@@ -189,28 +106,30 @@ runs:
         username: ${{ inputs.oci-registry-username }}
         password: ${{ inputs.oci-registry-password }}
 
-    - id: built-and-push
+    - id: build
       uses: docker/build-push-action@v5
       with:
-        provenance: false
-        push: true
         context: ${{ inputs.context }}
         build-args: ${{ inputs.build-args }}
         target: ${{ inputs.target }}
         file: ${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}
-        tags: ${{ steps.docker-metadata.outputs.tags }}
-        labels: ${{ steps.docker-metadata.outputs.labels }}
+        labels: ${{ inputs.labels }}
+        platforms: ${{ inputs.platform }}
         cache-from: ${{ steps.cache.outputs.cache-from }}
         cache-to: ${{ steps.cache.outputs.cache-to }}
-        platforms: ${{ inputs.platform }}
+        outputs: type=image,name=${{ inputs.image }},push-by-digest=true,name-canonical=true,push=true
 
-    # #endregion
-
-    - id: generate-outputs
+    - id: get-built-image
       uses: actions/github-script@v6.4.1
       with:
         script: |
-          const builtMetadata = ${{ steps.built-and-push.outputs.metadata }};
+          const builtMetadataOutput = `${{ steps.build.outputs.metadata }}`;
+          let builtMetadata;
+          try {
+            builtMetadata = JSON.parse(builtMetadataOutput);
+          } catch (error) {
+            throw new Error(`Given "metadata" output is not a valid JSON: ${error}`);
+          }
 
           if (typeof builtMetadata !== 'object') {
             core.setFailed('Given "metadata" output is not a JSON object.');
@@ -221,19 +140,10 @@ runs:
             core.setFailed('Given "metadata"."image.name" output is undefined.');
             return;
           }
+          if (builtMetadata["containerimage.digest"] === undefined) {
+            core.setFailed('Given "metadata"."containerimage.digest" output is undefined.');
+            return;
+          }
 
-          const images = builtMetadata["image.name"].split(",");
-
-          // Sort images by longest tag first
-          images.sort((a, b) => b.length - a.length);
-
-          core.setOutput('images', JSON.stringify(images));
-
-    - uses: aquasecurity/trivy-action@0.12.0
-      with:
-        image-ref: ${{ fromJSON(steps.generate-outputs.outputs.images)[0] }}
-        format: "sarif"
-        output: "trivy-results.sarif"
-      env:
-        TRIVY_USERNAME: ${{ inputs.oci-registry-username }}
-        TRIVY_PASSWORD: ${{ inputs.oci-registry-password }}
+          core.setOutput('image', builtMetadata["image.name"]);
+          core.setOutput('digest', builtMetadata["containerimage.digest"]);

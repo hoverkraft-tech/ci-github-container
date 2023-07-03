@@ -5,14 +5,6 @@ branding:
   icon: package
   color: gray-dark
 
-outputs:
-  images:
-    description: 'The images tags built. Example: ["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64","ghcr.io/my-org/my-repo/application:pr-63-5222075-linux-amd64"]'
-    value: ${{ steps.generate-outputs.outputs.images }}
-  tag-suffix:
-    description: 'The platform tag suffix. Example: "-linux-amd64"'
-    value: ${{ steps.prepare-variables.outputs.tag-suffix }}
-
 inputs:
   oci-registry:
     description: "OCI registry where to pull and push images"
@@ -27,17 +19,12 @@ inputs:
     default: ${{ github.token }}
     required: true
   built-images:
-    description: 'Built images names and tags. Example: {
+    description: 'Built images data. Example: {
       "application": {
       "name": "application",
-      "registry": "ghcr.io",
-      "repository": "my-org/my-repo/application",
-      "tags": ["pr-63", "pr-63-5222075"],
-      "images": ["ghcr.io/my-org/my-repo/application:pr-63","ghcr.io/my-org/my-repo/application:pr-63-5222075"],
-      "platforms":[
-      {"name":"application","images":["ghcr.io/my-org/my-repo/application:pr-63-linux-arm64"],"tagSuffix":"-linux-arm64","platform":"linux/arm64"},
-      {"name":"application","images":["ghcr.io/my-org/my-repo/application:pr-63-linux-amd64"],"tagSuffix":"-linux-amd64","platform":"linux/amd64"}]
-      }
+      "image": "ghcr.io/my-org/my-repo/application",
+      "digest": "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "tags": ["ghcr.io/my-org/my-repo/application:pr-63-5222075","ghcr.io/my-org/my-repo/application:pr-63"]
       }
       }'
     required: true
@@ -45,6 +32,7 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - uses: docker/setup-buildx-action@v3
     - uses: docker/setup-qemu-action@v3
 
     - uses: docker/login-action@v3
@@ -65,29 +53,34 @@ runs:
             throw new Error(`"built-images" input is not a valid JSON: ${error}`);
           }
 
-          const createAndPushCommands = [];
-          for (const builtImage of Object.values(builtImages)) {
-            const createAndPushCommandsForImage = builtImage.images.map((image, key) => {
-              const manifestsToAmmend = builtImage.platforms.map(({ images }) => `--amend ${images[key]}`);
+          // Create manifest for each image
+          const commands = Object.keys(builtImages).map(imageName => {
+            const builtImage = builtImages[imageName];
 
-              const createManifestCommand = `docker manifest create ${image} ${manifestsToAmmend.join(' ')}`;
-              const pushManifestCommand = `docker manifest push ${image}`;
+            const tags = [...new Set(builtImage.tags)].map(tag => {
+              return `--tag ${tag}`;
+            }).join(" ");
 
-              return new Promise(async (resolve, reject)  => {
-                try {
-                  await exec.exec(createManifestCommand);
-                  core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
-                  await exec.exec(pushManifestCommand);
-                  core.debug(`Push manifest for "${builtImage.name}" ("${pushManifestCommand}") executed`);
-                  resolve();
-                } catch(error){
-                  reject(error);
-                }
-              });
+            const image = builtImage.image;
+
+            const digests = [...new Set(builtImage.digests)].map(digest => {
+              const cleanDigest = digest.trim();
+              return cleanDigest.length ? `${image}@${cleanDigest}` : "";
+            }).join(" ");
+
+            createManifestCommand = `docker buildx imagetools create ${tags} ${digests}`;
+
+            return new Promise(async (resolve, reject)  => {
+              try {
+                await exec.exec(createManifestCommand);
+                core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+                resolve();
+              } catch(error){
+                reject(error);
+              }
             });
+          });
 
-            createAndPushCommands.push(...createAndPushCommandsForImage);
-          }
+          await Promise.all(commands);
 
-          await Promise.all(createAndPushCommands);
-          core.debug("All manifests created and pushed");
+          core.debug("Manifest created and pushed");

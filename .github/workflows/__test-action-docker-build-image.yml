@@ -17,7 +17,7 @@ jobs:
             exit 1
           fi
 
-      - id: build-image-with-tag
+      - id: build-image
         uses: ./actions/docker/build-image
         with:
           oci-registry: ghcr.io
@@ -26,29 +26,24 @@ jobs:
           dockerfile: "./tests/application-1/Dockerfile"
           target: "prod"
           platform: "linux/amd64"
-          image: application-1
-          tag: 0.1.0
+          image: ghcr.io/hoverkraft-tech/ci-github-container/application-1
+          labels: |
+            org.opencontainers.image.title=Application 1
+            org.opencontainers.image.description=Application 1
 
-      - name: Check images ouput
+      - name: Check build image ouput
         uses: actions/github-script@v6.4.1
         with:
           script: |
             const assert = require("assert");
 
-            const imagesOutput = `${{ steps.build-image-with-tag.outputs.images }}`;
-            assert(imagesOutput.length, `"images" output is empty`);
+            const imageOutput = `${{ steps.build-image.outputs.image }}`;
+            assert(imageOutput.length, `"image" output is empty`);
+            assert.equal(imageOutput,"ghcr.io/hoverkraft-tech/ci-github-container/application-1", `"image" output is not valid`);
 
-            // Check if is valid Json
-            let images = null;
-            try {
-              images = JSON.parse(imagesOutput);
-            } catch (error) {
-              throw new Error(`"images" output is not a valid JSON: ${error}`);
-            }
-
-            assert(Array.isArray(images), `"images" output is not an array`);
-            assert.equal(images.length, 1, `"images" output does not contain 1 image`);
-            assert.equal(images[0], `ghcr.io/hoverkraft-tech/ci-github-container/application-1:0.1.0-linux-amd64`);
+            const digestOutput = `${{ steps.build-image.outputs.digest }}`;
+            assert(digestOutput.length, `"digest" output is empty`);
+            assert.match(digestOutput, /^sha256:[a-f0-9]{64}$/, `"digest" output is not a valid image digest`);
 
       - uses: docker/login-action@v3
         with:
@@ -58,10 +53,4 @@ jobs:
 
       - name: Check docker images
         run: |
-          docker manifest inspect "${{ fromJson(steps.build-image-with-tag.outputs.images)[0] }}"
-
-      - name: Cleanup docker images
-        uses: ./actions/docker/delete-image-tags
-        with:
-          image: "application-1"
-          tag-prefix: "0.1.0-"
+          docker manifest inspect "${{ steps.build-image.outputs.image }}@${{ steps.build-image.outputs.digest }}"

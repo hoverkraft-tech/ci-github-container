@@ -6,31 +6,38 @@ env:
   TAG: "pr-1-linux-amd64"
 
 jobs:
+  setup-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
+            echo "GitHub token secrets is not set"
+            exit 1
+          fi
+  build:
+    needs: setup-tests
+    uses: ./.github/workflows/docker-build-images.yml
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      images: |
+        [
+          {
+            "name": "test-prune",
+            "context": ".",
+            "dockerfile": "./tests/application-1/Dockerfile",
+            "build-args": { "PROD_MODE": "true" },
+            "target": "prod",
+            "platforms": ["linux/amd64"]
+          }
+        ]
+
   tests:
     name: Test for "prune-pull-requests-image-tags" action
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    needs: build
     steps:
       - uses: actions/checkout@v4
-
-      - run: |
-          if [ -z "${{ github.token }}" ]; then
-            echo "GitHub token is not set"
-            exit 1
-          fi
-
-      - id: build-image
-        uses: ./actions/docker/build-image
-        with:
-          oci-registry: ghcr.io
-          oci-registry-password: ${{ github.token }}
-          context: "."
-          dockerfile: "./tests/application-1/Dockerfile"
-          target: "prod"
-          platform: "linux/amd64"
-          image: ${{ env.IMAGE }}
 
       - uses: docker/login-action@v3
         with:
@@ -40,8 +47,8 @@ jobs:
 
       - name: Push extra docker image tags for test
         run: |
-          docker pull ${{ fromJson(steps.build-image.outputs.images)[0] }}
-          docker tag ${{ fromJson(steps.build-image.outputs.images)[0] }} ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
+          docker pull ${{ fromJson(needs.build.outputs.built-images).test-prune.images[0] }}
+          docker tag ${{ fromJson(needs.build.outputs.built-images).test-prune.images[0] }} ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
           docker push ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
 
       - id: prune-pull-requests-image-tags
