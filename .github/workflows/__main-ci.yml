@@ -18,7 +18,7 @@ jobs:
 
   release:
     needs: ci
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/release-actions.yml@0.6.1
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/release-actions.yml@0.7.0
     with:
       update-all: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
       github-app-id: ${{ vars.CI_BOT_APP_ID }}
