@@ -23,7 +23,7 @@ on:
 
 jobs:
   main:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@0.9.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@0.9.1
     # Optional customizations.
     with:
       # Images to clean. Example: ["application-1","application-2"].
