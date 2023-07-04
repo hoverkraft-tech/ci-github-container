@@ -50,7 +50,7 @@ jobs:
           image: ${{ env.IMAGE }}
 
       - name: Check ouputs
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.4.1
         with:
           script: |
             const assert = require("assert");
@@ -77,7 +77,7 @@ jobs:
             }
 
       - name: Ensure packages have been deleted
-        uses: actions/github-script@v6.4.0
+        uses: actions/github-script@v6.4.1
         with:
           github-token: ${{ github.token }}
           script: |
