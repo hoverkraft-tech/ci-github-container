@@ -55,6 +55,7 @@ jobs:
   prepare-variables:
     outputs:
       images: ${{ steps.validate-inputs.outputs.images }}
+      artifact-name: ${{ steps.define-artifact-name.outputs.artifact-name }}
     runs-on: "ubuntu-latest"
     steps:
       - id: validate-inputs
@@ -114,6 +115,18 @@ jobs:
 
             core.setOutput('images', JSON.stringify(imagesByPlatform));
 
+      - id: define-artifact-name
+        uses: actions/github-script@v6.4.1
+        with:
+          script: |
+            function uniqid(prefix = "") {
+                const sec = Date.now() * 1000 + Math.random() * 1000;
+                const id = sec.toString(16).replace(/\./g, "").padEnd(14, "0");
+                return `${prefix}${id}`;
+            };
+
+            core.setOutput('artifact-name', uniqid("build-images-"));
+
   build-images:
     name: Build image ${{ matrix.image.name }} for ${{ matrix.image.platform }}
     needs: prepare-variables
@@ -172,7 +185,7 @@ jobs:
       # https://github.com/orgs/community/discussions/26639
       - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.7.1
         with:
-          artifact-name: "built-images"
+          artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.outputs-built-image.outputs.built-image }}
 
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
@@ -183,7 +196,7 @@ jobs:
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
 
   outputs-built-images:
-    needs: build-images
+    needs: [prepare-variables, build-images]
     runs-on: "ubuntu-latest"
     outputs:
       built-images: ${{ steps.generate-outputs.outputs.built-images }}
@@ -196,7 +209,7 @@ jobs:
       - id: get-matrix-outputs
         uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.7.1
         with:
-          artifact-name: "built-images"
+          artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
       - id: generate-outputs
         uses: actions/github-script@v6.4.1
