@@ -1,0 +1,15 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ template "test-application-1.fullname" . }}-config
+  labels:
+    {{- include "test-application-1.labels" . | nindent 4 }}
+data:
+  {{- with .Values.application }}
+  DB_CONNECTION: {{ .dbConnection | quote }}
+  DB_HOST: {{ .dbHost | quote }}
+  DB_PORT: {{ .dbPort | quote }}
+  DB_DATABASE: {{ .dbDatabase | quote }}
+  DB_USERNAME: {{ .dbUsername | quote }}
+  DB_PASSWORD: {{ .dbPassword | quote }}
+  {{- end }}
