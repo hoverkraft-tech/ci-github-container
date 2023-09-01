@@ -24,7 +24,7 @@ inputs:
     description: "Path to the chart to release"
     required: true
   values:
-    description: 'Define charts values to be filled. [{ path, value }]. Example: [{ "path": ".image.registry", "value": "ghcr.io" }]. See [https://mikefarah.gitbook.io/yq/](https://mikefarah.gitbook.io/yq/)'
+    description: 'Define charts values to be filled. [{ file, path, value }]. Example: [{ "file": "charts/application/charts/api/values.yaml", "path": ".image.registry", "value": "ghcr.io" }]. See [https://mikefarah.gitbook.io/yq/](https://mikefarah.gitbook.io/yq/)'
     required: false
   helm-repositories:
     description: "List of Helm repositories to add before release charts. See [https://helm.sh/docs/helm/helm_repo_add/](https://helm.sh/docs/helm/helm_repo_add/)"
@@ -73,8 +73,10 @@ runs:
             return;
           }
 
+          const defaultValuesPath = "values.yaml";
+
           // Check each item
-          const yqUpdates = [];
+          const yqUpdates = {};
           for (const key in chartValues) {
             const chartValue = chartValues[key];
             if (typeof chartValue !== 'object') {
@@ -87,12 +89,23 @@ runs:
                 throw new Error(`"values[${key}].${property}" input is missing`);
               }
             }
-            yqUpdates.push(`${chartValue.path} = "${chartValue.value}"`);
+
+            const valueFilePath = chartValue['file'] ? chartValue['file'] : defaultValuesPath;
+            const filePath = `${{ inputs.path }}/${valueFilePath}`;
+
+            if (!yqUpdates[filePath]) {
+              yqUpdates[filePath] = [];
+            }
+            
+            yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
           }
 
-          const yqCommand = `yq -i '${yqUpdates.join(' | ')}' ${{ inputs.path }}/values.yaml`;
+          // Build yq commands
+          const yqCommands = Object.entries(yqUpdates).map(([filePath, updates]) => {
+            return `yq -i '${updates.join(' | ')}' ${filePath}`;
+          })
 
-          core.setOutput('yq-command', yqCommand);
+          core.setOutput('yq-command', yqCommands.join('\n'));
 
     - uses: mikefarah/yq@v4.35.1
       with:

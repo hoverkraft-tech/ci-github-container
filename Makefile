@@ -6,7 +6,7 @@ help: ## Display help
 lint: ## Execute linting (https://github.com/super-linter/super-linter)
 	DEFAULT_WORKSPACE="$(CURDIR)"; \
 	VOLUME="$$DEFAULT_WORKSPACE:$$DEFAULT_WORKSPACE"; \
-	LINTER_IMAGE="super-linter/super-linter:slim-v4"; \
+	LINTER_IMAGE="ghcr.io/super-linter/super-linter:slim-v5"; \
 	docker pull $$LINTER_IMAGE; \
 	docker run \
 		-e RUN_LOCAL=true -e USE_FIND_ALGORITHM=true \

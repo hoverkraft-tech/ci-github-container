@@ -4,22 +4,26 @@ on:
   workflow_call:
 
 jobs:
-  linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.7.1
+  # linter:
+  #   uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.7.1
 
-  test-action-docker-build-image:
-    needs: linter
-    uses: ./.github/workflows/__test-action-docker-build-image.yml
+  # test-action-docker-build-image:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-docker-build-image.yml
 
-  test-action-docker-delete-image-tags:
-    needs: linter
-    uses: ./.github/workflows/__test-action-docker-delete-image-tags.yml
+  # test-action-docker-delete-image-tags:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-docker-delete-image-tags.yml
 
-  test-action-docker-prune-pull-requests-package-version:
-    needs: linter
-    uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
+  # test-action-docker-prune-pull-requests-package-version:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
 
-  test-workflow-docker-build-images:
-    name: Test docker build images
-    needs: linter
-    uses: ./.github/workflows/__test-workflow-docker-build-images.yml
+  test-action-helm-release-chart:
+    # needs: linter
+    uses: ./.github/workflows/__test-action-helm-release-chart.yml
+
+  # test-workflow-docker-build-images:
+  #   name: Test docker build images
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-workflow-docker-build-images.yml
