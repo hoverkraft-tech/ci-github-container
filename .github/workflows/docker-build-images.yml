@@ -146,7 +146,7 @@ jobs:
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       - id: oidc
         uses: ChristopherHX/oidc@v2
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
@@ -189,7 +189,7 @@ jobs:
           value: ${{ steps.outputs-built-image.outputs.built-image }}
 
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
@@ -257,7 +257,7 @@ jobs:
         # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
       - id: oidc
         uses: ChristopherHX/oidc@v2
-      - uses: actions/checkout@v3 # checks out called workflow
+      - uses: actions/checkout@v4 # checks out called workflow
         with:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
