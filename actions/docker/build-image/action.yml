@@ -202,7 +202,7 @@ runs:
 
           core.setOutput('images', JSON.stringify(images));
 
-    - uses: aquasecurity/trivy-action@v0.12.0
+    - uses: aquasecurity/trivy-action@0.12.0
       with:
         image-ref: ${{ fromJSON(steps.generate-outputs.outputs.images)[0] }}
         format: "sarif"
