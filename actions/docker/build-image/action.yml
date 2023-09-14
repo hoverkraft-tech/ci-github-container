@@ -207,6 +207,9 @@ runs:
         image-ref: ${{ fromJSON(steps.generate-outputs.outputs.images)[0] }}
         format: "sarif"
         output: "trivy-results.sarif"
+      env:
+        TRIVY_USERNAME: ${{ inputs.oci-registry-username }}
+        TRIVY_PASSWORD: ${{ inputs.oci-registry-password }}
 
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v2
