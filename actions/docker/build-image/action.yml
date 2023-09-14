@@ -177,6 +177,8 @@ runs:
         cache-to: ${{ steps.cache.outputs.cache-to }}
         platforms: ${{ inputs.platform }}
 
+    # #endregion
+
     - id: generate-outputs
       uses: actions/github-script@v6.4.1
       with:
@@ -200,4 +202,13 @@ runs:
 
           core.setOutput('images', JSON.stringify(images));
 
-# #endregion
+    - uses: aquasecurity/trivy-action@v0.12.0
+      with:
+        image-ref: ${{ fromJSON(steps.generate-outputs.outputs.images)[0] }}
+        format: "sarif"
+        output: "trivy-results.sarif"
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: "trivy-results.sarif"
