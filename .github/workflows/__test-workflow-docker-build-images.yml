@@ -81,7 +81,7 @@ jobs:
             assert(application2Image.images.length);
             application2Image.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-2:[\.a-z0-9-]+$/));
 
-      - uses: docker/login-action@v2
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
