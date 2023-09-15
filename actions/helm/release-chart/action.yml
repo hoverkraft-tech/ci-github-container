@@ -129,6 +129,15 @@ runs:
           helm repo add $line
         done
 
+    - shell: bash
+      run: |
+        for chart in ${{ inputs.path }}/**/Chart.yaml; do
+          if [ ! -f "$chart" ]; then
+            continue
+          fi
+          helm dependency build "$(dirname "$chart")"
+        done
+
     - id: chart-releaser
       uses: appany/helm-oci-chart-releaser@v0.4.1
       with:
