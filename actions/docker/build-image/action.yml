@@ -104,6 +104,9 @@ runs:
       with:
         lfs: true
 
+    - shell: bash
+      run: git lfs pull
+
     - id: cache
       uses: int128/docker-build-cache-config-action@v1
       with:
