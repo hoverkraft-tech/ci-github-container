@@ -131,11 +131,26 @@ runs:
 
     - shell: bash
       run: |
-        for chart in ${{ inputs.path }}/**/Chart.yaml; do
+        echo "Building charts dependencies"
+
+        CHART_ROOT_DIR="$(pwd)/${{ inputs.path }}"
+        CHART_FILES=$(find "$CHART_ROOT_DIR" -name "Chart.yaml")
+
+        # If no files found, exit
+        if [ -z "$CHART_FILES" ]; then
+          echo "No charts found in $CHART_ROOT_DIR"
+          exit 0
+        fi
+
+        # For each chart, build dependencies
+        for chart in $CHART_FILES; do
           if [ ! -f "$chart" ]; then
             continue
           fi
-          helm dependency build "$(dirname "$chart")"
+
+          CHART_DIR=$(dirname "$chart")
+          echo "Building dependencies for $CHART_DIR"
+          helm dependency build "$CHART_DIR"
         done
 
     - id: chart-releaser
