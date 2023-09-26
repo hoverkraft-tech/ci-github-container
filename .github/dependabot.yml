@@ -31,6 +31,13 @@ updates:
       day: friday
       time: '04:00'
   - package-ecosystem: github-actions
+    directory: /actions/docker/get-image-metadata
+    open-pull-requests-limit: 20
+    schedule:
+      interval: weekly
+      day: friday
+      time: '04:00'
+  - package-ecosystem: github-actions
     directory: /actions/docker/get-image-name
     open-pull-requests-limit: 20
     schedule:
