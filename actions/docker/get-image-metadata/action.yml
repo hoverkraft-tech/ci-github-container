@@ -115,9 +115,9 @@ runs:
           const shortCommitSha = stdout.trim();
           core.debug("shortCommitSha: " + shortCommitSha);
 
-          const commitShaMatcher = /(pr-${{ steps.get-issue-number.outputs.issue-number }}-)([0-9a-f]{7,40})(-)/;
+          const commitShaMatcher = /(pr-${{ steps.get-issue-number.outputs.issue-number }}-)([0-9a-f]{7,40})/;
           const fixedTags = tags.split("\n").map(tag => {
-            return tag.replace(commitShaMatcher, "$1"+shortCommitSha+"$3");
+            return tag.replace(commitShaMatcher, "$1"+shortCommitSha);
           }).join("\n");
 
           core.setOutput('tags', fixedTags);
