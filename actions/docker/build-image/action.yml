@@ -71,7 +71,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.7.3
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.7.5
       with:
         value: ${{ inputs.platform }}
 
@@ -98,9 +98,9 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.7.3
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.7.5
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.7.3
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.7.5
       with:
         lfs: true
 
