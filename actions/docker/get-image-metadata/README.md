@@ -13,7 +13,7 @@ Action to retrieve required metadata to build Docker image
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-metadata@v0.11.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-metadata@v0.11.1
   with:
     # OCI registry where to pull and push images
     # Default: ghcr.io
