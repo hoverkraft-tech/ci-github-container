@@ -123,13 +123,7 @@ runs:
       uses: actions/github-script@v6.4.1
       with:
         script: |
-          const builtMetadataOutput = `${{ steps.build.outputs.metadata }}`;
-          let builtMetadata;
-          try {
-            builtMetadata = JSON.parse(builtMetadataOutput);
-          } catch (error) {
-            throw new Error(`Given "metadata" output is not a valid JSON: ${error}`);
-          }
+          const builtMetadata = ${{ steps.build.outputs.metadata }};
 
           if (typeof builtMetadata !== 'object') {
             core.setFailed('Given "metadata" output is not a JSON object.');
