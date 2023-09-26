@@ -23,7 +23,7 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@v0.10.1
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@v0.11.0
   with:
     # Image name
     image: ""
