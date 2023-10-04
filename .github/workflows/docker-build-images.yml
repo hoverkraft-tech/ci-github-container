@@ -21,6 +21,11 @@ on:
           }'
         value: ${{ jobs.outputs-built-images.outputs.built-images }}
     inputs:
+      runs-on:
+        description: "Runner to use. Json array of runners. See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job"
+        type: string
+        default: '["ubuntu-latest"]'
+        required: false
       oci-registry:
         description: "OCI registry where to pull and push images"
         type: string
@@ -55,7 +60,7 @@ jobs:
     outputs:
       images: ${{ steps.validate-inputs.outputs.images }}
       artifact-name: ${{ steps.define-artifact-name.outputs.artifact-name }}
-    runs-on: "ubuntu-latest"
+    runs-on: ${{ fromJson(inputs.runs-on) }}
     steps:
       - id: validate-inputs
         uses: actions/github-script@v6.4.1
@@ -129,7 +134,7 @@ jobs:
   build-images:
     name: Build image ${{ matrix.image.name }} for ${{ matrix.image.platform }}
     needs: prepare-variables
-    runs-on: "ubuntu-latest"
+    runs-on: ${{ fromJson(inputs.runs-on) }}
     strategy:
       fail-fast: false
       matrix:
@@ -214,7 +219,7 @@ jobs:
 
   publish-manifests:
     needs: [prepare-variables, build-images]
-    runs-on: "ubuntu-latest"
+    runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
       built-images: ${{ steps.get-built-images.outputs.built-images }}
     permissions:
@@ -285,7 +290,7 @@ jobs:
 
   outputs-built-images:
     needs: [publish-manifests]
-    runs-on: "ubuntu-latest"
+    runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
       built-images: ${{ steps.outputs-built-images.outputs.built-images }}
     steps:
