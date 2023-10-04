@@ -30,15 +30,21 @@ jobs:
     uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@0.11.3
     # Optional customizations.
     with:
+      # Json array of runner(s) to use.
+      # See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job
+      # Default: '["ubuntu-latest"]'
+      runs-on: '["ubuntu-latest"]'
+
       # Images to clean. Example: ["application-1","application-2"].
       images: ""
 ```
 
 <!-- start inputs -->
 
-| **Input**               | **Description**                                                          | **Default** | **Required** |
-| ----------------------- | ------------------------------------------------------------------------ | ----------- | ------------ |
-| **<code>images</code>** | Images to clean. Example: <code>["application-1","application-2"]</code> |             | **true**     |
+| **Input**                | **Description**                                                                                                                                                                                | **Default**                    | **Required** |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------ |
+| **<code>runs-on</code>** | Json array of runner(s) to use. See [https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job](https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job) | <code>["ubuntu-latest"]</code> | **false**    |
+| **<code>images</code>**  | Images to clean. Example: <code>["application-1","application-2"]</code>                                                                                                                       |                                | **true**     |
 
 <!-- end inputs -->
 
