@@ -89,11 +89,42 @@ jobs:
 
       - name: Check docker images
         run: |
-          docker manifest inspect "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
-          docker pull "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
+          IMAGES=(
+            "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
+            "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
+          )
 
-          docker manifest inspect "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
-          docker pull "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
+          for IMAGE in "${IMAGES[@]}"; do
+            echo "Checking image: ${IMAGE}"
+
+            MANIFEST=$(docker manifest inspect "$IMAGE")
+            if ! MANIFEST=$(docker manifest inspect "$IMAGE"); then
+              echo "Failed to inspect manifest for image: ${IMAGE}"
+              echo "${MANIFEST}"
+              exit 1
+            fi
+
+            PLATFORMS=$(echo "${MANIFEST}" | jq -e '.manifests[].platform')
+
+            # Check if all platforms are present
+
+            ## os=linux,architecture=amd64,variant=null
+            PLATFORM=$(echo "${PLATFORMS}" | jq -e '. | select(.architecture == "amd64")')
+            echo "${PLATFORM}" | jq -e '.os' | grep -q 'linux'
+            echo "${PLATFORM}" | jq -e '.variant' | grep -q 'null'
+
+            ## os=linux,architecture=arm64,variant=null
+            PLATFORM=$(echo "${PLATFORMS}" | jq -e '. | select(.architecture == "arm64")')
+            echo "${PLATFORM}" | jq -e '.os' | grep -q 'linux'
+            echo "${PLATFORM}" | jq -e '.variant' | grep -q 'null'
+
+            ## os=linux,architecture=arm,variant=v7
+            PLATFORM=$(echo "${PLATFORMS}" | jq -e '. | select(.architecture == "arm/v7")')
+            echo "${PLATFORM}" | jq -e '.os' | grep -q 'linux'
+            echo "${PLATFORM}" | jq -e '.variant' | grep -q 'v7'
+
+            docker pull "$IMAGE"
+          done
 
   cleanup:
     needs: checks
