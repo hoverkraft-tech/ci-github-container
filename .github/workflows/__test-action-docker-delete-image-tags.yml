@@ -3,7 +3,7 @@ on:
 
 env:
   IMAGE: "test-delete-image-tags"
-  TAG: "0.1.0"
+  TAG: "1.0.1"
 
 jobs:
   setup-tests:
@@ -29,7 +29,7 @@ jobs:
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
             "platforms": ["linux/amd64"],
-            "tag": "0.1.0"
+            "tag": "1.0.1"
           }
         ]
 
