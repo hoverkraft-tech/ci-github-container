@@ -90,7 +90,10 @@ jobs:
       - name: Check docker images
         run: |
           docker manifest inspect "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
+          docker pull "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
+
           docker manifest inspect "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
+          docker pull "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
 
   cleanup:
     needs: checks
