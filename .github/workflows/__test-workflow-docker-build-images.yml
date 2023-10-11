@@ -1,10 +1,11 @@
-name: Internal - Common Continuous Integration tasks
+name: Test for "docker-build-images" workflow
+run-name: Test for "docker-build-images" workflow
 
 on:
   workflow_call:
 
 jobs:
-  setup-tests:
+  arrange:
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -12,8 +13,8 @@ jobs:
             echo "GitHub token secrets is not set"
             exit 1
           fi
-  tests:
-    needs: setup-tests
+  act:
+    needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -34,13 +35,12 @@ jobs:
             "dockerfile": "./tests/application-2/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
-            "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
+            "platforms": ["linux/amd64"]
           }
         ]
 
-  checks:
-    continue-on-error: true
-    needs: tests
+  assert:
+    needs: act
     runs-on: "ubuntu-latest"
     steps:
       - name: Check built images ouput
@@ -49,7 +49,7 @@ jobs:
           script: |
             const assert = require("assert");
 
-            const builtImagesOutput = `${{ needs.tests.outputs.built-images }}`;
+            const builtImagesOutput = `${{ needs.act.outputs.built-images }}`;
             assert(builtImagesOutput.length, `"built-images" output is empty`);
 
             // Check if is valid Json
@@ -87,50 +87,73 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Check docker images
+      - name: Check multi-arch docker image and manifest
         run: |
-          IMAGES=(
-            "${{ fromJson(needs.tests.outputs.built-images).application-1.images[0] }}"
-            "${{ fromJson(needs.tests.outputs.built-images).application-2.images[0] }}"
-          )
+          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-1.images[0] }}"
 
-          for IMAGE in "${IMAGES[@]}"; do
-            echo "Checking image: ${IMAGE}"
+          docker pull "$IMAGE"
 
-            MANIFEST=$(docker manifest inspect "$IMAGE")
-            if ! MANIFEST=$(docker manifest inspect "$IMAGE"); then
-              echo "Failed to inspect manifest for image: ${IMAGE}"
-              echo "${MANIFEST}"
-              exit 1
-            fi
+          if ! MANIFEST=$(docker manifest inspect "$IMAGE"); then
+            echo "Failed to inspect manifest for image: ${IMAGE}"
+            exit 1
+          fi
 
-            PLATFORMS=$(echo "${MANIFEST}" | jq -e '.manifests[].platform')
+          # Check that there are 3 platforms
+          PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]')
+          NB_PLATFORMS=$(echo "${PLATFORMS}" | jq -e '. | length')
+          if [ "$NB_PLATFORMS" != "3" ]; then
+            echo "Expected 3 platforms, got: $NB_PLATFORMS"
+            echo "${MANIFEST}"
+            exit 1
+          fi
 
-            # Check if all platforms are present
+          # Check if all platforms are valid
 
-            ## os=linux,architecture=amd64,variant=null
-            PLATFORM=$(echo "${PLATFORMS}" | jq -e '. | select(.architecture == "amd64")')
-            echo "${PLATFORM}" | jq -e '.os' | grep -q 'linux'
-            echo "${PLATFORM}" | jq -e '.variant' | grep -q 'null'
+          ## os=linux,architecture=amd64,variant=null
+          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
+          test "$PLATFORM_EXISTS" = "true"
 
-            ## os=linux,architecture=arm64,variant=null
-            PLATFORM=$(echo "${PLATFORMS}" | jq -e '. | select(.architecture == "arm64")')
-            echo "${PLATFORM}" | jq -e '.os' | grep -q 'linux'
-            echo "${PLATFORM}" | jq -e '.variant' | grep -q 'null'
+          ## os=linux,architecture=arm64,variant=null
+          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "arm64" and .os == "linux" and .variant == null)')
+          test "$PLATFORM_EXISTS" = "true"
 
-            ## os=linux,architecture=arm,variant=v7
-            PLATFORM=$(echo "${PLATFORMS}" | jq -e '. | select(.architecture == "arm/v7")')
-            echo "${PLATFORM}" | jq -e '.os' | grep -q 'linux'
-            echo "${PLATFORM}" | jq -e '.variant' | grep -q 'v7'
+          ## os=linux,architecture=arm,variant=v7
+          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "arm" and .os == "linux" and .variant == "v7")')
+          test "$PLATFORM_EXISTS" = "true"
 
-            docker pull "$IMAGE"
-          done
+      - name: Check single-arch docker image
+        run: |
+          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-2.images[0] }}"
+
+          docker pull "$IMAGE"
+
+          if ! MANIFEST=$(docker manifest inspect "$IMAGE"); then
+            echo "Failed to inspect manifest for image: ${IMAGE}"
+            echo "${MANIFEST}"
+            exit 1
+          fi
+
+          # Check that there is only platforms
+          PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]')
+          NB_PLATFORMS=$(echo "${PLATFORMS}" | jq -e '. | length')
+          if [ "$NB_PLATFORMS" != "1" ]; then
+            echo "Expected 1 platform, got: $NB_PLATFORMS"
+            echo "${MANIFEST}"
+            exit 1
+          fi
+
+          # Check if platform is valid
+
+          ## os=linux,architecture=amd64,variant=null
+          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
+          test "$PLATFORM_EXISTS" = "true"
 
   cleanup:
-    needs: checks
+    needs: assert
     runs-on: "ubuntu-latest"
     permissions:
       packages: write
+    if: always()
     steps:
       - uses: actions/checkout@v4
 
