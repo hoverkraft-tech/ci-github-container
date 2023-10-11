@@ -1,3 +1,6 @@
+name: Test for "docker/build-image" action
+run-name: Test for "docker/build-image" action
+
 on:
   workflow_call:
 

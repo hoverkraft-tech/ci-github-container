@@ -1,3 +1,6 @@
+name: Test for "docker/prune-pull-requests-image-tags" action
+run-name: Test for "docker/prune-pull-requests-image-tags" action
+
 on:
   workflow_call:
 
@@ -6,7 +9,7 @@ env:
   TAG: "pr-1-linux-amd64"
 
 jobs:
-  setup-tests:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -14,8 +17,8 @@ jobs:
             echo "GitHub token secrets is not set"
             exit 1
           fi
-  build:
-    needs: setup-tests
+  act:
+    needs: setup
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -32,10 +35,10 @@ jobs:
           }
         ]
 
-  tests:
-    name: Test for "prune-pull-requests-image-tags" action
+  assert:
+    name: Test for "docker/prune-pull-requests-image-tags" action
     runs-on: ubuntu-latest
-    needs: build
+    needs: act
     permissions:
       packages: write
     steps:
@@ -49,8 +52,8 @@ jobs:
 
       - name: Push extra docker image tags for test
         run: |
-          docker pull ${{ fromJson(needs.build.outputs.built-images).test-prune.images[0] }}
-          docker tag ${{ fromJson(needs.build.outputs.built-images).test-prune.images[0] }} ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
+          docker pull ${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }}
+          docker tag ${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }} ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
           docker push ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
 
       - id: prune-pull-requests-image-tags
@@ -109,7 +112,7 @@ jobs:
             assert.equal(packageVersionExists, false, `Package version "${{ env.TAG }}" has not been deleted`);
 
   cleanup:
-    needs: tests
+    needs: assert
     runs-on: "ubuntu-latest"
     permissions:
       packages: write

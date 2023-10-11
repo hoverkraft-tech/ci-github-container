@@ -1,9 +1,11 @@
+name: Test for "helm/release-chart" action
+run-name: Test for "helm/release-chart" action
+
 on:
   workflow_call:
 
 jobs:
   tests:
-    name: Test for "helm/release-chart" action
     runs-on: ubuntu-latest
     permissions:
       contents: read
