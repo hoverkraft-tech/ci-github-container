@@ -1,8 +1,12 @@
+<!-- start branding -->
+<!-- end branding -->
 <!-- start title -->
 
 # GitHub Action: Release Helm Chart
 
 <!-- end title -->
+<!-- start badges -->
+<!-- end badges -->
 <!-- start description -->
 
 Action to release a Helm chart to OCI registry

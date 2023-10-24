@@ -1,8 +1,12 @@
+<!-- start branding -->
+<!-- end branding -->
 <!-- start title -->
 
 # GitHub Reusable Workflow: Docker build images
 
 <!-- end title -->
+<!-- start badges -->
+<!-- end badges -->
 <!-- start description -->
 
 Workflow to build multiple docker images.
