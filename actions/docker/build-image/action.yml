@@ -65,7 +65,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.8.1
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.9.0
       with:
         value: ${{ inputs.platform }}
 
@@ -85,7 +85,7 @@ runs:
         image: ${{ inputs.image }}/cache
         flavor: ${{ steps.get-cache-flavor.outputs.flavor }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.8.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.9.0
       with:
         lfs: true
 
