@@ -121,7 +121,7 @@ jobs:
 
       - id: get-issue-number
         if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.9.0
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.9.1
 
       - name: Cleanup images tags
         if: ${{ github.event_name == 'pull_request' }}
