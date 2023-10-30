@@ -6,17 +6,24 @@ on:
 
 env:
   IMAGE: "test-prune"
-  TAG: "pr-1-linux-amd64"
 
 jobs:
   setup:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.generate-tag.outputs.tag }}
     steps:
       - run: |
           if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
             echo "GitHub token secrets is not set"
             exit 1
           fi
+
+      - id: generate-tag
+        run: |
+          TAG="pr-$(( 1 + RANDOM % 160))"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
   act:
     needs: setup
     uses: ./.github/workflows/docker-build-images.yml
@@ -38,7 +45,7 @@ jobs:
   assert:
     name: Test for "docker/prune-pull-requests-image-tags" action
     runs-on: ubuntu-latest
-    needs: act
+    needs: [setup, act]
     permissions:
       packages: write
     steps:
@@ -52,9 +59,11 @@ jobs:
 
       - name: Push extra docker image tags for test
         run: |
-          docker pull ${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }}
-          docker tag ${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }} ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
-          docker push ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ env.TAG }}
+          BASE_IMAGE="${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }}"
+          NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ needs.setup.outputs.tag }}
+          docker pull "$BASE_IMAGE"
+          docker tag "$BASE_IMAGE" "$NEW_IMAGE"
+          docker push "$NEW_IMAGE"
 
       - id: prune-pull-requests-image-tags
         uses: ./actions/docker/prune-pull-requests-image-tags
@@ -79,7 +88,7 @@ jobs:
             }
 
             assert(Array.isArray(deletedImageTags), `"deleted-image-tags" output is not an array`);
-            assert.equal(deletedImageTags[0], `${{ env.TAG }}`);
+            assert.equal(deletedImageTags[0], `${{ needs.setup.outputs.tag }}`);
 
             // If is pull request ensure that deleted tags does not contain current pull request
             const pullRequestNumber = `${{ github.event.pull_request.number }}`;
@@ -106,10 +115,10 @@ jobs:
 
             const packageVersionExists = packageVersions.some(
               (packageVersion) => packageVersion.metadata.container.tags.some(
-                (tag) => tag === "${{ env.TAG }}"
+                (tag) => tag === "${{ needs.setup.outputs.tag }}"
               )
             );
-            assert.equal(packageVersionExists, false, `Package version "${{ env.TAG }}" has not been deleted`);
+            assert.equal(packageVersionExists, false, `Package version "${{ needs.setup.outputs.tag }}" has not been deleted`);
 
   cleanup:
     needs: assert
