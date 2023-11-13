@@ -159,7 +159,7 @@ jobs:
 
       - id: get-issue-number
         if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.10.0
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.10.1
 
       - name: Cleanup application-1 images
         if: ${{ github.event_name == 'pull_request' }}
