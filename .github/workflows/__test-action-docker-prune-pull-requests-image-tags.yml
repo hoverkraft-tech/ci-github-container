@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 env:
-  IMAGE: "test-prune"
+  IMAGE: "test-prune-${{ github.run_number }}"
 
 jobs:
   setup:
@@ -33,7 +33,7 @@ jobs:
       images: |
         [
           {
-            "name": "test-prune",
+            "name": "test-prune-${{ github.run_number }}",
             "context": ".",
             "dockerfile": "./tests/application-1/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
@@ -59,8 +59,9 @@ jobs:
 
       - name: Push extra docker image tags for test
         run: |
-          BASE_IMAGE="${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }}"
+          BASE_IMAGE=$(echo '${{ needs.act.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[0]')
           NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ needs.setup.outputs.tag }}
+
           docker pull "$BASE_IMAGE"
           docker tag "$BASE_IMAGE" "$NEW_IMAGE"
           docker push "$NEW_IMAGE"
@@ -125,6 +126,7 @@ jobs:
     runs-on: "ubuntu-latest"
     permissions:
       packages: write
+    if: always()
     steps:
       - uses: actions/checkout@v4
 
