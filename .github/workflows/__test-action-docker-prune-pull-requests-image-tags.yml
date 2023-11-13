@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 env:
-  IMAGE: "test-prune"
+  IMAGE: "test-prune-${{ github.run_number }}"
 
 jobs:
   setup:
@@ -33,7 +33,7 @@ jobs:
       images: |
         [
           {
-            "name": "test-prune",
+            "name": "test-prune-${{ github.run_number }}",
             "context": ".",
             "dockerfile": "./tests/application-1/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
@@ -59,8 +59,9 @@ jobs:
 
       - name: Push extra docker image tags for test
         run: |
-          BASE_IMAGE="${{ fromJson(needs.act.outputs.built-images).test-prune.images[0] }}"
+          BASE_IMAGE=$(echo '${{ needs.act.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[0]')
           NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ needs.setup.outputs.tag }}
+
           docker pull "$BASE_IMAGE"
           docker tag "$BASE_IMAGE" "$NEW_IMAGE"
           docker push "$NEW_IMAGE"
@@ -97,7 +98,7 @@ jobs:
               assert.equal(deletedImageTagsForCurrentPullRequest.length, 0, `"deleted-image-tags" output contains current pull request image tag`);
             }
 
-      - name: Ensure packages have been deleted
+      - name: Ensure packages versions have been deleted
         uses: actions/github-script@v6.4.1
         with:
           github-token: ${{ github.token }}
@@ -125,6 +126,7 @@ jobs:
     runs-on: "ubuntu-latest"
     permissions:
       packages: write
+    if: always()
     steps:
       - uses: actions/checkout@v4
 
@@ -132,9 +134,19 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.10.0
 
-      - name: Cleanup images tags
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: ./actions/docker/delete-image-tags
+      - name: Delete test packages
+        uses: actions/github-script@v6.4.1
         with:
-          image: ${{ env.IMAGE }}
-          tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
+          github-token: ${{ github.token }}
+          script: |
+            const packagesToDelete = ["${{ env.IMAGE }}", "${{ env.IMAGE }}/cache"];
+            
+            for (const packageName of packagesToDelete) {
+              const packagePayload = {
+                package_type: 'container',
+                package_name: `ci-github-container/${packageName}`,
+                org: 'hoverkraft-tech',
+              };
+
+              await github.rest.packages.deletePackageForOrg(packagePayload);
+            }

@@ -20,7 +20,7 @@ jobs:
           fi
       - id: generate-tag
         run: |
-          RC="-rc.$RANDOM"
+          RC="-rc.${{ github.run_number }}"
           TAG="$(printf '%d.%d.%d%s' $((1+RANDOM%20)) $((1+RANDOM%20)) $((1+RANDOM%20)) "$RC")"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
