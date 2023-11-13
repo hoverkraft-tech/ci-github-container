@@ -212,6 +212,7 @@ jobs:
 
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       - uses: actions/checkout@v4
+        if: always() && steps.oidc.outputs.job_workflow_repo_name_and_owner
         with:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
