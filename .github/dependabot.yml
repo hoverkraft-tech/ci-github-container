@@ -2,6 +2,13 @@
 # Make changes to `.github/dependabot.template.yml` and a PR will be automatically created.
 version: 2
 updates:
+  - package-ecosystem: docker
+    open-pull-requests-limit: 20
+    directory: /
+    schedule:
+      interval: weekly
+      day: friday
+      time: '04:00'
   - package-ecosystem: github-actions
     directory: /
     open-pull-requests-limit: 20
