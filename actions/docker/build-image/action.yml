@@ -125,7 +125,7 @@ runs:
         secrets: ${{ inputs.secrets }}
 
     - id: get-built-image
-      uses: actions/github-script@v7.0.0
+      uses: actions/github-script@v7.0.1
       with:
         script: |
           const builtMetadata = ${{ steps.build.outputs.metadata }};
