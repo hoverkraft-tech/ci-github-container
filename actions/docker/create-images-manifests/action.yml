@@ -42,7 +42,7 @@ runs:
         password: ${{ inputs.oci-registry-password }}
 
     - name: Create SHA manifest and push
-      uses: actions/github-script@v7.0.0
+      uses: actions/github-script@v7.0.1
       with:
         script: |
           const builtImagesInput = `${{ inputs.built-images }}`;
