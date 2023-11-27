@@ -18,7 +18,7 @@ jobs:
           image: application-1
 
       - name: Check get image metadata ouputs
-        uses: actions/github-script@v7.0.0
+        uses: actions/github-script@v7.0.1
         with:
           script: |
             const assert = require("assert");
@@ -52,7 +52,7 @@ jobs:
           tag: 1.0.0
 
       - name: Check get image metadata ouputs
-        uses: actions/github-script@v7.0.0
+        uses: actions/github-script@v7.0.1
         with:
           script: |
             const assert = require("assert");

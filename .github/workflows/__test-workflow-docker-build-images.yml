@@ -44,7 +44,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: Check built images ouput
-        uses: actions/github-script@v7.0.0
+        uses: actions/github-script@v7.0.1
         with:
           script: |
             const assert = require("assert");
