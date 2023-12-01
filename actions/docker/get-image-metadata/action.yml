@@ -12,6 +12,9 @@ outputs:
   labels:
     description: "The image labels."
     value: ${{ steps.generate-outputs.outputs.labels }}
+  annotations:
+    description: "The image annotations."
+    value: ${{ steps.generate-outputs.outputs.annotations }}
   tags:
     description: 'The image tags. Example: "pr-63-5222075\npr-63"'
     value: ${{ steps.generate-outputs.outputs.tags }}
@@ -87,40 +90,14 @@ runs:
 
           core.setFailed(`No tags found for the current event: ${context.eventName}`);
 
-    - id: tmp-docker-metadata
+    - id: docker-metadata
       uses: docker/metadata-action@v5.3.0
       with:
         images: ${{ steps.image-name.outputs.image-name-with-registry }}
         tags: ${{ steps.define-metadata-inputs.outputs.tags }}
         flavor: ${{ steps.define-metadata-inputs.outputs.flavor }}
-
-    # FIXME: workaround until will be merged: https://github.com/docker/actions-toolkit/pull/173
-    - id: docker-metadata
-      uses: actions/github-script@v7.0.1
-      with:
-        script: |
-          const labels = `${{ steps.tmp-docker-metadata.outputs.labels }}`;
-          core.setOutput('labels', labels);
-
-          const tags = `${{ steps.tmp-docker-metadata.outputs.tags }}`;
-
-          const isIssueComment = context.eventName === 'issue_comment';
-          if(!isIssueComment) {
-            core.setOutput('tags', tags);
-            return;
-          }
-
-          // Get short commit sha from detached head
-          const { stdout } = await exec.getExecOutput(`git rev-parse --short HEAD`);
-          const shortCommitSha = stdout.trim();
-          core.debug("shortCommitSha: " + shortCommitSha);
-
-          const commitShaMatcher = /(pr-${{ steps.get-issue-number.outputs.issue-number }}-)([0-9a-f]{7,40})/;
-          const fixedTags = tags.split("\n").map(tag => {
-            return tag.replace(commitShaMatcher, "$1"+shortCommitSha);
-          }).join("\n");
-
-          core.setOutput('tags', fixedTags);
+      env:
+        DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
 
     - id: generate-outputs
       uses: actions/github-script@v7.0.1
@@ -131,6 +108,9 @@ runs:
 
           const labels = `${{ steps.docker-metadata.outputs.labels }}`;
           core.setOutput('labels', labels);
+
+          const annotations = `${{ steps.docker-metadata.outputs.annotations }}`;
+          core.setOutput('annotations', annotations);
 
           const tags = `${{ steps.docker-metadata.outputs.tags }}`;
           const sortedTags = tags
