@@ -64,6 +64,9 @@ permissions:
 
     # Labels to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     labels: ""
+
+    # Annotations to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
+    annotations: ""
 ```
 
 <!-- end usage -->
@@ -81,6 +84,7 @@ permissions:
 | **<code>build-args</code>**            | List of build-time variables. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                              |                                             | **false**    |
 | **<code>target</code>**                | Sets the target stage to build. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                            |                                             | **false**    |
 | **<code>labels</code>**                | Labels to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                        |                                             | **false**    |
+| **<code>annotations</code>**           | Annotations to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                   |                                             | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
