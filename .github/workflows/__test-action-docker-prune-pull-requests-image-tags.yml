@@ -21,7 +21,7 @@ jobs:
 
       - id: generate-tag
         run: |
-          TAG="pr-$(( 1 + RANDOM % 160))"
+          TAG="pr-$(( 1 + RANDOM % 210))"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   act:
@@ -140,7 +140,7 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const packagesToDelete = ["${{ env.IMAGE }}", "${{ env.IMAGE }}/cache"];
-            
+
             for (const packageName of packagesToDelete) {
               const packagePayload = {
                 package_type: 'container',

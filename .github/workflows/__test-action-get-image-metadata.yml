@@ -31,7 +31,26 @@ jobs:
             assert(labelsOutput.length, `"labels" output is empty`);
             assert(
               labelsOutput.startsWith("org.opencontainers.image.created"),
+              `"labels" "org.opencontainers.image.created" output is not valid`
+            );
+            assert(
+              labelsOutput.includes(
+                "org.opencontainers.image.source=https://github.com/hoverkraft-tech/ci-github-container\n" +
+                "org.opencontainers.image.title=ci-github-container\n" +
+                "org.opencontainers.image.url=https://github.com/hoverkraft-tech/ci-github-container\n"
+              ),
               `"labels" output is not valid`
+            );
+
+            const annotationsOutput = `${{ steps.get-image-metadata.outputs.annotations }}`;
+            assert(annotationsOutput.length, `"annotations" output is empty`);
+            assert(
+              annotationsOutput.includes(
+                "manifest:org.opencontainers.image.source=https://github.com/hoverkraft-tech/ci-github-container\n" +
+                "manifest:org.opencontainers.image.title=ci-github-container\n" +
+                "manifest:org.opencontainers.image.url=https://github.com/hoverkraft-tech/ci-github-container\n"
+              ),
+              `"annotations" output is not valid`
             );
 
             const tagsOutput = `${{ steps.get-image-metadata.outputs.tags }}`;

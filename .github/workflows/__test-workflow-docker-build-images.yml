@@ -99,7 +99,12 @@ jobs:
           fi
 
           # Check that there are 3 platforms
-          PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]')
+          if ! PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]'); then
+            echo "Failed to get platforms for image: ${IMAGE}"
+            echo "${MANIFEST}"
+            exit 1
+          fi
+
           NB_PLATFORMS=$(echo "${PLATFORMS}" | jq -e '. | length')
           if [ "$NB_PLATFORMS" != "3" ]; then
             echo "Expected 3 platforms, got: $NB_PLATFORMS"
@@ -111,15 +116,42 @@ jobs:
 
           ## os=linux,architecture=amd64,variant=null
           PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
-          test "$PLATFORM_EXISTS" = "true"
+          test "$PLATFORM_EXISTS" = "true" || (echo "Expected platform not found: os=linux,architecture=amd64,variant=null" && echo "$PLATFORMS" && exit 1)
 
           ## os=linux,architecture=arm64,variant=null
           PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "arm64" and .os == "linux" and .variant == null)')
-          test "$PLATFORM_EXISTS" = "true"
+          test "$PLATFORM_EXISTS" = "true" || (echo "Expected platform not found: os=linux,architecture=arm64,variant=null" && echo "$PLATFORMS" && exit 1)
 
           ## os=linux,architecture=arm,variant=v7
           PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "arm" and .os == "linux" and .variant == "v7")')
-          test "$PLATFORM_EXISTS" = "true"
+          test "$PLATFORM_EXISTS" = "true" || (echo "Expected platform not found: os=linux,architecture=arm,variant=v7" && echo "$PLATFORMS" && exit 1)
+
+          # FIXME: workaround to get manifest annotations
+          if ! MANIFEST=$(docker buildx imagetools inspect --raw "$IMAGE"); then
+            echo "Failed to inspect manifest for image: ${IMAGE}"
+            exit 1
+          fi
+
+          # Check annotations
+          if ! ANNOTATIONS=$(echo "${MANIFEST}" | jq -e '.annotations'); then
+            echo "Failed to get annotations for image: ${IMAGE}"
+            echo "${MANIFEST}"
+            exit 1
+          fi
+
+          # Check expected annotations
+
+          ## org.opencontainers.image.source
+          ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.source"] == "https://github.com/hoverkraft-tech/ci-github-container"')
+          test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.source" && echo "$ANNOTATIONS" && exit 1)
+
+          ## org.opencontainers.image.title
+          ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.title"] == "ci-github-container"')
+          test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.title" && echo "$ANNOTATIONS" && exit 1)
+
+          ## org.opencontainers.image.url
+          ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.url"] == "https://github.com/hoverkraft-tech/ci-github-container"')
+          test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.url" && echo "$ANNOTATIONS" && exit 1)
 
       - name: Check single-arch docker image
         run: |

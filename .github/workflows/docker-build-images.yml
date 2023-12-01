@@ -184,6 +184,7 @@ jobs:
           oci-registry-password: ${{ secrets.oci-registry-password }}
           image: ${{ steps.metadata.outputs.image }}
           labels: ${{ steps.metadata.outputs.labels }}
+          annotations: ${{ steps.metadata.outputs.annotations }}
           context: ${{ matrix.image.context }}
           dockerfile: ${{ matrix.image.dockerfile }}
           build-args: ${{ matrix.image.build-args }}
@@ -200,6 +201,7 @@ jobs:
               "image": `${{ steps.metadata.outputs.image }}`,
               "tags": `${{ steps.metadata.outputs.tags }}`.split("\n").map(tag => tag.trim()).filter(tag => tag !== ""),
               "digest": `${{ steps.build.outputs.digest }}`,
+              "annotations": `${{ steps.metadata.outputs.annotations }}`.split("\n").map(annotation => annotation.trim()).filter(annotation => annotation !== ""),
             };
             core.setOutput("built-image", JSON.stringify(builtImage));
 
@@ -249,13 +251,14 @@ jobs:
             // Group by image name
             const images = {};
             builtImages.forEach(builtImage => {
-              const { name, image, digest, tags } = builtImage;
+              const { name, image, digest, tags, annotations } = builtImage;
               if (!images[name]) {
                 images[name] = {
                   name,
                   image,
                   digests: [],
                   tags,
+                  annotations,
                 };
               }
 
