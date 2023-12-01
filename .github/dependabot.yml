@@ -9,6 +9,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      docker-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /
     open-pull-requests-limit: 20
@@ -16,6 +20,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/docker/build-image
     open-pull-requests-limit: 20
@@ -23,6 +31,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/docker/create-images-manifests
     open-pull-requests-limit: 20
@@ -30,6 +42,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/docker/delete-image-tags
     open-pull-requests-limit: 20
@@ -37,6 +53,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/docker/get-image-metadata
     open-pull-requests-limit: 20
@@ -44,6 +64,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/docker/get-image-name
     open-pull-requests-limit: 20
@@ -51,6 +75,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/docker/prune-pull-requests-image-tags
     open-pull-requests-limit: 20
@@ -58,6 +86,10 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
   - package-ecosystem: github-actions
     directory: /actions/helm/release-chart
     open-pull-requests-limit: 20
@@ -65,3 +97,7 @@ updates:
       interval: weekly
       day: friday
       time: '04:00'
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - '*'
