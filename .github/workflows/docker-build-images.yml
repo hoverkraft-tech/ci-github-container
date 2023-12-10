@@ -43,7 +43,13 @@ on:
           "dockerfile": "./docker/application/Dockerfile",
           "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },
           "target": "prod",
-          "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
+          "platforms": [
+          "linux/amd64",
+          {
+          "name": "darwin/amd64",
+          "runs-on": "macos-latest"
+          }
+          ]
           }]'
         type: string
         required: true
@@ -69,6 +75,14 @@ jobs:
             const ociRegistryPassword = `${{ secrets.oci-registry-password }}`;
             if (!ociRegistryPassword) {
               throw new Error(`"oci-registry-password" secret is missing`);
+            }
+
+            const runsOnInput = `${{ inputs.runs-on }}`;
+            let runsOn = null;
+            try {
+              runsOn = JSON.parse(runsOnInput);
+            } catch (error) {
+              throw new Error(`"runs-on" input is not a valid JSON: ${error}`);
             }
 
             const imagesInput = `${{ inputs.images }}`;
@@ -102,16 +116,34 @@ jobs:
               }
 
               // Format build-args object to string
-              if(image['build-args']){
+              if (image['build-args']) {
                 const buildArgs = Object.keys(image['build-args']).map(key => `${key}=${image['build-args'][key]}`).join('\n');
                 image['build-args'] = buildArgs;
               }
 
               // Add image for each platform
               for (const platform of image['platforms']) {
+                let platformName = platform;
+                let platformRunsOn = runsOn;
+
+                // Platform can be a string or an object
+                if (typeof platform === 'object') {
+                  if (!platform.hasOwnProperty('name')) {
+                    throw new Error(`"images[${key}].platforms[${platform}].name" input is missing`);
+                  }
+                  platformName = platform['name'];
+
+                  if (platform.hasOwnProperty('runs-on')) {
+                    platformRunsOn = platform['runs-on'];
+                  }
+                } else if (typeof platform !== 'string') {
+                  throw new Error(`"images[${key}].platforms[${platform}]" input is not a string or an object`);
+                }
+
                 const imageByPlatform = {
                   ...image,
-                  platform: platform
+                  platform: platformName,
+                  "runs-on": platformRunsOn,
                 };
                 imagesByPlatform.push(imageByPlatform);
               }
@@ -134,7 +166,7 @@ jobs:
   build-images:
     name: Build image ${{ matrix.image.name }} for ${{ matrix.image.platform }}
     needs: prepare-variables
-    runs-on: ${{ fromJson(inputs.runs-on) }}
+    runs-on: ${{ matrix.image.runs-on }}
     strategy:
       fail-fast: false
       matrix:
