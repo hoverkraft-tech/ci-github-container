@@ -54,7 +54,13 @@ jobs:
       #    "dockerfile": "./docker/application/Dockerfile",
       #    "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },
       #    "target": "prod",
-      #    "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
+      #    "platforms": [
+      #        "linux/amd64",
+      #        {
+      #           "name": "darwin/amd64",
+      #           "runs-on": "macos-latest"
+      #        }
+      #    ]
       # }]
       images: ""
 ```
@@ -69,12 +75,13 @@ jobs:
 <!-- end secrets -->
 <!-- start inputs -->
 
-| **Input**                              | **Description**                                                                                                                                                                                                                                                                           | **Default**                                 | **Required** |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
-| **<code>runs-on</code>**               | Json array of runner(s) to use. See [https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job](https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job)                                                                                            | <code>["ubuntu-latest"]</code>              | **false**    |
-| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                                | <code>ghcr.io</code>                        | **false**    |
-| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                                                                                           | <code>${{ github.repository_owner }}</code> | **false**    |
-| **<code>images</code>**                | Images to build parameters. Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]}]</code> |                                             | **true**     |
+| **Input**                              | **Description**                                                                                                                                                                                                                                                                     | **Default**                                 | **Required** |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
+| **<code>runs-on</code>**               | Json array of runner(s) to use. See [https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job](https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job)                                                                                      | <code>["ubuntu-latest"]</code>              | **false**    |
+| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                          | <code>ghcr.io</code>                        | **false**    |
+| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                                                                                     | <code>${{ github.repository_owner }}</code> | **false**    |
+| **<code>images</code>**                | Images to build parameters.                                                                                                                                                                                                                                                         |                                             | **true**     |
+|                                        | Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64",{"name": "darwin/amd64","runs-on": "macos-latest"}]}]</code> |                                             |              |
 
 <!-- end inputs -->
 
