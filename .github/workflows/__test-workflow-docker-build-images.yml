@@ -179,30 +179,3 @@ jobs:
           ## os=linux,architecture=amd64,variant=null
           PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
           test "$PLATFORM_EXISTS" = "true"
-
-  cleanup:
-    needs: assert
-    runs-on: "ubuntu-latest"
-    permissions:
-      packages: write
-    if: always()
-    steps:
-      - uses: actions/checkout@v4
-
-      - id: get-issue-number
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.11.1
-
-      - name: Cleanup application-1 images
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: ./actions/docker/delete-image-tags
-        with:
-          image: "application-1"
-          tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"
-
-      - name: Cleanup application-2 images
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: ./actions/docker/delete-image-tags
-        with:
-          image: "application-2"
-          tag-prefix: "${{ steps.get-issue-number.outputs.issue-number }}-"

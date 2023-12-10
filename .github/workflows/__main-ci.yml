@@ -21,11 +21,7 @@ jobs:
       images: |
         [
           "application-1",
-          "application-1/cache",
           "application-2",
-          "application-2/cache",
-          "test-delete-image-tags",
-          "test-delete-image-tags/cache"
         ]
 
   release:

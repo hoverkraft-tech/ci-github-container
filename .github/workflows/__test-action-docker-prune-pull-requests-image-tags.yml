@@ -38,7 +38,7 @@ jobs:
             "dockerfile": "./tests/application-1/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
-            "platforms": ["linux/amd64"]
+            "platforms": ["linux/amd64","linux/arm64"]
           }
         ]
 
@@ -120,6 +120,37 @@ jobs:
               )
             );
             assert.equal(packageVersionExists, false, `Package version "${{ needs.setup.outputs.tag }}" has not been deleted`);
+
+      - uses: docker/login-action@v3
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Ensure current image tag didn't get deleted
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          for IMAGE_TAG in $(echo '${{ needs.act.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[]'); do
+            docker pull "$IMAGE_TAG"
+
+            if ! MANIFEST=$(docker manifest inspect "$IMAGE_TAG"); then
+              echo "Failed to inspect manifest for image: ${IMAGE_TAG}"
+              exit 1
+            fi
+
+            echo "$MANIFEST"
+
+            # Ensure all manifest digests didn't get deleted
+            for DIGEST in $(echo "$MANIFEST" | jq -r '.manifests[].digest'); do
+              IMAGE_MANIFEST="ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}@$DIGEST"
+              docker pull "$IMAGE_MANIFEST"
+              if ! docker manifest inspect "$IMAGE_MANIFEST" > /dev/null; then
+                echo "Failed to inspect manifest for image: ${IMAGE_MANIFEST}"
+                exit 1
+              fi
+            done
+          done
 
   cleanup:
     needs: assert

@@ -17,6 +17,16 @@ on:
         description: 'Images to clean. Example: ["application-1","application-2"]'
         type: string
         required: true
+      prune-cache-images:
+        description: 'Prune cache image tags  (like "application-1/cache"). Default: true'
+        type: boolean
+        default: true
+        required: false
+      pull-request-tag-filter:
+        description: "The regular expression to match pull request tags. Must have a capture group for the pull request number."
+        default: "^pr-([0-9]+)(?:-|$)"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -55,6 +65,10 @@ jobs:
               }
             }
 
+            if (${{ inputs.prune-cache-images }}) {
+              images = [...images, ...images.map((image) => `${image}/cache`)];
+            }
+
             core.setOutput('images', JSON.stringify([...new Set(images)]));
 
   prune-pull-requests-image-tags:
@@ -85,3 +99,4 @@ jobs:
         uses: ./self-workflow/actions/docker/prune-pull-requests-image-tags
         with:
           image: ${{ matrix.image }}
+          pull-request-tag-filter: ${{ inputs.pull-request-tag-filter }}
