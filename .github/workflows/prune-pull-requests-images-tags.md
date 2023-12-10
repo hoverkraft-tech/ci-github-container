@@ -37,14 +37,22 @@ jobs:
 
       # Images to clean. Example: ["application-1","application-2"].
       images: ""
+
+      # Prune cache image tags  (like "application-1/cache"). Default: true
+      prune-cache-images: true
+
+      # The regular expression to match pull request tags. Must have a capture group for the pull request number.
+      pull-request-tag-filter: "^pr-([0-9]+)(?:-|$)"
 ```
 
 <!-- start inputs -->
 
-| **Input**                | **Description**                                                                                                                                                                                | **Default**                    | **Required** |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------ |
-| **<code>runs-on</code>** | Json array of runner(s) to use. See [https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job](https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job) | <code>["ubuntu-latest"]</code> | **false**    |
-| **<code>images</code>**  | Images to clean. Example: <code>["application-1","application-2"]</code>                                                                                                                       |                                | **true**     |
+| **Input**                           | **Description**                                                                                                                                                                                | **Default**                       | **Required** |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------ |
+| **<code>runs-on</code>**            | Json array of runner(s) to use. See [https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job](https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job) | <code>["ubuntu-latest"]</code>    | **false**    |
+| **<code>images</code>**             | Images to clean. Example: <code>["application-1","application-2"]</code>                                                                                                                       |                                   | **true**     |
+| **<code>prune-cache-images</code>** | Prune cache image tags (like "application-1/cache").                                                                                                                                           | <code>true</code>                 | **false**    |
+| **<code>prune-cache-images</code>** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                                                      | <code>^pr-([0-9]+)(?:-\|$)</code> | **false**    |
 
 <!-- end inputs -->
 

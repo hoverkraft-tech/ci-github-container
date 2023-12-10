@@ -18,7 +18,7 @@ inputs:
 
 outputs:
   deleted-image-tags:
-    description: "The list of deleted image tags"
+    description: 'The list of deleted tags for given image. Example: ["1.0.0", "1.0.1"]'
     value: ${{ steps.delete-image-tags.outputs.deleted-image-tags }}
 
 runs:
@@ -54,12 +54,14 @@ runs:
           const packageVersions = await github.paginate(
             github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
           );
+          core.debug('Package versions: ' + JSON.stringify(packageVersions));
 
           const pullRequestTagFilterInput = `${{ inputs.pull-request-tag-filter }}`;
           if (!pullRequestTagFilterInput.length) {
             core.setFailed('Input "pull-request-tag-filter" is undefined');
             return;
           }
+
           // Assert that the regex has a valid capture group for the pull request number
           const hasCaptureGroupMatch = pullRequestTagFilterInput.match(/\([^?]([^)]+)\)/g);
           if (!hasCaptureGroupMatch ) {
@@ -76,7 +78,11 @@ runs:
 
           // Check that all tags are related to the same pull request
           const getTagsUniquePullRequest = (tags) => {
-            let pullRequestNumber;
+            if (!tags.length) {
+              return null;
+            }
+
+            let pullRequestNumber = null;
 
             const allTagsAreUniqueToPulRequest = tags.every(tag => {
               const matches = tag.match(pullRequestTagFilter);
@@ -115,14 +121,10 @@ runs:
             return closedPullRequests.get(pullRequestNumber);
           };
 
+          // FIXME: as we cannot delete tags, we can check that a version is stricly related to matching prefix tags (https://github.com/orgs/community/discussions/26267)
           const packageVersionsToDelete = [];
           for(const packageVersion of packageVersions) {
             const tags = packageVersion.metadata.container.tags;
-            if (!tags.length) {
-              core.debug(`Package version ${packageVersion.name} cannot be deleted as it has no tags.` + JSON.stringify(packageVersion));
-              continue;
-            }
-
             const pullRequestNumber = getTagsUniquePullRequest(tags);
             if (pullRequestNumber === null) {
               core.debug(`Package version ${packageVersion.name} cannot be deleted as it is not related to a single pull request: ${tags.join(', ')}`);
