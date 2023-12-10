@@ -43,6 +43,9 @@ runs:
         github-token: ${{ inputs.github-token }}
         script: |
           const packageName = `${{ steps.image-name.outputs.image-name }}`.replace(`${context.repo.owner}/`, '');
+          const tagPrefix = `${{ inputs.tag-prefix }}`;
+          const tagPrefixMatcher = tagPrefix ? new RegExp(`^${tagPrefix}(-|$)`) : null;
+
           const packagePayload = {
             package_type: 'container',
             package_name: packageName,
@@ -55,38 +58,37 @@ runs:
           );
           core.debug('Package versions: ' + JSON.stringify(packageVersions));
 
-          // FIXME: as we cannot delete tags, we can check that a version is stricly related to matching prefix tags (https://github.com/orgs/community/discussions/26267)
-          const tagPrefix = `${{ inputs.tag-prefix }}`;
-          const tagPrefixMatcher = tagPrefix ? new RegExp(`^${tagPrefix}(-|$)`) : null;
-
-          const packageVersionsToDelete = [];
+          let packageTagsToDelete = [];
           for(const packageVersion of packageVersions) {
             const { metadata } = packageVersion;
 
-            const canDeletePackageVersion = !metadata.container.tags.length || metadata.container.tags.every(
-              tag => !tagPrefixMatcher || tag.match(tagPrefixMatcher)
-            );
+            if (!metadata.container.tags.length) {
+              continue;
+            }
 
-            if (canDeletePackageVersion) {
-              packageVersionsToDelete.push(packageVersion);
+            if(tagPrefixMatcher) {
+              packageTagsToDelete.push(...metadata.container.tags.filter(tag => tag.match(tagPrefixMatcher)));
             } else {
-              core.debug(`Package version ${packageVersion.name} cannot be deleted as it is related to tags: ${metadata.container.tags}`);
+              packageTagsToDelete.push(...metadata.container.tags);
             }
           }
 
-          core.debug('Package versions to delete: ' + JSON.stringify(packageVersionsToDelete));
+          packageTagsToDelete = [...new Set(packageTagsToDelete)];
 
-          await Promise.all(
-            packageVersionsToDelete.map(
-              async ({ id }) => {
+          core.debug('Package tags to be deleted: ' + JSON.stringify(packageTagsToDelete));
+
+          const deleteImageTags = await Promise.all(
+            packageTagsToDelete.map(
+              async tag => {
                 try{
-                  await github.rest.packages.deletePackageVersionForOrg({
-                    ...packagePayload,
-                    package_version_id: id,
-                  });
+                  await github.request(
+                    "DELETE /orgs/{org}/packages/{package_type}/{package_name}/{tag}", 
+                    {...packagePayload, tag}
+                  );
+                  return tag;
                 } catch(error){
                   if (error.status === 404) {
-                    core.warning(`Image version ${id} not found`);
+                    core.warning(`Tag ${tag} not found`);
                   } else {
                     throw error;
                   }
@@ -95,5 +97,4 @@ runs:
             )
           );
 
-          const deletedTags = packageVersionsToDelete.map(({ metadata:{ container: { tags } } }) => tags).flat();
-          core.setOutput('deleted-image-tags',JSON.stringify([...new Set(deletedTags)]));
+          core.setOutput('deleted-image-tags',JSON.stringify(deleteImageTags));
