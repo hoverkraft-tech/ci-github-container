@@ -10,16 +10,26 @@ on:
   workflow_call:
     outputs:
       built-images:
-        description: 'Built images names and tags. Example: {
+        description: 'Built images data. Example: {
           "application": {
           "name": "application",
           "registry": "ghcr.io",
           "repository": "my-org/my-repo/application",
           "tags": ["pr-63-5222075","pr-63"],
-          "images": ["ghcr.io/my-org/my-repo/application:pr-63-5222075","ghcr.io/my-org/my-repo/application:pr-63"],
+          "images": [
+          "ghcr.io/my-org/my-repo/application:pr-63-5222075",
+          "ghcr.io/my-org/my-repo/application:pr-63"
+          ],
+          "digests": [
+          "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
+          ],
+          "annotations": {
+          "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+          "org.opencontainers.image.description": "Application image"
+          }
           }
           }'
-        value: ${{ jobs.outputs-built-images.outputs.built-images }}
+        value: ${{ jobs.publish-manifests.outputs.built-images }}
     inputs:
       runs-on:
         description: "Runner to use. Json array of runners. See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job"
@@ -122,7 +132,8 @@ jobs:
               }
 
               // Add image for each platform
-              for (const platform of image['platforms']) {
+              const platforms = image['platforms'];
+              for (const platform of platforms) {
                 let platformName = platform;
                 let platformRunsOn = runsOn;
 
@@ -187,18 +198,6 @@ jobs:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
-      - run: |
-          echo "self-workflow" >> .gitignore
-          echo "self-workflow" >> .dockerignore
-
-      - id: metadata
-        uses: ./self-workflow/actions/docker/get-image-metadata
-        with:
-          oci-registry: ${{ inputs.oci-registry }}
-          tag: ${{ matrix.image.tag }}
-          image: ${{ matrix.image.name }}
-
-      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       - uses: actions/checkout@v4
         with:
           path: ./self-workflow
@@ -214,9 +213,7 @@ jobs:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
           oci-registry-password: ${{ secrets.oci-registry-password }}
-          image: ${{ steps.metadata.outputs.image }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          annotations: ${{ steps.metadata.outputs.annotations }}
+          image: ${{ matrix.image.name }}
           context: ${{ matrix.image.context }}
           dockerfile: ${{ matrix.image.dockerfile }}
           build-args: ${{ matrix.image.build-args }}
@@ -224,25 +221,12 @@ jobs:
           platform: ${{ matrix.image.platform }}
           secrets: ${{ secrets.build-secrets }}
 
-      - id: outputs-built-image
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            const builtImage = {
-              "name": `${{ matrix.image.name }}`,
-              "image": `${{ steps.metadata.outputs.image }}`,
-              "tags": `${{ steps.metadata.outputs.tags }}`.split("\n").map(tag => tag.trim()).filter(tag => tag !== ""),
-              "digest": `${{ steps.build.outputs.digest }}`,
-              "annotations": `${{ steps.metadata.outputs.annotations }}`.split("\n").map(annotation => annotation.trim()).filter(annotation => annotation !== ""),
-            };
-            core.setOutput("built-image", JSON.stringify(builtImage));
-
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
       - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.11.2
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
-          value: ${{ steps.outputs-built-image.outputs.built-image }}
+          value: ${{ steps.build.outputs.built-image }}
 
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       - uses: actions/checkout@v4
@@ -253,22 +237,23 @@ jobs:
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
 
   publish-manifests:
-    needs: [prepare-variables, build-images]
-    runs-on: ${{ fromJson(inputs.runs-on) }}
-    outputs:
-      built-images: ${{ steps.get-built-images.outputs.built-images }}
+    name: Publish images manifests
     permissions:
       contents: read
       packages: write
       # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
       id-token: write
+    needs: [prepare-variables, build-images]
+    runs-on: ${{ fromJson(inputs.runs-on) }}
+    outputs:
+      built-images: ${{ steps.built-images.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
         uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.11.2
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
-      - id: get-built-images
+      - id: built-images
         uses: actions/github-script@v7.0.1
         with:
           script: |
@@ -283,22 +268,16 @@ jobs:
             // Group by image name
             const images = {};
             builtImages.forEach(builtImage => {
-              const { name, image, digest, tags, annotations } = builtImage;
+              const { name, digests, ...image } = builtImage;
               if (!images[name]) {
                 images[name] = {
                   name,
-                  image,
-                  digests: [],
-                  tags,
-                  annotations,
+                  digests,
+                  ...image,
                 };
+              } else {
+                images[name].digests = [...new Set([...images[name].digests, ...digests])];
               }
-
-              if(images[name].image !== image) {
-                throw new Error(`Image mismatch for "${name}"`);
-              }
-
-              images[name].digests.push(digest);
             });
 
             core.setOutput('built-images', JSON.stringify(images));
@@ -322,41 +301,4 @@ jobs:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
           oci-registry-password: ${{ secrets.oci-registry-password }}
-          built-images: ${{ steps.get-built-images.outputs.built-images }}
-
-  outputs-built-images:
-    needs: [publish-manifests]
-    runs-on: ${{ fromJson(inputs.runs-on) }}
-    outputs:
-      built-images: ${{ steps.outputs-built-images.outputs.built-images }}
-    steps:
-      - id: outputs-built-images
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            const builtImagesOutput = `${{ needs.publish-manifests.outputs.built-images }}`;
-            let builtImages = null;
-            try {
-              builtImages = JSON.parse(builtImagesOutput);
-            } catch (error) {
-              throw new Error(`"built-images" output is not a valid JSON: ${error}`);
-            }
-
-            Object.keys(builtImages).forEach(key => {
-              const builtImage = builtImages[key];
-
-              const registry = builtImage.image.replace(/([^\/]+)\/[^:]+/,'$1');
-              const repository = builtImage.image.replace(/[^\/]+\/([^:]+)/,'$1');
-              const images = [...builtImage.tags];
-              const tags = builtImage.tags.map(tag => tag.replace(/[^\/]+\/[^:]+:(.+)/,'$1'));
-
-              builtImages[key] = {
-                "name": builtImage.name,
-                registry,
-                repository,
-                tags,
-                images,
-              };
-            });
-
-            core.setOutput("built-images", builtImages);
+          built-images: ${{ steps.built-images.outputs.built-images }}

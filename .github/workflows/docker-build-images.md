@@ -86,6 +86,11 @@ jobs:
 <!-- end inputs -->
 
 <!-- start outputs -->
+
+| **Output**                    | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **<code>built-images</code>** | Built images data. Example: <code>{ "application": { "name": "application", "registry": "ghcr.io", "repository": "my-org/my-repo/application", "tags": ["pr-63-5222075","pr-63"], "images": [ "ghcr.io/my-org/my-repo/application:pr-63-5222075", "ghcr.io/my-org/my-repo/application:pr-63" ], "digests": [ "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d", "ghcr.io/my-org/my-repo/application@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402" ], "annotations": { "org.opencontainers.image.created": "2021-09-30T14:00:00Z", "org.opencontainers.image.description": "Application image" } } }</code> |
+
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
 <!-- end [.github/ghadocs/examples/] -->

@@ -6,12 +6,20 @@ branding:
   color: gray-dark
 
 outputs:
-  image:
-    description: 'Name of the built image. Example: "ghcr.io/my-org/my-repo/application"'
-    value: ${{ steps.get-built-image.outputs.image }}
-  digest:
-    description: 'Digest of the built image. Example: "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"'
-    value: ${{ steps.get-built-image.outputs.digest }}
+  built-image:
+    description: 'Built image data. Example: {
+      "name": "application",
+      "registry": "ghcr.io",
+      "repository": "my-org/my-repo/application",
+      "tags": ["pr-63-5222075","pr-63"],
+      "images": ["ghcr.io/my-org/my-repo/application:pr-63-5222075","ghcr.io/my-org/my-repo/application:pr-63"],
+      "digests": ["ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"],
+      "annotations": {
+        "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+        "org.opencontainers.image.description": "Application image"
+      }
+    }'
+    value: ${{ steps.get-built-image.outputs.built-image }}
 
 inputs:
   oci-registry:
@@ -27,8 +35,11 @@ inputs:
     default: ${{ github.token }}
     required: true
   image:
-    description: 'Image name. Example: "ghcr.io/my-org/my-repo/application"'
-    required: true
+    description: "Additional Image name"
+    required: false
+  tag:
+    description: "Force image tag to publish"
+    required: false
   platform:
     description: "Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: true
@@ -46,12 +57,6 @@ inputs:
   target:
     description: "Sets the target stage to build. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
     required: false
-  labels:
-    description: "Labels to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
-    required: false
-  annotations:
-    description: "Annotations to apply to the built image. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
-    required: false
   secrets:
     description: "List of secrets to expose to the build. See [https://docs.docker.com/build/ci/github-actions/secrets/](https://docs.docker.com/build/ci/github-actions/secrets/)"
     required: false
@@ -65,6 +70,13 @@ runs:
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
 
+    - id: metadata
+      uses: ./self-actions/docker/get-image-metadata
+      with:
+        oci-registry: ${{ inputs.oci-registry }}
+        image: ${{ inputs.image }}
+        tag: ${{ inputs.tag }}
+
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: |
@@ -75,21 +87,21 @@ runs:
       with:
         value: ${{ inputs.platform }}
 
-    - id: get-cache-flavor
+    - id: get-platform-config
       shell: bash
       run: |
         TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
 
         # Add tag suffix flavor
-        FLAVOR="suffix=$TAG_SUFFIX"
+        CACHE_FLAVOR="suffix=$TAG_SUFFIX"
 
-        echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
+        echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
 
     - id: cache
       uses: int128/docker-build-cache-config-action@v1.28.0
       with:
-        image: ${{ inputs.image }}/cache
-        flavor: ${{ steps.get-cache-flavor.outputs.flavor }}
+        image: ${{ steps.metadata.outputs.image }}/cache
+        flavor: ${{ steps.get-platform-config.outputs.cache-flavor }}
         pull-request-cache: true
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.11.2
@@ -100,6 +112,9 @@ runs:
       run: git lfs pull
 
     - uses: docker/setup-qemu-action@v3
+      with:
+        platforms: ${{ inputs.platform }}
+
     - uses: docker/setup-buildx-action@v3
       with:
         version: latest
@@ -117,33 +132,65 @@ runs:
         build-args: ${{ inputs.build-args }}
         target: ${{ inputs.target }}
         file: ${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}
-        labels: ${{ inputs.labels }}
-        annotations: ${{ inputs.annotations }}
+        secrets: ${{ inputs.secrets }}
         platforms: ${{ inputs.platform }}
         cache-from: ${{ steps.cache.outputs.cache-from }}
         cache-to: ${{ steps.cache.outputs.cache-to }}
-        outputs: type=image,name=${{ inputs.image }},push-by-digest=true,name-canonical=true,push=true
-        secrets: ${{ inputs.secrets }}
+        outputs: "type=image,push=true,push-by-digest=true,name-canonical=true,name=${{ steps.metadata.outputs.image }}"
+        labels: ${{ steps.metadata.outputs.labels }}
+        annotations: ${{ steps.metadata.outputs.annotations }}
 
     - id: get-built-image
       uses: actions/github-script@v7.0.1
       with:
         script: |
           const builtMetadata = ${{ steps.build.outputs.metadata }};
-
           if (typeof builtMetadata !== 'object') {
             core.setFailed('Given "metadata" output is not a JSON object.');
             return;
           }
 
-          if (builtMetadata["image.name"] === undefined) {
-            core.setFailed('Given "metadata"."image.name" output is undefined.');
-            return;
-          }
           if (builtMetadata["containerimage.digest"] === undefined) {
             core.setFailed('Given "metadata"."containerimage.digest" output is undefined.');
             return;
           }
 
-          core.setOutput('image', builtMetadata["image.name"]);
-          core.setOutput('digest', builtMetadata["containerimage.digest"]);
+          if (builtMetadata["containerimage.descriptor"] === undefined) {
+            core.setFailed('Given "metadata"."containerimage.descriptor" output is undefined.');
+            return;
+          }
+
+          const name = `${{ inputs.image }}`;
+          const image = `${{ steps.metadata.outputs.image }}`;
+          const registryMatch = image.match(/^([^\/]+)\/.*/);
+          const registry = registryMatch ? registryMatch[1] : null;
+          const repositoryMatch = image.match(/^[^\/]+\/([^:]+)/);
+          const repository = repositoryMatch ? repositoryMatch[1] : null;
+
+          const tags = `${{ steps.metadata.outputs.tags }}`
+          .split("\n")
+          .map(tag => tag.replace(/[^\/]+\/[^:]+:(.+)/,'$1').trim())
+          .filter(tag => tag !== "");
+
+          const images = tags.map(tag => `${image}:${tag}`);
+          const digests = builtMetadata["containerimage.digest"]
+            .split(",")
+            .map(digest => {
+              const cleanedDigest = digest.trim();
+              return cleanedDigest !== "" ? `${image}@${cleanedDigest}` : null;
+            })
+            .filter(digest => digest !== null);
+
+          const annotations = builtMetadata["containerimage.descriptor"].annotations;
+
+          const builtImage = {
+            name,
+            tags,
+            annotations,
+            registry,
+            repository,
+            images,
+            digests,
+          };
+
+          core.setOutput("built-image", JSON.stringify(builtImage));

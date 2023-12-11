@@ -35,7 +35,7 @@ jobs:
           {
             "name": "test-prune-${{ github.run_number }}",
             "context": ".",
-            "dockerfile": "./tests/application-1/Dockerfile",
+            "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
             "platforms": ["linux/amd64","linux/arm64"]

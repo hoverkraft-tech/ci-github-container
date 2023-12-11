@@ -38,7 +38,8 @@ runs:
 
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
-      run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
+      run: |
+        [ -d ./self-actions/docker/get-image-name ] || ( mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/ )
 
     - id: image-name
       uses: ./self-actions/docker/get-image-name

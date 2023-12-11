@@ -22,17 +22,17 @@ jobs:
       images: |
         [
           {
-            "name": "application-1",
+            "name": "application-multi-arch",
             "context": ".",
-            "dockerfile": "./tests/application-1/Dockerfile",
+            "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
             "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
           },
           {
-            "name": "application-2",
+            "name": "application-mono-arch",
             "context": ".",
-            "dockerfile": "./tests/application-2/Dockerfile",
+            "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
             "platforms": ["linux/amd64"]
@@ -63,23 +63,23 @@ jobs:
             assert(typeof builtImages === "object" && !Array.isArray(builtImages), `"built-images" output is not an object`);
             assert.equal(Object.keys(builtImages).length, 2, `"built-images" output does not contain 2 images`);
 
-            assert(builtImages["application-1"], `"built-images" output does not contain "application-1" image`);
+            assert(builtImages["application-multi-arch"], `"built-images" output does not contain "application-multi-arch" image`);
 
-            const application1Image = builtImages["application-1"];
-            assert.equal(application1Image.name, "application-1");
-            assert.equal(application1Image.registry, "ghcr.io");
-            assert.equal(application1Image.repository,"hoverkraft-tech/ci-github-container/application-1");
-            assert(application1Image.tags.length);
-            assert(application1Image.images.length);
-            application1Image.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-1:[\.a-z0-9-]+$/));
+            const applicationMultiArchImage = builtImages["application-multi-arch"];
+            assert.equal(applicationMultiArchImage.name, "application-multi-arch");
+            assert.equal(applicationMultiArchImage.registry, "ghcr.io");
+            assert.equal(applicationMultiArchImage.repository,"hoverkraft-tech/ci-github-container/application-multi-arch");
+            assert(applicationMultiArchImage.tags.length);
+            assert(applicationMultiArchImage.images.length);
+            applicationMultiArchImage.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-multi-arch:[\.a-z0-9-]+$/));
 
-            const application2Image = builtImages["application-2"];
-            assert.equal(application2Image.name, "application-2");
-            assert.equal(application2Image.registry, "ghcr.io");
-            assert.equal(application2Image.repository,"hoverkraft-tech/ci-github-container/application-2");
-            assert(application2Image.tags.length);
-            assert(application2Image.images.length);
-            application2Image.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-2:[\.a-z0-9-]+$/));
+            const applicationMonoArchImage = builtImages["application-mono-arch"];
+            assert.equal(applicationMonoArchImage.name, "application-mono-arch");
+            assert.equal(applicationMonoArchImage.registry, "ghcr.io");
+            assert.equal(applicationMonoArchImage.repository,"hoverkraft-tech/ci-github-container/application-mono-arch");
+            assert(applicationMonoArchImage.tags.length);
+            assert(applicationMonoArchImage.images.length);
+            applicationMonoArchImage.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-mono-arch:[\.a-z0-9-]+$/));
 
       - uses: docker/login-action@v3
         with:
@@ -89,7 +89,7 @@ jobs:
 
       - name: Check multi-arch docker image and manifest
         run: |
-          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-1.images[0] }}"
+          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-multi-arch.images[0] }}"
 
           docker pull "$IMAGE"
 
@@ -153,9 +153,9 @@ jobs:
           ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.url"] == "https://github.com/hoverkraft-tech/ci-github-container"')
           test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.url" && echo "$ANNOTATIONS" && exit 1)
 
-      - name: Check single-arch docker image
+      - name: Check mono-arch docker image
         run: |
-          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-2.images[0] }}"
+          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-mono-arch.images[0] }}"
 
           docker pull "$IMAGE"
 
@@ -166,7 +166,12 @@ jobs:
           fi
 
           # Check that there is only platforms
-          PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]')
+          if ! PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]'); then
+            echo "Failed to get platforms for image: ${IMAGE}"
+            echo "${MANIFEST}"
+            exit 1
+          fi
+
           NB_PLATFORMS=$(echo "${PLATFORMS}" | jq -e '. | length')
           if [ "$NB_PLATFORMS" != "1" ]; then
             echo "Expected 1 platform, got: $NB_PLATFORMS"
