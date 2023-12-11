@@ -47,17 +47,6 @@ updates:
         patterns:
           - '*'
   - package-ecosystem: github-actions
-    directory: /actions/docker/delete-image-tags
-    open-pull-requests-limit: 20
-    schedule:
-      interval: weekly
-      day: friday
-      time: '04:00'
-    groups:
-      github-actions-dependencies:
-        patterns:
-          - '*'
-  - package-ecosystem: github-actions
     directory: /actions/docker/get-image-metadata
     open-pull-requests-limit: 20
     schedule:
