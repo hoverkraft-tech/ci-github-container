@@ -20,12 +20,24 @@ inputs:
     required: true
   built-images:
     description: 'Built images data. Example: {
-      "application": {
-      "name": "application",
-      "image": "ghcr.io/my-org/my-repo/application",
-      "digest": "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-      "tags": ["ghcr.io/my-org/my-repo/application:pr-63-5222075","ghcr.io/my-org/my-repo/application:pr-63"]
-      }
+        "application": {
+          "name": "application",
+          "registry": "ghcr.io",
+          "repository": "my-org/my-repo/application",
+          "tags": ["pr-63-5222075","pr-63"],
+          "images": [
+            "ghcr.io/my-org/my-repo/application:pr-63-5222075",
+            "ghcr.io/my-org/my-repo/application:pr-63"
+          ],
+          "digests": [
+            "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+            "ghcr.io/my-org/my-repo/application@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"
+          ],
+          "annotations": {
+            "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+            "org.opencontainers.image.description": "Application image"
+          }
+        }
       }'
     required: true
 
@@ -60,24 +72,18 @@ runs:
           const commands = Object.keys(builtImages).map(imageName => {
             const builtImage = builtImages[imageName];
 
-            const tags = [...new Set(builtImage.tags)].map(tag => {
-              return `--tag ${tag}`;
+            const tags = builtImage.images.map(image => {
+              return `--tag ${image}`;
             }).join(" ");
 
-            const image = builtImage.image;
+            const digests = builtImage.digests.join(" ");
 
-            const digests = [...new Set(builtImage.digests)].map(digest => {
-              const cleanDigest = digest.trim();
-              return cleanDigest.length ? `${image}@${cleanDigest}` : "";
-            }).join(" ");
-
-            const annotations = builtImage.annotations
-              .map(annotation => annotation.replace('manifest:', '').trim())
-              .filter((annotation, index, array) => annotation.length && array.indexOf(annotation) === index)
-              .map(annotation => {
-                const annotationLevels = ["index"];
-                return annotationLevels.map(annotationLevel => `--annotation "${annotationLevel}:${annotation}"`).join(" ");
-              }).join(" ");
+            const annotationLevels = ["index"];
+            const annotations = Object.keys(builtImage.annotations)
+              .map(annotation => annotationLevels
+                .map(annotationLevel => `--annotation "${annotationLevel}:${annotation}=${builtImage.annotations[annotation]}"`)
+              )
+              .flat().join(" ");
 
             createManifestCommand = `docker buildx imagetools create ${annotations} ${tags} ${digests}`;
 
