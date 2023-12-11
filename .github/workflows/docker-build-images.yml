@@ -239,7 +239,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.11.1
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.11.2
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.outputs-built-image.outputs.built-image }}
@@ -264,7 +264,7 @@ jobs:
       id-token: write
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.11.1
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.11.2
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
