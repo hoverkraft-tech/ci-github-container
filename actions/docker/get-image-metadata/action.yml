@@ -18,6 +18,9 @@ outputs:
   tags:
     description: 'The image tags. Example: "pr-63-5222075\npr-63"'
     value: ${{ steps.generate-outputs.outputs.tags }}
+  flavor:
+    description: 'The image flavor. Example: "latest=true\npr-63=false"'
+    value: ${{ steps.get-platform-config.outputs.flavor }}
 
 inputs:
   oci-registry:
@@ -27,8 +30,14 @@ inputs:
   image:
     description: "Additional Image name"
     required: false
+  platform:
+    description: "Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)"
+    required: true
   tag:
     description: "Force image tag to publish"
+    required: false
+  levels:
+    description: "Levels of metadata to generate. See [https://github.com/docker/metadata-action?tab=readme-ov-file#environment-variables](https://github.com/docker/metadata-action?tab=readme-ov-file#environment-variables)"
     required: false
 
 runs:
@@ -39,10 +48,10 @@ runs:
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: |
-        [ -d ./self-actions/docker/get-image-name ] || ( mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/ )
+        mkdir -p ./self-get-image-metadata-action/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-get-image-metadata-action/
 
     - id: image-name
-      uses: ./self-actions/docker/get-image-name
+      uses: ./self-get-image-metadata-action/docker/get-image-name
       with:
         image: ${{ inputs.image }}
         oci-registry: ${{ inputs.oci-registry }}
@@ -50,7 +59,7 @@ runs:
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: |
-        rm -fr ./self-actions
+        rm -fr ./self-get-image-metadata-action
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
@@ -58,14 +67,35 @@ runs:
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.11.2
 
+    - id: slugify-platform
+      if: inputs.platform
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.11.2
+      with:
+        value: ${{ inputs.platform }}
+
+    - id: get-platform-config
+      shell: bash
+      if: steps.slugify-platform.outputs.result
+      run: |
+        TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
+
+        # Add tag suffix flavor
+        FLAVOR="suffix=$TAG_SUFFIX"
+
+        echo "flavor=$FLAVOR" >> "$GITHUB_OUTPUT"
+
     - id: define-metadata-inputs
       uses: actions/github-script@v7.0.1
       with:
         result-encoding: string
         script: |
+          let flavor = `${{ steps.get-platform-config.outputs.flavor }}`;
+
           // If push on default branch set tag to latest
           const isPushOnDefaultBranch = context.eventName === 'push' && context.ref === `refs/heads/${{ github.base_ref }}`;
-          core.setOutput('flavor', isPushOnDefaultBranch ? 'latest=true' : 'latest=false');
+          flavor += "\nlatest="+ (isPushOnDefaultBranch ? 'true' : 'false');
+
+          core.setOutput('flavor', flavor);
 
           const tagInput = `${{ inputs.tag }}`
           if (tagInput.length) {
@@ -98,7 +128,7 @@ runs:
         tags: ${{ steps.define-metadata-inputs.outputs.tags }}
         flavor: ${{ steps.define-metadata-inputs.outputs.flavor }}
       env:
-        DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
+        DOCKER_METADATA_ANNOTATIONS_LEVELS: ${{ inputs.levels }}
 
     - id: generate-outputs
       uses: actions/github-script@v7.0.1

@@ -23,10 +23,10 @@ on:
           "digests": [
           "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
           ],
-          "annotations": {
-          "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
-          "org.opencontainers.image.description": "Application image"
-          }
+          "annotations": [
+          "org.opencontainers.image.created=2021-09-30T14:00:00Z",
+          "org.opencontainers.image.description=Application image"
+          ]
           }
           }'
         value: ${{ jobs.publish-manifests.outputs.built-images }}
@@ -198,11 +198,6 @@ jobs:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
-      - uses: actions/checkout@v4
-        with:
-          path: ./self-workflow
-          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
-          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
       - run: |
           echo "self-workflow" >> .gitignore
           echo "self-workflow" >> .dockerignore
@@ -219,6 +214,7 @@ jobs:
           build-args: ${{ matrix.image.build-args }}
           target: ${{ matrix.image.target }}
           platform: ${{ matrix.image.platform }}
+          tag: ${{ matrix.image.tag }}
           secrets: ${{ secrets.build-secrets }}
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
