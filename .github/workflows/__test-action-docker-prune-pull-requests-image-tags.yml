@@ -24,7 +24,8 @@ jobs:
           TAG="pr-$(( 1 + RANDOM % 210))"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-  act:
+  arrange:
+    name: Arrange - Build images
     needs: setup
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
@@ -42,12 +43,13 @@ jobs:
           }
         ]
 
-  assert:
-    name: Test for "docker/prune-pull-requests-image-tags" action
+  act:
     runs-on: ubuntu-latest
-    needs: [setup, act]
+    needs: [setup, arrange]
     permissions:
       packages: write
+    outputs:
+      deleted-image-tags: ${{ steps.prune-pull-requests-image-tags.outputs.deleted-image-tags }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +61,7 @@ jobs:
 
       - name: Push extra docker image tags for test
         run: |
-          BASE_IMAGE=$(echo '${{ needs.act.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[0]')
+          BASE_IMAGE=$(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[0]')
           NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ needs.setup.outputs.tag }}
 
           docker pull "$BASE_IMAGE"
@@ -71,13 +73,17 @@ jobs:
         with:
           image: ${{ env.IMAGE }}
 
-      - name: Check ouputs
+  assert:
+    runs-on: ubuntu-latest
+    needs: [setup, arrange, act]
+    steps:
+      - name: Assert - Check ouputs
         uses: actions/github-script@v7.0.1
         with:
           script: |
             const assert = require("assert");
 
-            const deletedImageTagsOutput = `${{ steps.prune-pull-requests-image-tags.outputs.deleted-image-tags }}`;
+            const deletedImageTagsOutput = `${{ needs.act.outputs.deleted-image-tags }}`;
             assert(deletedImageTagsOutput.length, `"deleted-image-tags" output is empty`);
 
             // Check if is valid Json
@@ -98,7 +104,7 @@ jobs:
               assert.equal(deletedImageTagsForCurrentPullRequest.length, 0, `"deleted-image-tags" output contains current pull request image tag`);
             }
 
-      - name: Ensure packages versions have been deleted
+      - name: Assert - Ensure packages versions have been deleted
         uses: actions/github-script@v7.0.1
         with:
           github-token: ${{ github.token }}
@@ -128,10 +134,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Ensure current image tag didn't get deleted
+      - name: Assert - Ensure current image tag didn't get deleted
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          for IMAGE_TAG in $(echo '${{ needs.act.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[]'); do
+          for IMAGE_TAG in $(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[]'); do
             docker pull "$IMAGE_TAG"
 
             if ! MANIFEST=$(docker manifest inspect "$IMAGE_TAG"); then
@@ -179,5 +185,14 @@ jobs:
                 org: 'hoverkraft-tech',
               };
 
-              await github.rest.packages.deletePackageForOrg(packagePayload);
+              try {
+                await github.rest.packages.deletePackageForOrg(packagePayload);
+              } catch (error) {
+                if (error.status === 404) {
+                  core.warning(`Package "${packagePayload.package_name}" not found.`);
+                } else {
+                  throw error;
+                }
+              }
+
             }
