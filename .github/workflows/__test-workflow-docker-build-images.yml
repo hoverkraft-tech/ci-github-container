@@ -4,6 +4,7 @@ run-name: Test for "docker-build-images" workflow
 on:
   workflow_call:
 
+# jscpd:ignore-start
 jobs:
   arrange:
     runs-on: ubuntu-latest
@@ -35,7 +36,8 @@ jobs:
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
             "target": "prod",
-            "platforms": ["linux/amd64"]
+            "platforms": ["linux/amd64"],
+            "tag": "0.1.0"
           }
         ]
 
@@ -77,9 +79,9 @@ jobs:
             assert.equal(applicationMonoArchImage.name, "application-mono-arch");
             assert.equal(applicationMonoArchImage.registry, "ghcr.io");
             assert.equal(applicationMonoArchImage.repository,"hoverkraft-tech/ci-github-container/application-mono-arch");
-            assert(applicationMonoArchImage.tags.length);
-            assert(applicationMonoArchImage.images.length);
-            applicationMonoArchImage.images.forEach(image => assert.match(image, /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-mono-arch:[\.a-z0-9-]+$/));
+            assert.equal(applicationMonoArchImage.tags.length, 1);
+            assert.equal(applicationMonoArchImage.images.length, 1);
+            assert.equal(applicationMonoArchImage.images[0], "ghcr.io/hoverkraft-tech/ci-github-container/application-mono-arch:0.1.0");
 
       - uses: docker/login-action@v3
         with:
@@ -184,3 +186,5 @@ jobs:
           ## os=linux,architecture=amd64,variant=null
           PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
           test "$PLATFORM_EXISTS" = "true"
+
+# jscpd:ignore-end

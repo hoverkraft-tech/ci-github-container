@@ -214,6 +214,7 @@ jobs:
           oci-registry-username: ${{ inputs.oci-registry-username }}
           oci-registry-password: ${{ secrets.oci-registry-password }}
           image: ${{ matrix.image.name }}
+          tag: ${{ matrix.image.tag }}
           context: ${{ matrix.image.context }}
           dockerfile: ${{ matrix.image.dockerfile }}
           build-args: ${{ matrix.image.build-args }}

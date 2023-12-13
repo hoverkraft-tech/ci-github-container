@@ -4,6 +4,7 @@ run-name: Test for "docker/build-image" action
 on:
   workflow_call:
 
+# jscpd:ignore-start
 jobs:
   tests:
     name: Test for "docker/build-image" action
@@ -63,16 +64,16 @@ jobs:
               const prTag = `pr-${{ github.event.pull_request.number }}`;
 
               assert.equal(builtImageOutput.tags.length, 2, `"tags" output is not valid`);
-              
+
               assert.equal(builtImageOutput.tags[0], prShaTag, `"tags" output is not valid`);
               assert.equal(builtImageOutput.tags[1], prTag, `"tags" output is not valid`);
-              
+
               assert.equal(builtImageOutput.images.length, 2, `"images" output is not valid`);
               assert.equal(builtImageOutput.images[0], `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${prShaTag}`, `"images" output is not valid`);
               assert.equal(builtImageOutput.images[1], `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${prTag}`, `"images" output is not valid`);
-              
+
               assert.equal(builtImageOutput.annotations["org.opencontainers.image.version"], prTag, `"annotations.org.opencontainers.image.version" output is not valid`);
-              
+
             } else {
               const refTag = `${{ github.ref_name }}`;
 
@@ -81,7 +82,7 @@ jobs:
 
               assert.equal(builtImageOutput.images.length, 1, `"images" output is not valid`);
               assert.equal(builtImageOutput.images[0], `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${refTag}`, `"images" output is not valid`);
-              
+
               assert.equal(builtImageOutput.annotations["org.opencontainers.image.version"], refTag, `"annotations.org.opencontainers.image.version" output is not valid`);
             }
 
@@ -105,3 +106,68 @@ jobs:
               exit 1
             fi
           done
+
+  tests-with-given-tag:
+    name: Test for "docker/build-image" action with given tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Arrange - Checkout
+        uses: actions/checkout@v4
+
+      - name: Arrange - Ensure token is set
+        run: |
+          if [ -z "${{ github.token }}" ]; then
+            echo "GitHub token is not set"
+            exit 1
+          fi
+
+      - name: Act - Build image
+        id: build-image
+        uses: ./actions/docker/build-image
+        with:
+          oci-registry: ghcr.io
+          oci-registry-password: ${{ github.token }}
+          context: "."
+          dockerfile: "./tests/application/Dockerfile"
+          target: "prod"
+          platform: "linux/amd64"
+          image: application-test
+          tag: "0.1.0"
+
+      - name: Assert - Check built image output
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const assert = require("assert");
+
+            const builtImageOutput = ${{ steps.build-image.outputs.built-image }};
+            assert(builtImageOutput, `"built-image" output is empty`);
+
+            assert.equal(builtImageOutput.tags.length, 1, `"tags" output is not valid`);
+            assert.equal(builtImageOutput.tags[0], '0.1.0', `"tags" output is not valid`);
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Assert - Check docker digests
+        run: |
+          DIGESTS=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.digests[]')
+          for DIGEST in $DIGESTS; do
+            if ! docker pull "$DIGEST"; then
+              echo "Failed to pull $DIGEST"
+              exit 1
+            fi
+
+            if ! docker manifest inspect "$DIGEST"; then
+              echo "Failed to inspect $DIGEST"
+              exit 1
+            fi
+          done
+
+# jscpd:ignore-end
