@@ -155,11 +155,6 @@ runs:
             return;
           }
 
-          if (builtMetadata["containerimage.descriptor"] === undefined) {
-            core.setFailed('Given "metadata"."containerimage.descriptor" output is undefined.');
-            return;
-          }
-
           const name = `${{ inputs.image }}`;
           const image = `${{ steps.metadata.outputs.image }}`;
           const registryMatch = image.match(/^([^\/]+)\/.*/);
@@ -181,7 +176,20 @@ runs:
             })
             .filter(digest => digest !== null);
 
-          const annotations = builtMetadata["containerimage.descriptor"].annotations;
+          const annotations = `${{ steps.metadata.outputs.annotations }}`
+            .split("\n")
+            .map(annotation => {
+              const cleanedAnnotation = annotation
+                .replace(/^[^:]+:/, "")
+                .trim();
+              return cleanedAnnotation !== "" ? cleanedAnnotation : null;
+            })
+            .filter(annotation => annotation !== null)
+            .reduce((annotations, annotation) => {
+              const [key, value] = annotation.split("=");
+              annotations[key] = value;
+              return annotations;
+            }, {})
 
           const builtImage = {
             name,
