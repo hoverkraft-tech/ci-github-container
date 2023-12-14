@@ -143,7 +143,7 @@ runs:
 
           await Promise.all(
             packageVersionsToDelete.map(
-              async ({ id }) => {
+              async ({ id, name }) => {
                 try{
                   await github.rest.packages.deletePackageVersionForOrg({
                     ...packagePayload,
@@ -151,7 +151,7 @@ runs:
                   });
                 } catch(error){
                   if (error.status === 404) {
-                    core.warning(`Image version ${id} not found`);
+                    core.warning(`Package version ${name} (${id}) cannot be deleted as it is not found`);
                   } else {
                     throw error;
                   }
