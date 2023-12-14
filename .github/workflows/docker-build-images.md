@@ -28,7 +28,7 @@ on:
 
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0.14.2
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0.14.3
     secrets:
       # Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
