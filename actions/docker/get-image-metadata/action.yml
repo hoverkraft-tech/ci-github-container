@@ -92,7 +92,7 @@ runs:
           core.setFailed(`No tags found for the current event: ${context.eventName}`);
 
     - id: docker-metadata
-      uses: docker/metadata-action@v5.4.0
+      uses: docker/metadata-action@v5.5.0
       with:
         images: ${{ steps.image-name.outputs.image-name-with-registry }}
         tags: ${{ steps.define-metadata-inputs.outputs.tags }}
