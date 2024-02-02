@@ -1,4 +1,4 @@
-FROM ghcr.io/super-linter/super-linter:slim-v5
+FROM ghcr.io/super-linter/super-linter:slim-v6
 
 ENV RUN_LOCAL=true 
 ENV USE_FIND_ALGORITHM=true
