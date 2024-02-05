@@ -38,127 +38,47 @@ runs:
       run: |
         rm -fr ./self-actions
 
+    - id: is-organization-or-user
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@0.12.0
+
     - id: delete-image-tags
       uses: actions/github-script@v7.0.1
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const packageName = `${{ steps.image-name.outputs.image-name }}`.replace(`${context.repo.owner}/`, '');
-          const packagePayload = {
-            package_type: 'container',
-            package_name: packageName,
-            org: context.repo.owner,
-          };
-          core.debug('Package payload: ' + JSON.stringify(packagePayload));
-
-          const packageVersions = await github.paginate(
-            github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
-          );
-          core.debug('Package versions: ' + JSON.stringify(packageVersions));
-
-          const pullRequestTagFilterInput = `${{ inputs.pull-request-tag-filter }}`;
-          if (!pullRequestTagFilterInput.length) {
-            core.setFailed('Input "pull-request-tag-filter" is undefined');
-            return;
+          const pullRequestTagFilter = `${{ inputs.pull-request-tag-filter }}`;
+          if (!pullRequestTagFilter.length) {
+              core.setFailed('Input "pull-request-tag-filter" is undefined');
+              return;
           }
 
           // Assert that the regex has a valid capture group for the pull request number
-          const hasCaptureGroupMatch = pullRequestTagFilterInput.match(/\([^?]([^)]+)\)/g);
-          if (!hasCaptureGroupMatch ) {
-            core.setFailed(`Input "pull-request-tag-filter" ${pullRequestTagFilterInput} must have a capture group for the pull request number`);
+          const hasCaptureGroupMatch = pullRequestTagFilter.match(/\([^?]([^)]+)\)/g);
+          if (!hasCaptureGroupMatch) {
+            core.setFailed(
+              `Input "pull-request-tag-filter" ${pullRequestTagFilter} must have a capture group for the pull request number`
+            );
             return;
           }
 
           if (hasCaptureGroupMatch.length !== 1) {
-            core.setFailed(`Input "pull-request-tag-filter" ${pullRequestTagFilterInput} must have only one capture group for the pull request number`);
+            core.setFailed(
+              `Input "pull-request-tag-filter" ${pullRequestTagFilter} must have only one capture group for the pull request number`
+            );
             return;
           }
 
-          const pullRequestTagFilter = new RegExp(pullRequestTagFilterInput);
+          const imageName = `${{ steps.image-name.outputs.image-name }}`;
+          const isOrganization = ${{ steps.is-organization-or-user.outputs.is-organization }};
 
-          // Check that all tags are related to the same pull request
-          const getTagsUniquePullRequest = (tags) => {
-            if (!tags.length) {
-              return null;
-            }
+          const script = require(`${{ github.action_path }}/index.js`)
+          const deletedTags = await script({
+            github,
+            context,
+            core,
+            imageName,
+            pullRequestTagFilter,
+            isOrganization,
+          });
 
-            let pullRequestNumber = null;
-
-            const allTagsAreUniqueToPulRequest = tags.every(tag => {
-              const matches = tag.match(pullRequestTagFilter);
-              if (!matches) {
-                return false;
-              }
-              const currentPullRequestNumber = matches[1];
-              if (!currentPullRequestNumber) {
-                return false;
-              }
-
-              if (pullRequestNumber && pullRequestNumber !== currentPullRequestNumber) {
-                return false;
-              }
-
-              pullRequestNumber = currentPullRequestNumber;
-              return true;
-            });
-
-            if (allTagsAreUniqueToPulRequest) {
-              return pullRequestNumber;
-            } else {
-              return null;
-            }
-          };
-
-          const closedPullRequests = new Map();
-          const isPullRequestClosed = async (pullRequestNumber) => {
-            if (!closedPullRequests.has(pullRequestNumber)) {
-              const { data: { state } } = await github.rest.pulls.get({
-                ...context.repo,
-                pull_number: pullRequestNumber,
-              });
-              closedPullRequests.set(pullRequestNumber, state === 'closed');
-            }
-            return closedPullRequests.get(pullRequestNumber);
-          };
-
-          // FIXME: as we cannot delete tags, we can check that a version is stricly related to matching prefix tags (https://github.com/orgs/community/discussions/26267)
-          const packageVersionsToDelete = [];
-          for(const packageVersion of packageVersions) {
-            const tags = packageVersion.metadata.container.tags;
-            const pullRequestNumber = getTagsUniquePullRequest(tags);
-            if (pullRequestNumber === null) {
-              core.debug(`Package version ${packageVersion.name} cannot be deleted as it is not related to a single pull request: ${tags.join(', ')}`);
-              continue;
-            }
-
-            const currentPullRequestIsClosed = await isPullRequestClosed(pullRequestNumber);
-            if (!currentPullRequestIsClosed) {
-              core.debug(`Package version ${packageVersion.name} cannot be deleted as pull request ${pullRequestNumber} is not closed}`);
-              continue;
-            }
-            packageVersionsToDelete.push(packageVersion);
-          }
-
-          core.debug('Package versions to delete: ' + JSON.stringify(packageVersionsToDelete));
-
-          await Promise.all(
-            packageVersionsToDelete.map(
-              async ({ id, name }) => {
-                try{
-                  await github.rest.packages.deletePackageVersionForOrg({
-                    ...packagePayload,
-                    package_version_id: id,
-                  });
-                } catch(error){
-                  if (error.status === 404) {
-                    core.warning(`Package version ${name} (${id}) cannot be deleted as it is not found`);
-                  } else {
-                    throw error;
-                  }
-                }
-              }
-            )
-          );
-
-          const deletedTags = packageVersionsToDelete.map(({ metadata:{ container: { tags } } }) => tags).flat();
-          core.setOutput('deleted-image-tags',JSON.stringify([...new Set(deletedTags)]));
+          core.setOutput('deleted-image-tags', JSON.stringify(deletedTags));
