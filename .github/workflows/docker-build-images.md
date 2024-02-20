@@ -13,6 +13,14 @@ Workflow to build multiple docker images.
 Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md)
 This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build
 
+Needs the following permissions:
+
+- `id-token`: `write`
+- `contents`: `read`
+- `packages`: `write`
+- `issues`: `read`
+- `pull-requests`: `read`
+
 <!-- end description -->
 <!-- start contents -->
 <!-- end contents -->
@@ -29,6 +37,12 @@ on:
 jobs:
   docker-build-images:
     uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0.14.4
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+      issues: read
+      pull-requests: read
     secrets:
       # Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
@@ -50,7 +64,7 @@ jobs:
 
       # Images to build parameters.
       # Example: [{
-      #    "image": "application",
+      #    "name": "application",
       #    "dockerfile": "./docker/application/Dockerfile",
       #    "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },
       #    "target": "prod",
