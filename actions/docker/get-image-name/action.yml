@@ -16,6 +16,8 @@ outputs:
 inputs:
   oci-registry:
     description: "OCI registry to prefix the image full name"
+  repository:
+    description: "Repository name"
   image:
     description: "Additional Image name"
 
@@ -25,7 +27,12 @@ runs:
     - id: image-name-generator
       shell: bash
       run: |
-        IMAGE_BASE_NAME="$(echo "${{ github.repository }}" | awk '{print tolower($0)}')"
+
+        if [ -n "${{ inputs.repository }}" ]; then
+          IMAGE_BASE_NAME="${{ inputs.repository }}"
+        else
+          IMAGE_BASE_NAME="$(echo "${{ github.repository }}" | awk '{print tolower($0)}')"
+        fi
 
         IMAGE="${{ inputs.image }}"
         if [ -n "$IMAGE" ]; then IMAGE_BASE_NAME="$IMAGE_BASE_NAME/$IMAGE"; fi

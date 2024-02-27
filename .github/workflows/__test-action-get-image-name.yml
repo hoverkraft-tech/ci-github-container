@@ -1,0 +1,81 @@
+name: Test for "docker/get-image-name" action
+run-name: Test for "docker/get-image-name" action
+
+on:
+  workflow_call:
+
+jobs:
+  tests-with-implicit-repository:
+    name: Test for "docker/get-image-name" action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: get-image-name
+        uses: ./actions/docker/get-image-name
+        with:
+          oci-registry: ghcr.io
+          image: application-test
+
+      - name: Check get image name ouputs
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            /* jscpd:ignore-start */
+            const assert = require("assert");
+
+            const imageNameOutput = `${{ steps.get-image-name.outputs.image-name }}`;
+            const fullImageNameOutput = `${{ steps.get-image-name.outputs.image-name-with-registry }}`;
+
+            assert(imageNameOutput.length, `"image-name" output is empty`);
+            assert.equal(
+              imageNameOutput,
+              "hoverkraft-tech/ci-github-container/application-test",
+              `"image-name" output is not valid`
+            );
+
+            assert(fullImageNameOutput.length, `"image-name-with-registry" output is empty`);
+            assert.equal(
+              fullImageNameOutput,
+              "ghcr.io/hoverkraft-tech/ci-github-container/application-test",
+              `"image-name-with-registry" output is not valid`
+            );
+            /* jscpd:ignore-end */
+
+  tests-with-given-repository:
+    name: Test for "docker/get-image-name" action with given repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: get-image-name
+        uses: ./actions/docker/get-image-name
+        with:
+          oci-registry: docker.io
+          image: application-test
+          repository: hoverkraft-tech/other-repository
+
+      - name: Check get image name ouput
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            /* jscpd:ignore-start */
+            const assert = require("assert");
+
+            const imageNameOutput = `${{ steps.get-image-name.outputs.image-name }}`;
+            const fullImageNameOutput = `${{ steps.get-image-name.outputs.image-name-with-registry }}`;
+
+            assert(imageNameOutput.length, `"image-name" output is empty`);
+            assert.equal(
+              imageNameOutput,
+              "hoverkraft-tech/other-repository/application-test",
+              `"image-name" output is not valid`
+            );
+
+            assert(fullImageNameOutput.length, `"image-name-with-registry" output is empty`);
+            assert.equal(
+              fullImageNameOutput,
+              "docker.io/hoverkraft-tech/other-repository/application-test",
+              `"image-name-with-registry" output is not valid`
+            );
+            /* jscpd:ignore-end */
