@@ -6,7 +6,8 @@ module.exports = async ({
   pullRequestTagFilter,
   isOrganization
 }) => {
-  const packageName = imageName.replace(`${context.repo.owner}/`, '')
+  const repositoryOwner = `${context.repo.owner}`.toLowerCase()
+  const packageName = imageName.replace(`${repositoryOwner}/`, '')
 
   let currentPage = 1
   const allDeletedTags = []
