@@ -34,8 +34,12 @@ inputs:
     description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)'
     default: ${{ github.token }}
     required: true
+  repository:
+    description: "Repository name. Example: 'my-org/my-repo'. See [Docker get-image-metadata action](../get-image-metadata/README.md)"
+    default: ${{ github.repository }}
+    required: false
   image:
-    description: "Additional Image name"
+    description: "Additional image name. Example: 'application'. See [Docker get-image-metadata action](../get-image-metadata/README.md)"
     required: false
   tag:
     description: "Force image tag to publish"
@@ -74,6 +78,7 @@ runs:
       uses: ./self-actions/docker/get-image-metadata
       with:
         oci-registry: ${{ inputs.oci-registry }}
+        repository: ${{ inputs.repository }}
         image: ${{ inputs.image }}
         tag: ${{ inputs.tag }}
 

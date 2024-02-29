@@ -22,25 +22,30 @@ Action to forge the name of a given image including registry, repository and giv
     # OCI registry to prefix the image full name
     oci-registry: ""
 
-    # Additional Image name
+    # Repository name
+    # Default: ${{ github.repository }}
+    repository: ""
+
+    # Additional image name
     image: ""
 ```
 
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input**                     | **Description**                            | **Default** | **Required** |
-| ----------------------------- | ------------------------------------------ | ----------- | ------------ |
-| **<code>oci-registry</code>** | OCI registry to prefix the image full name |             | **false**    |
-| **<code>image</code>**        | Additional Image name                      |             | **false**    |
+| **Input**                     | **Description**                            | **Default**                           | **Required** |
+| ----------------------------- | ------------------------------------------ | ------------------------------------- | ------------ |
+| **<code>oci-registry</code>** | OCI registry to prefix the image full name |                                       | **false**    |
+| **<code>repository</code>**   | Repository name                            | <code>${{ github.repository }}</code> | **false**    |
+| **<code>image</code>**        | Additional image name                      |                                       | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
 
-| \***\*Output\*\***                    | \***\*Description\*\***                                                              | \***\*Default\*\*** | \***\*Required\*\*** |
-| ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------- | -------------------- |
-| <code>image-name</code>               | Forged image name. Example: "my-org/my-repo/application"                             | undefined           | undefined            |
-| <code>image-name-with-registry</code> | Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application" | undefined           | undefined            |
+| **Output**                            | **Description**                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| <code>image-name</code>               | Forged image name. Example: "my-org/my-repo/application"                             |
+| <code>image-name-with-registry</code> | Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application" |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
