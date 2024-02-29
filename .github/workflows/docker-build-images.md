@@ -20,6 +20,7 @@ Needs the following permissions:
 - `packages`: `write`
 - `issues`: `read`
 - `pull-requests`: `read`
+- `actions`: `write`
 
 <!-- end description -->
 <!-- start contents -->
@@ -43,6 +44,7 @@ jobs:
       packages: write
       issues: read
       pull-requests: read
+      actions: write
     secrets:
       # Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
