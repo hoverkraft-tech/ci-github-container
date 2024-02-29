@@ -18,8 +18,11 @@ inputs:
     description: "OCI registry to prefix the image full name"
   repository:
     description: "Repository name"
+    default: ${{ github.repository }}
+    required: false
   image:
-    description: "Additional Image name"
+    description: "Additional image name"
+    required: false
 
 runs:
   using: "composite"
@@ -28,18 +31,16 @@ runs:
       shell: bash
       run: |
 
-        if [ -n "${{ inputs.repository }}" ]; then
-          IMAGE_BASE_NAME="${{ inputs.repository }}"
-        else
-          IMAGE_BASE_NAME="$(echo "${{ github.repository }}" | awk '{print tolower($0)}')"
-        fi
+        REPOSITORY="$(echo "${{ inputs.repository }}" | awk '{print tolower($0)}')"
+        if [ -z "$REPOSITORY" ]; then echo "Repository name is required"; exit 1; fi
+        IMAGE_NAME="$REPOSITORY"
 
         IMAGE="${{ inputs.image }}"
-        if [ -n "$IMAGE" ]; then IMAGE_BASE_NAME="$IMAGE_BASE_NAME/$IMAGE"; fi
+        if [ -n "$IMAGE" ]; then IMAGE_NAME="$IMAGE_NAME/$IMAGE"; fi
 
-        echo "image-name=$IMAGE_BASE_NAME" >> $GITHUB_OUTPUT
+        echo "image-name=$IMAGE_NAME" >> $GITHUB_OUTPUT
 
         OCI_REGISTRY="${{ inputs.oci-registry }}"
-        if [ -n "$OCI_REGISTRY" ]; then IMAGE_BASE_NAME="$OCI_REGISTRY/$IMAGE_BASE_NAME"; fi
+        if [ -n "$OCI_REGISTRY" ]; then IMAGE_NAME="$OCI_REGISTRY/$IMAGE_NAME"; fi
 
-        echo "image-name-with-registry=$IMAGE_BASE_NAME" >> $GITHUB_OUTPUT
+        echo "image-name-with-registry=$IMAGE_NAME" >> $GITHUB_OUTPUT

@@ -41,8 +41,14 @@ permissions:
     # Default: ${{ github.token }}
     oci-registry-password: ""
 
-    # Image name. Example: "ghcr.io/my-org/my-repo/application"
+    # Additional image name. Example: 'application'.
+    # See [Docker get-image-metadata action](../get-image-metadata/README.md)
     image: ""
+
+    # Repository name. Example: 'my-org/my-repo'.
+    # See [Docker get-image-metadata action](../get-image-metadata/README.md)
+    # Default: "${{ github.repository }}"
+    repository: ""
 
     # Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)
     platform: ""
@@ -77,7 +83,8 @@ permissions:
 | **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                              | <code>ghcr.io</code>                        | **true**     |
 | **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                         | <code>${{ github.repository_owner }}</code> | **true**     |
 | **<code>oci-registry-password</code>** | Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage) | <code>${{ github.token }}</code>            | **true**     |
-| **<code>image</code>**                 | Image name. Example: "ghcr.io/my-org/my-repo/application"                                                                                                                                                               |                                             | **true**     |
+| **<code>repository</code>**            | Repository name. Example: 'my-org/my-repo'. See [Docker get-image-metadata action](../get-image-metadata/README.md)                                                                                                     | <code>${{ github.repository }}</code>       | **true**     |
+| **<code>image</code>**                 | Additional image name. Example: 'application'. See [Docker get-image-metadata action](../get-image-metadata/README.md)                                                                                                  |                                             | **true**     |
 | **<code>platform</code>**              | Platform to build for. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                                                     |                                             | **true**     |
 | **<code>context</code>**               | Build's context is the set of files located in the specified PATH or URL. See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                  | <code>.</code>                              | **false**    |
 | **<code>dockerfile</code>**            | Location of Dockerfile (defaults to Dockerfile). See [https://github.com/docker/build-push-action#inputs](https://github.com/docker/build-push-action#inputs)                                                           | <code>Dockerfile</code>                     | **false**    |

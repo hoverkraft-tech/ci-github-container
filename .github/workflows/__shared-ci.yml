@@ -15,7 +15,7 @@ jobs:
     needs: linter
     uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
 
-  test-action-action-get-image-metadata:
+  test-action-get-image-metadata:
     needs: linter
     uses: ./.github/workflows/__test-action-get-image-metadata.yml
 

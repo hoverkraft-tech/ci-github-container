@@ -125,10 +125,23 @@ jobs:
                 }
               }
 
+              if (typeof image['name'] !== 'string') {
+                throw new Error(`"images[${key}].name" input is not a string`);
+              }
+
+              if (!Array.isArray(image['platforms'])) {
+                throw new Error(`"images[${key}].platforms" input is not an array`);
+              }
+
               // Format build-args object to string
               if (image['build-args']) {
                 const buildArgs = Object.keys(image['build-args']).map(key => `${key}=${image['build-args'][key]}`).join('\n');
                 image['build-args'] = buildArgs;
+              }
+
+              // Set default repository
+              if (!image['repository']) {
+                image['repository'] = `${{ github.repository }}`;
               }
 
               // Add image for each platform
@@ -208,6 +221,7 @@ jobs:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
           oci-registry-password: ${{ secrets.oci-registry-password }}
+          repository: ${{ matrix.image.repository }}
           image: ${{ matrix.image.name }}
           tag: ${{ matrix.image.tag }}
           context: ${{ matrix.image.context }}

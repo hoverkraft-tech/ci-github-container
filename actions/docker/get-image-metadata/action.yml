@@ -24,8 +24,12 @@ inputs:
     description: "OCI registry where to pull and push images"
     default: "ghcr.io"
     required: true
+  repository:
+    description: "Repository name. Example: 'my-org/my-repo'. See [Docker get-image-name action](../get-image-name/README.md)"
+    default: ${{ github.repository }}
+    required: false
   image:
-    description: "Additional Image name"
+    description: "Additional image name. Example: 'application'. See [Docker get-image-name action](../get-image-name/README.md)"
     required: false
   tag:
     description: "Force image tag to publish"
@@ -45,6 +49,7 @@ runs:
       uses: ./self-actions/docker/get-image-name
       with:
         image: ${{ inputs.image }}
+        repository: ${{ inputs.repository }}
         oci-registry: ${{ inputs.oci-registry }}
 
     - shell: bash

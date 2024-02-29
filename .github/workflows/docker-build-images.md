@@ -10,7 +10,7 @@
 <!-- start description -->
 
 Workflow to build multiple docker images.
-Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md)
+Build images using [Docker build-image action](../../actions/docker/build-image/README.md)
 This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build
 
 Needs the following permissions:
@@ -82,12 +82,16 @@ jobs:
 <!-- end usage -->
 <!-- start secrets -->
 
+## Secrets
+
 | **Secret**                             | **Description**                                                                                                                                                                                            |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **<code>oci-registry-password</code>** | Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage). |
 
 <!-- end secrets -->
 <!-- start inputs -->
+
+## Inputs
 
 | **Input**                              | **Description**                                                                                                                                                                                                                                                                     | **Default**                                 | **Required** |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
@@ -99,11 +103,37 @@ jobs:
 
 <!-- end inputs -->
 
+### Images entry parameters
+
+| **Parameter**               | **Description**                                                                                                                                                                                                                                            | **Default**             | **Required** |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------ |
+| **<code>name</code>**       | Image name. Must be unique. It is used as `image` in [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                               |                         | **true**     |
+| **<code>repository</code>** | Repository name. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                               |                         | **false**    |
+| **<code>context</code>**    | Build context. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                                 | <code>.</code>          | **false**    |
+| **<code>dockerfile</code>** | Location of Dockerfile. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                        | <code>Dockerfile</code> | **false**    |
+| **<code>build-args</code>** | List of build-time variables. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                  |                         | **false**    |
+| **<code>target</code>**     | Sets the target stage to build. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                |                         | **true**     |
+| **<code>platforms</code>**  | List of platforms to build for. It is used as `platform` in [Docker build-image action](../../actions/docker/build-image/README.md). Can be a string (Example: `linux/amd64`) or an object (Example: `{"name": "darwin/amd64","runs-on": "macos-latest"}`) |                         | **true**     |
+
 <!-- start outputs -->
 
-| **Output**                    | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **<code>built-images</code>** | Built images data. Example: <code>{ "application": { "name": "application", "registry": "ghcr.io", "repository": "my-org/my-repo/application", "tags": ["pr-63-5222075","pr-63"], "images": [ "ghcr.io/my-org/my-repo/application:pr-63-5222075", "ghcr.io/my-org/my-repo/application:pr-63" ], "digests": [ "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d", "ghcr.io/my-org/my-repo/application@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402" ], "annotations": { "org.opencontainers.image.created": "2021-09-30T14:00:00Z", "org.opencontainers.image.description": "Application image" } } }</code> |
+## Outputs
+
+| **Output**                    | **Description**                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| **<code>built-images</code>** | Built images data. Example: <code>{ "application": { build-image-data } }</code> |
+
+### Built image data
+
+| **Parameter**                | **Description**                    | **Example**                                                                                                                |
+| ---------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **<code>name</code>**        | Image name                         | `application`                                                                                                              |
+| **<code>registry</code>**    | Registry where the image is stored | `ghcr.io`                                                                                                                  |
+| **<code>repository</code>**  | Repository name                    | `my-org/my-repo/application`                                                                                               |
+| **<code>tags</code>**        | List of tags                       | `["pr-63-5222075","pr-63"]`                                                                                                |
+| **<code>images</code>**      | List of images                     | `["ghcr.io/my-org/my-repo/application:pr-63-5222075","ghcr.io/my-org/my-repo/application:pr-63"]`                          |
+| **<code>digests</code>**     | List of digests                    | `["ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"]`           |
+| **<code>annotations</code>** | List of annotations                | `{"org.opencontainers.image.created": "2021-09-30T14:00:00Z","org.opencontainers.image.description": "Application image"}` |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
