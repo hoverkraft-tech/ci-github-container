@@ -53,26 +53,30 @@ async function getAllPackageVersions ({
   page
 }) {
   if (isOrganization) {
-    const { data } =
-      await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+    const { data } = await rateLimitRetryCall(
+      github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
+      {
         package_type: 'container',
         package_name: packageName,
         org: context.repo.owner,
         per_page: 100,
         page
-      })
+      }
+    )
 
     return data
   }
 
-  const { data } =
-    await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+  const { data } = await rateLimitRetryCall(
+    github.rest.packages.getAllPackageVersionsForPackageOwnedByUser,
+    {
       package_type: 'container',
       package_name: packageName,
       username: context.repo.owner,
       per_page: 100,
       page
-    })
+    }
+  )
 
   return data
 }
@@ -158,7 +162,7 @@ async function isPullRequestClosed ({ github, context, pullRequestNumber }) {
   if (!closedPullRequests.has(pullRequestNumber)) {
     const {
       data: { state }
-    } = await github.rest.pulls.get({
+    } = await rateLimitRetryCall(github.rest.pulls.get, {
       ...context.repo,
       pull_number: pullRequestNumber
     })
@@ -177,20 +181,26 @@ async function deletePackageVersion ({
 }) {
   try {
     if (isOrganization) {
-      return await github.rest.packages.deletePackageVersionForOrg({
-        package_type: 'container',
-        package_name: packageName,
-        org: context.repo.owner,
-        package_version_id: packageVersion.id
-      })
+      return await rateLimitRetryCall(
+        github.rest.packages.deletePackageVersionForOrg,
+        {
+          package_type: 'container',
+          package_name: packageName,
+          org: context.repo.owner,
+          package_version_id: packageVersion.id
+        }
+      )
     }
 
-    return await github.rest.packages.deletePackageVersionForUser({
-      package_type: 'container',
-      package_name: packageName,
-      username: context.repo.owner,
-      package_version_id: packageVersion.id
-    })
+    return await rateLimitRetryCall(
+      github.rest.packages.deletePackageVersionForUser,
+      {
+        package_type: 'container',
+        package_name: packageName,
+        username: context.repo.owner,
+        package_version_id: packageVersion.id
+      }
+    )
   } catch (error) {
     if (error.status === 404) {
       core.warning(
@@ -199,5 +209,20 @@ async function deletePackageVersion ({
     } else {
       throw error
     }
+  }
+}
+
+async function rateLimitRetryCall (fn, ...args) {
+  try {
+    return await fn(...args)
+  } catch (error) {
+    if (error.status === 403 && error.headers['retry-after']) {
+      const retryAfter = parseInt(error.headers['retry-after'], 10)
+      await new Promise((resolve) =>
+        setTimeout(resolve, (retryAfter + 1) * 1000)
+      )
+      return rateLimitRetryCall(fn, ...args)
+    }
+    throw error
   }
 }

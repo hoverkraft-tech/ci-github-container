@@ -38,7 +38,7 @@ permissions:
     pull-request-tag-filter: ""
 
     # GitHub token with the packages:read and packages:delete scopes. See
-    # [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries)
+    # <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>
     # Default: ${{ github.token }}
     github-token: ""
 ```
@@ -46,19 +46,31 @@ permissions:
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input**                                | **Description**                                                                                                                                                                                                                                                                                                                                                                | **Default**                       | **Required** |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | ------------ |
-| **<code>image</code>**                   | Image name                                                                                                                                                                                                                                                                                                                                                                     |                                   | **false**    |
-| **<code>pull-request-tag-filter</code>** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                                                                                                                                                                                                                                      | <code>^pr-([0-9]+)(?:-\|$)</code> | **false**    |
-| **<code>github-token</code>**            | GitHub token with the packages:read and packages:delete scopes. See [https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries) | <code>${{ github.token }}</code>  | **false**    |
+## Inputs
+
+| **Input**                                | **Description**                                                                                                                                                                                                           | **Default**                       | **Required** |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------ |
+| **<code>image</code>**                   | Image name                                                                                                                                                                                                                |                                   | **false**    |
+| **<code>pull-request-tag-filter</code>** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                                                                                 | <code>^pr-([0-9]+)(?:-\|$)</code> | **false**    |
+| **<code>github-token</code>**            | GitHub token with the packages:read and packages:delete scopes. See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries> | <code>${{ github.token }}</code>  | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
 
-| \***\*Output\*\***              | \***\*Description\*\***        | \***\*Default\*\*** | \***\*Required\*\*** |
-| ------------------------------- | ------------------------------ | ------------------- | -------------------- |
-| <code>deleted-image-tags</code> | The list of deleted image tags | undefined           | undefined            |
+## Outputs
+
+| **Output**                      | **Description**                |
+| ------------------------------- | ------------------------------ |
+| <code>deleted-image-tags</code> | The list of deleted image tags |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
 <!-- end [.github/ghadocs/examples/] -->
+
+## Contributing
+
+### Lint index.js
+
+```bash
+npx standard --fix actions/docker/prune-pull-requests-image-tags/index.js
+```
