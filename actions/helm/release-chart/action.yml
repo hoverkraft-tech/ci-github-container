@@ -107,7 +107,7 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@v4.41.1
+    - uses: mikefarah/yq@v4.42.1
       with:
         cmd: |
           yq -i '.name = "${{ github.event.repository.name }}" | .version = "${{ inputs.tag }}" | .appVersion = "${{ inputs.tag }}"' ${{ inputs.path }}/Chart.yaml
