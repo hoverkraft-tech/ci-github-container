@@ -102,6 +102,7 @@ runs:
         images: ${{ steps.image-name.outputs.image-name-with-registry }}
         tags: ${{ steps.define-metadata-inputs.outputs.tags }}
         flavor: ${{ steps.define-metadata-inputs.outputs.flavor }}
+        context: git
       env:
         DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
 
