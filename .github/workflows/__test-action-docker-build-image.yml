@@ -175,6 +175,20 @@ jobs:
             fi
           done
 
+      - name: Assert - Check cache images
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            TAG="pr-${{ github.event.pull_request.number }}-linux-amd64"
+          else
+            TAG="main-linux-amd64"
+          fi
+
+          CACHE_IMAGE="ghcr.io/hoverkraft-tech/ci-github-container/application-test/cache:$TAG"
+          if ! docker pull "$CACHE_IMAGE"; then
+            echo "Failed to pull $CACHE_IMAGE"
+            exit 1
+          fi
+
   tests-with-given-tag:
     name: Test for "docker/build-image" action with given tag
     runs-on: ubuntu-latest
