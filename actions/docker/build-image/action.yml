@@ -192,6 +192,7 @@ runs:
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
         cache-type: gha
+        extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
       uses: docker/setup-docker-action@v4
