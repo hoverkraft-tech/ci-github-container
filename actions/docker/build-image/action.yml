@@ -187,6 +187,7 @@ runs:
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
         cache-type: gha
+        extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.16.1
       with:
