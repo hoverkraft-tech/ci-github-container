@@ -124,6 +124,9 @@ runs:
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
         version: v0.13.0
+        # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
+        driver-opts: |
+          image=moby/buildkit:v0.12.5
 
     - uses: docker/login-action@v3
       with:
