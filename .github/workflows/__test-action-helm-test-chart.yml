@@ -1,0 +1,25 @@
+name: Test for "helm/test-chart" action
+run-name: Test for "helm/test-chart" action
+
+on:
+  workflow_call:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: get-image-metadata
+        uses: ./actions/docker/get-image-metadata
+        with:
+          oci-registry: ghcr.io
+          image: application-test
+
+      - id: test-chart
+        uses: ./actions/helm/test-chart
+        with:
+          image-tag: "${{ steps.get-image-metadata.outputs.tags }}"
