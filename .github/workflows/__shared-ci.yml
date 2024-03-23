@@ -36,6 +36,10 @@ jobs:
     needs: linter
     uses: ./.github/workflows/__test-action-helm-release-chart.yml
 
+  test-action-helm-test-chart:
+    needs: linter
+    uses: ./.github/workflows/__test-action-helm-test-chart.yml
+
   test-workflow-docker-build-images:
     name: Test docker build images
     needs: linter
