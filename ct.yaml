@@ -1,0 +1,9 @@
+chart-dirs:
+  - tests/charts
+charts:
+  - tests/charts/application
+chart-yaml-schema: tests/charts/chart-schema.yaml
+lint-conf: tests/charts/lintconf.yaml
+helm-dependency-extra-args:
+  - --skip-refresh
+validate-maintainers: false

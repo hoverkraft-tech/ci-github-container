@@ -1,0 +1,76 @@
+name: "Test Helm Chart"
+description: "Action to test a Helm chart"
+branding:
+  icon: upload-cloud
+  color: gray-dark
+
+inputs:
+  image-tag:
+    description: "The extra parameter image.tag to pass to the helm release"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.12.1
+      with:
+        # Fetch all history so that we can compare against the target branch
+        fetch-depth: 0
+
+    - name: Check for .tools-version file
+      id: check-tools-version
+      run: |
+        if [[ -f .tools-version ]]; then
+          echo "tools-version-exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "tools-version-exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Install tools with asdf
+      if: steps.check-tools-version.outputs.tools-version-exists == 'true'
+      uses: asdf-vm/actions/install@v3
+
+    - name: Check for ct.yaml file
+      id: check-ct-yaml
+      run: |
+        if [[ -f ct.yaml ]]; then
+          echo "ct-yaml-exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "ct-yaml-exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - uses: actions/setup-python@v5
+      with:
+      python-version: '3.12'
+
+    - name: Set up chart-testing
+      if: steps.check-ct-yaml.outputs.ct-yaml-exists == 'true'
+      uses: helm/chart-testing-action@v2.6.1
+
+    - name: Run chart-testing (list-changed)
+      id: list-changed
+      if: steps.check-ct-yaml.outputs.ct-yaml-exists == 'true'
+      run: |
+        changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+        if [[ -n "$changed" ]]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run chart-testing (lint)
+      if: steps.list-changed.outputs.changed == 'true'
+      run: ct lint --target-branch ${{ github.event.repository.default_branch }}
+
+    - name: Create kind cluster
+      if: steps.list-changed.outputs.changed == 'true'
+      uses: helm/kind-action@v1.9.0
+
+    - name: Run chart-testing (install)
+      if: steps.list-changed.outputs.changed == 'true'
+      run: |
+        if [[ -n "${{ inputs.image-tag }}" ]]; then
+          HELM_EXTRA_ARGS="--set image.tag=${{ inputs.image-tag }}"
+        fi
+
+        ct install \
+          --target-branch ${{ github.event.repository.default_branch }} \
+          --helm-extra-args "${HELM_EXTRA_ARGS} --wait"
