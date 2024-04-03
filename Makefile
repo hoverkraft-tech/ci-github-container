@@ -11,6 +11,7 @@ lint: ## Execute linting
 	docker run \
 		-e DEFAULT_WORKSPACE="$$DEFAULT_WORKSPACE" \
 		-e FILTER_REGEX_INCLUDE="$(filter-out $@,$(MAKECMDGOALS))" \
+		-e LINTER_RULES_PATH="$$DEFAULT_WORKSPACE/.github/linters" \
 		-v $$VOLUME \
 		--rm \
 		$$LINTER_IMAGE
