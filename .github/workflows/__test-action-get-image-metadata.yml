@@ -4,6 +4,9 @@ run-name: Test for "docker/get-image-metadata" action
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   tests:
     name: Test for "docker/get-image-metadata" action

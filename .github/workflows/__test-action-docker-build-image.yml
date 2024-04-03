@@ -4,6 +4,10 @@ run-name: Test for "docker/build-image" action
 on:
   workflow_call:
 
+permissions:
+  contents: read
+  packages: write
+
 # jscpd:ignore-start
 jobs:
   tests:

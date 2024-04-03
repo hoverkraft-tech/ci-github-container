@@ -7,7 +7,7 @@ lint: ## Execute linting
 	DEFAULT_WORKSPACE="$(CURDIR)"; \
 	LINTER_IMAGE="linter:latest"; \
 	VOLUME="$$DEFAULT_WORKSPACE:$$DEFAULT_WORKSPACE"; \
-	docker build --tag $$LINTER_IMAGE .; \
+	docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g)  --tag $$LINTER_IMAGE .; \
 	docker run \
 		-e DEFAULT_WORKSPACE="$$DEFAULT_WORKSPACE" \
 		-e FILTER_REGEX_INCLUDE="$(filter-out $@,$(MAKECMDGOALS))" \

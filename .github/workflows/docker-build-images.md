@@ -15,12 +15,11 @@ This includes [multi-platform](https://docs.docker.com/build/building/multi-plat
 
 Needs the following permissions:
 
-- `id-token`: `write`
 - `contents`: `read`
-- `packages`: `write`
 - `issues`: `read`
+- `packages`: `write`
 - `pull-requests`: `read`
-- `actions`: `write`
+- `id-token`: `write` <!-- FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659 -->
 
 <!-- end description -->
 <!-- start contents -->
@@ -35,16 +34,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  issues: read
+  packages: write
+  pull-requests: read
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
+
 jobs:
   docker-build-images:
     uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0.15.2
-    permissions:
-      id-token: write
-      contents: read
-      packages: write
-      issues: read
-      pull-requests: read
-      actions: write
     secrets:
       # Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
@@ -86,9 +86,9 @@ jobs:
 
 ## Secrets
 
-| **Secret**                             | **Description**                                                                                                                                                                                            |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **<code>oci-registry-password</code>** | Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage). |
+| **Secret**                             | **Description**                                                                                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **<code>oci-registry-password</code>** | Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See <https://github.com/docker/login-action#usage>. |
 
 <!-- end secrets -->
 <!-- start inputs -->
@@ -97,9 +97,9 @@ jobs:
 
 | **Input**                              | **Description**                                                                                                                                                                                                                                                                     | **Default**                                 | **Required** |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
-| **<code>runs-on</code>**               | Json array of runner(s) to use. See [https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job](https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job)                                                                                      | <code>["ubuntu-latest"]</code>              | **false**    |
+| **<code>runs-on</code>**               | Json array of runner(s) to use. See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>                                                                                                                                                                   | <code>["ubuntu-latest"]</code>              | **false**    |
 | **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                          | <code>ghcr.io</code>                        | **false**    |
-| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See [https://github.com/docker/login-action#usage](https://github.com/docker/login-action#usage)                                                                                                                                     | <code>${{ github.repository_owner }}</code> | **false**    |
+| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See <https://github.com/docker/login-action#usage>                                                                                                                                                                                   | <code>${{ github.repository_owner }}</code> | **false**    |
 | **<code>images</code>**                | Images to build parameters.                                                                                                                                                                                                                                                         |                                             | **true**     |
 |                                        | Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64",{"name": "darwin/amd64","runs-on": "macos-latest"}]}]</code> |                                             |              |
 

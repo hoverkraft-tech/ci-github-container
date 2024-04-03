@@ -65,11 +65,19 @@ on:
         required: true
     secrets:
       oci-registry-password:
-        description: "Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See https://github.com/docker/login-action#usage"
+        description: "Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See https://github.com/docker/login-action#usage."
         required: true
       build-secrets:
-        description: "List of secrets to expose to the build. See [https://docs.docker.com/build/ci/github-actions/secrets/](https://docs.docker.com/build/ci/github-actions/secrets/)"
+        description: "List of secrets to expose to the build. See https://docs.docker.com/build/ci/github-actions/secrets/."
         required: false
+
+permissions:
+  contents: read
+  issues: read
+  packages: write
+  pull-requests: read
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
 
 jobs:
   prepare-variables:
@@ -233,7 +241,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.12.1
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@0.13.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
@@ -251,7 +259,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      actions: write
       # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
       id-token: write
     needs: [prepare-variables, build-images]
@@ -260,7 +267,7 @@ jobs:
       built-images: ${{ steps.built-images.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.12.1
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@0.13.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 

@@ -4,6 +4,9 @@ run-name: Test for "docker/get-image-name" action
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   tests-with-implicit-repository:
     name: Test for "docker/get-image-name" action
