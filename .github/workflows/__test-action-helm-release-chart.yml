@@ -4,6 +4,10 @@ run-name: Test for "helm/release-chart" action
 on:
   workflow_call:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   tests:
     runs-on: ubuntu-latest

@@ -3,9 +3,18 @@ name: Internal - Common Continuous Integration tasks
 on:
   workflow_call:
 
+permissions:
+  contents: read
+  issues: read
+  packages: write
+  pull-requests: read
+  statuses: write
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
+
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.12.1
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.13.0
 
   test-action-docker-build-image:
     needs: linter

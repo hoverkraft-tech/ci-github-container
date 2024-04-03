@@ -5,6 +5,15 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  issues: read
+  packages: write
+  pull-requests: read
+  statuses: write
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

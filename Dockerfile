@@ -1,4 +1,9 @@
+#checkov:skip=CKV_DOCKER_2: required
 FROM ghcr.io/super-linter/super-linter:slim-v6
+
+ARG UID=1000
+ARG GID=1000
+USER ${UID}:${GID}
 
 ENV RUN_LOCAL=true 
 ENV USE_FIND_ALGORITHM=true

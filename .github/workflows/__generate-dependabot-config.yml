@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+
+permissions:
+  contents: read
+
 jobs:
   generate-dependabot-config:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/generate-dependabot-config.yml@0.12.1
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/generate-dependabot-config.yml@0.13.0
     with:
       github-app-id: ${{ vars.CI_BOT_APP_ID }}
     secrets:
