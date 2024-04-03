@@ -4,12 +4,13 @@ run-name: Test for "helm/test-chart" action
 on:
   workflow_call:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   tests:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
