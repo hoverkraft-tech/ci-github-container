@@ -177,7 +177,7 @@ jobs:
 
       - id: get-issue-number
         if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.13.0
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.13.1
 
       - name: Delete test packages
         uses: actions/github-script@v7.0.1
