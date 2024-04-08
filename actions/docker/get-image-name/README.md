@@ -1,11 +1,17 @@
 <!-- start branding -->
+
+<img src=".github/ghadocs/branding.svg" width="15%" align="center" alt="branding<icon:tag color:gray-dark>" />
+
 <!-- end branding -->
 <!-- start title -->
 
-# GitHub Action: Get image name
+# <img src=".github/ghadocs/branding.svg" width="60px" align="center" alt="branding<icon:tag color:gray-dark>" /> GitHub Action: Get image name
 
 <!-- end title -->
 <!-- start badges -->
+
+<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
+
 <!-- end badges -->
 <!-- start description -->
 
@@ -17,27 +23,30 @@ Action to forge the name of a given image including registry, repository and giv
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-name@v0.11.2
+- uses: hoverkraft-tech/ci-github-container@0.16.0
   with:
-    # OCI registry to prefix the image full name
+    # Description: OCI registry to prefix the image full name
+    #
     oci-registry: ""
 
-    # Repository name
+    # Description: Repository name
+    #
     # Default: ${{ github.repository }}
     repository: ""
 
-    # Additional image name
+    # Description: Additional image name
+    #
     image: ""
 ```
 
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input**                     | **Description**                            | **Default**                           | **Required** |
-| ----------------------------- | ------------------------------------------ | ------------------------------------- | ------------ |
-| **<code>oci-registry</code>** | OCI registry to prefix the image full name |                                       | **false**    |
-| **<code>repository</code>**   | Repository name                            | <code>${{ github.repository }}</code> | **false**    |
-| **<code>image</code>**        | Additional image name                      |                                       | **false**    |
+| **Input**                 | **Description**                            | **Default**                           | **Required** |
+| ------------------------- | ------------------------------------------ | ------------------------------------- | ------------ |
+| <code>oci-registry</code> | OCI registry to prefix the image full name |                                       | **false**    |
+| <code>repository</code>   | Repository name                            | <code>${{ github.repository }}</code> | **false**    |
+| <code>image</code>        | Additional image name                      |                                       | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->

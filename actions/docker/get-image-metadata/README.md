@@ -1,11 +1,17 @@
 <!-- start branding -->
+
+<img src=".github/ghadocs/branding.svg" width="15%" align="center" alt="branding<icon:package color:gray-dark>" />
+
 <!-- end branding -->
 <!-- start title -->
 
-# GitHub Action: Get image metadata
+# <img src=".github/ghadocs/branding.svg" width="60px" align="center" alt="branding<icon:package color:gray-dark>" /> GitHub Action: Get image metadata
 
 <!-- end title -->
 <!-- start badges -->
+
+<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
+
 <!-- end badges -->
 <!-- start description -->
 
@@ -17,44 +23,48 @@ Action to retrieve required metadata to build Docker image
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-metadata@v0.11.2
+- uses: hoverkraft-tech/ci-github-container@0.16.0
   with:
-    # OCI registry where to pull and push images
+    # Description: OCI registry where to pull and push images
+    #
     # Default: ghcr.io
     oci-registry: ""
 
-    # Repository name. Example: 'my-org/my-repo'.
-    # See [Docker get-image-name action](../get-image-name/README.md)
+    # Description: Repository name. Example: 'my-org/my-repo'. See
+    # [Docker get-image-name action](../get-image-name/README.md)
+    #
     # Default: ${{ github.repository }}
-    repository:
+    repository: ""
 
-    # Additional image name. Example: 'application'.
-    # See [Docker get-image-name action](../get-image-name/README.md)
-    # Default: ${{ github.repository }}
+    # Description: Additional image name. Example: 'application'. See
+    # [Docker get-image-name action](../get-image-name/README.md)
+    #
     image: ""
 
-    # Force image tag to publish
+    # Description: Force image tag to publish
+    #
     tag: ""
 ```
 
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input**                     | **Description**                                                                                                | **Default**                           | **Required** |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------ |
-| **<code>oci-registry</code>** | OCI registry where to pull and push images                                                                     | <code>ghcr.io</code>                  | **true**     |
-| **<code>repository</code>**   | Repository name. Example: 'my-org/my-repo'. See [Docker get-image-name action](../get-image-name/README.md)    | <code>${{ github.repository }}</code> | **false**    |
-| **<code>image</code>**        | Additional image name. Example: 'application'. See [Docker get-image-name action](../get-image-name/README.md) |                                       | **false**    |
-| **<code>tag</code>**          | Force image tag to publish                                                                                     |                                       | **false**    |
+| **Input**                 | **Description**                                                                                                | **Default**                           | **Required** |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------ |
+| <code>oci-registry</code> | OCI registry where to pull and push images                                                                     | <code>ghcr.io</code>                  | **true**     |
+| <code>repository</code>   | Repository name. Example: 'my-org/my-repo'. See [Docker get-image-name action](../get-image-name/README.md)    | <code>${{ github.repository }}</code> | **false**    |
+| <code>image</code>        | Additional image name. Example: 'application'. See [Docker get-image-name action](../get-image-name/README.md) |                                       | **false**    |
+| <code>tag</code>          | Force image tag to publish                                                                                     |                                       | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
 
-| **Output**          | **Description**                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| <code>image</code>  | Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application" |
-| <code>labels</code> | The image labels.                                                                    |
-| <code>tags</code>   | The image tags. Example: "pr-63-5222075\npr-63"                                      |
+| **Output**               | **Description**                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| <code>image</code>       | Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application" |
+| <code>labels</code>      | The image labels.                                                                    |
+| <code>annotations</code> | The image annotations.                                                               |
+| <code>tags</code>        | The image tags. Example: "pr-63-5222075\npr-63"                                      |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
