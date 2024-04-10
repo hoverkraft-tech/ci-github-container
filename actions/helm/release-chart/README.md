@@ -20,6 +20,9 @@ Action to release a Helm chart to OCI registry
 <!-- end description -->
 <!-- start contents -->
 <!-- end contents -->
+
+## Usage
+
 <!-- start usage -->
 
 ```yaml
@@ -75,6 +78,16 @@ Action to release a Helm chart to OCI registry
 ```
 
 <!-- end usage -->
+
+## Permissions
+
+This action requires the following permissions on the repository:
+
+- `contents: read`: to read the chart files
+- `packages: write`: to publish the chart to the OCI registry (required for Github Package registry only)
+
+## Inputs
+
 <!-- start inputs -->
 
 | **Input**                          | **Description**                                                                                                                                                                                                                                         | **Default**                                 | **Required** |
