@@ -69,7 +69,7 @@ runs:
           }
 
           const imageName = `${{ steps.image-name.outputs.image-name }}`;
-          const isOrganization = ${{ steps.is-organization-or-user.outputs.is-organization }};
+          const isOrganization = `${{ steps.is-organization-or-user.outputs.is-organization }}` === 'true';
 
           const script = require(`${{ github.action_path }}/index.js`)
           const deletedTags = await script({
