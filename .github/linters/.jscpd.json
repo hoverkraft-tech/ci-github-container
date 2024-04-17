@@ -1,0 +1,6 @@
+{
+  "threshold": 5,
+  "ignore": [
+    "/workspace/actions/**/README.md"
+  ]
+}

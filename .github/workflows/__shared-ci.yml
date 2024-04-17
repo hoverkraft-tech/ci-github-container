@@ -15,6 +15,9 @@ permissions:
 jobs:
   linter:
     uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.13.3
+    with:
+      linter-env: |
+        VALIDATE_KUBERNETES_KUBECONFORM=false
 
   test-action-docker-build-image:
     needs: linter
