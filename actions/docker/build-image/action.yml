@@ -103,7 +103,7 @@ runs:
         echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
 
     - id: cache
-      uses: int128/docker-build-cache-config-action@v1.30.0
+      uses: int128/docker-build-cache-config-action@v1.31.0
       with:
         image: ${{ steps.metadata.outputs.image }}/cache
         flavor: ${{ steps.get-platform-config.outputs.cache-flavor }}
