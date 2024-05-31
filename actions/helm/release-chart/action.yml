@@ -107,7 +107,7 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@v4.43.1
+    - uses: mikefarah/yq@v4.44.1
       with:
         cmd: |
           yq -i '.name = "${{ github.event.repository.name }}" | .version = "${{ inputs.tag }}" | .appVersion = "${{ inputs.tag }}"' ${{ inputs.path }}/Chart.yaml
@@ -154,7 +154,7 @@ runs:
         done
 
     - id: chart-releaser
-      uses: appany/helm-oci-chart-releaser@v0.4.1
+      uses: appany/helm-oci-chart-releaser@v0.4.2
       with:
         name: ${{ github.event.repository.name }}
         repository: ${{ github.repository }}/charts/${{ inputs.chart }}
