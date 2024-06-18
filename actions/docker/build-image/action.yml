@@ -88,7 +88,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.13.2
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.13.3
       with:
         value: ${{ inputs.platform }}
 
@@ -103,13 +103,13 @@ runs:
         echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
 
     - id: cache
-      uses: int128/docker-build-cache-config-action@v1.30.0
+      uses: int128/docker-build-cache-config-action@v1.31.0
       with:
         image: ${{ steps.metadata.outputs.image }}/cache
         flavor: ${{ steps.get-platform-config.outputs.cache-flavor }}
         pull-request-cache: true
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.13.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.13.3
       with:
         lfs: true
 
@@ -135,7 +135,7 @@ runs:
         password: ${{ inputs.oci-registry-password }}
 
     - id: build
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ${{ inputs.context }}
         build-args: ${{ inputs.build-args }}
