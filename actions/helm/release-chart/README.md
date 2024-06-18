@@ -1,18 +1,23 @@
-<!-- start branding -->
-
-<img src=".github/ghadocs/branding.svg" width="15%" align="center" alt="branding<icon:upload-cloud color:gray-dark>" />
-
-<!-- end branding -->
 <!-- start title -->
 
-# <img src=".github/ghadocs/branding.svg" width="60px" align="center" alt="branding<icon:upload-cloud color:gray-dark>" /> GitHub Action: Release Helm Chart
+# GitHub Action: Release Helm Chart
 
 <!-- end title -->
+<!--
+// jscpd:ignore-start
+-->
 <!-- start badges -->
 
-<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
+<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a>
+<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a>
+<img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" />
+<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a>
+<img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
 
 <!-- end badges -->
+<!--
+// jscpd:ignore-end
+-->
 <!-- start description -->
 
 Action to release a Helm chart to OCI registry
@@ -66,12 +71,6 @@ Action to release a Helm chart to OCI registry
     #
     helm-repositories: ""
 
-    # Description: GitHub token to use latest version of helm. See
-    # [https://github.com/Azure/setup-helm](https://github.com/Azure/setup-helm)
-    #
-    # Default: ${{ github.token }}
-    github-token: ""
-
     # Description: The release tag to set to chart
     #
     tag: ""
@@ -84,7 +83,7 @@ Action to release a Helm chart to OCI registry
 This action requires the following permissions on the repository:
 
 - `contents: read`: to read the chart files
-- `packages: write`: to publish the chart to the OCI registry (required for Github Package registry only)
+- `packages: write`: to publish the chart to the OCI registry (required for GitHub Package registry only)
 
 ## Inputs
 
@@ -99,7 +98,6 @@ This action requires the following permissions on the repository:
 | <code>path</code>                  | Path to the chart to release                                                                                                                                                                                                                            |                                             | **true**     |
 | <code>values</code>                | Define charts values to be filled. [{ file, path, value }]. Example: [{ "file": "charts/application/charts/api/values.yaml", "path": ".image.registry", "value": "ghcr.io" }]. See [https://mikefarah.gitbook.io/yq/](https://mikefarah.gitbook.io/yq/) |                                             | **false**    |
 | <code>helm-repositories</code>     | List of Helm repositories to add before release charts. See [https://helm.sh/docs/helm/helm_repo_add/](https://helm.sh/docs/helm/helm_repo_add/)                                                                                                        |                                             | **false**    |
-| <code>github-token</code>          | GitHub token to use latest version of helm. See [https://github.com/Azure/setup-helm](https://github.com/Azure/setup-helm)                                                                                                                              | <code>${{ github.token }}</code>            | **true**     |
 | <code>tag</code>                   | The release tag to set to chart                                                                                                                                                                                                                         |                                             | **true**     |
 
 <!-- end inputs -->

@@ -1,12 +1,16 @@
-<!-- start branding -->
-<!-- end branding -->
 <!-- start title -->
 
 # GitHub Action: Build image
 
 <!-- end title -->
+<!--
+// jscpd:ignore-start
+-->
 <!-- start badges -->
 <!-- end badges -->
+<!--
+// jscpd:ignore-end
+-->
 <!-- start description -->
 
 Action to build an image with Docker for a specific platform

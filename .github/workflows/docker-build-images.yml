@@ -103,6 +103,7 @@ jobs:
               throw new Error(`"runs-on" input is not a valid JSON: ${error}`);
             }
 
+            // jscpd:ignore-start
             const imagesInput = `${{ inputs.images }}`;
 
             // Check if is valid Json
@@ -117,6 +118,7 @@ jobs:
             if (!Array.isArray(images)) {
               throw new Error(`"images" input is not an array`);
             }
+            // jscpd:ignore-end
 
             // Check each item
             const imagesByPlatform = [];

@@ -42,6 +42,7 @@ jobs:
         uses: actions/github-script@v7.0.1
         with:
           script: |
+            // jscpd:ignore-start
             const imagesInput = `${{ inputs.images }}`;
 
             // Check if is valid Json
@@ -56,6 +57,7 @@ jobs:
             if (!Array.isArray(images)) {
               throw new Error(`"images" input is not an array`);
             }
+            // jscpd:ignore-end
 
             // Check each item
             for (const key in images) {
