@@ -48,8 +48,6 @@ jobs:
           fi
 
       - uses: azure/setup-helm@v4
-        with:
-          token: ${{ github.token }}
 
       - name: Check chart status
         run: |

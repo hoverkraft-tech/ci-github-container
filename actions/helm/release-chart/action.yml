@@ -29,10 +29,6 @@ inputs:
   helm-repositories:
     description: "List of Helm repositories to add before release charts. See [https://helm.sh/docs/helm/helm_repo_add/](https://helm.sh/docs/helm/helm_repo_add/)"
     required: false
-  github-token:
-    description: "GitHub token to use latest version of helm. See [https://github.com/Azure/setup-helm](https://github.com/Azure/setup-helm)"
-    required: true
-    default: ${{ github.token }}
   tag:
     description: "The release tag to set to chart"
     required: true
@@ -45,7 +41,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.13.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.13.3
 
     - id: chart-values-updates
       uses: actions/github-script@v7.0.1
@@ -107,15 +103,13 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@v4.43.1
+    - uses: mikefarah/yq@v4.44.2
       with:
         cmd: |
           yq -i '.name = "${{ github.event.repository.name }}" | .version = "${{ inputs.tag }}" | .appVersion = "${{ inputs.tag }}"' ${{ inputs.path }}/Chart.yaml
           ${{ steps.chart-values-updates.outputs.yq-command }}
 
     - uses: azure/setup-helm@v4
-      with:
-        token: ${{ inputs.github-token }}
 
     - shell: bash
       run: |
@@ -154,7 +148,7 @@ runs:
         done
 
     - id: chart-releaser
-      uses: appany/helm-oci-chart-releaser@v0.4.1
+      uses: appany/helm-oci-chart-releaser@v0.4.2
       with:
         name: ${{ github.event.repository.name }}
         repository: ${{ github.repository }}/charts/${{ inputs.chart }}
