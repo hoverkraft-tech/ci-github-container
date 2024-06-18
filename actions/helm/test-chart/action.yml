@@ -1,24 +1,36 @@
+---
 name: "Test Helm Chart"
-description: "Action to test a Helm chart"
+# yamllint disable-line rule:line-length
+description: "Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-action)"
 branding:
-  icon: upload-cloud
+  icon: check-circle
   color: gray-dark
 
 inputs:
-  image-tag:
-    description: "The extra parameter image.tag to pass to the helm release"
+  working-directory:
+    description: "Working directory"
+    required: false
+    default: "${{ github.workspace }}"
+  helm-set:
+    description: |
+      Set values for Helm chart.
+      Multiple values can be set using multiline string.
+      Example:
+        key1=value1
+        key2=value2
     required: false
 
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.12.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.13.3
       with:
-        # Fetch all history so that we can compare against the target branch
         fetch-depth: 0
 
     - name: Check for .tools-version file
       id: check-tools-version
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: |
         if [[ -f .tools-version ]]; then
           echo "tools-version-exists=true" >> "$GITHUB_OUTPUT"
@@ -32,6 +44,8 @@ runs:
 
     - name: Check for ct.yaml file
       id: check-ct-yaml
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: |
         if [[ -f ct.yaml ]]; then
           echo "ct-yaml-exists=true" >> "$GITHUB_OUTPUT"
@@ -41,36 +55,43 @@ runs:
 
     - uses: actions/setup-python@v5
       with:
-      python-version: '3.12'
+        python-version: "3.12"
 
     - name: Set up chart-testing
-      if: steps.check-ct-yaml.outputs.ct-yaml-exists == 'true'
       uses: helm/chart-testing-action@v2.6.1
 
-    - name: Run chart-testing (list-changed)
-      id: list-changed
-      if: steps.check-ct-yaml.outputs.ct-yaml-exists == 'true'
-      run: |
-        changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
-        if [[ -n "$changed" ]]; then
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        fi
-
     - name: Run chart-testing (lint)
-      if: steps.list-changed.outputs.changed == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: ct lint --target-branch ${{ github.event.repository.default_branch }}
 
     - name: Create kind cluster
-      if: steps.list-changed.outputs.changed == 'true'
       uses: helm/kind-action@v1.9.0
 
-    - name: Run chart-testing (install)
-      if: steps.list-changed.outputs.changed == 'true'
+    - name: Define target branch
+      id: define-target-branch
+      shell: bash
       run: |
-        if [[ -n "${{ inputs.image-tag }}" ]]; then
-          HELM_EXTRA_ARGS="--set image.tag=${{ inputs.image-tag }}"
+        if [ "${{ github.event_name }}" == "pull_request"]; then
+          TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
+        else
+          TARGET_BRANCH="${{ github.event.repository.default_branch }}"
+        fi
+        echo "target-branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+
+    - name: Run chart-testing (install)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        HELM_SET="${{ inputs.helm-set }}"
+        HELM_EXTRA_SET_ARGS=""
+        if [ -n "$HELM_SET" ]; then
+          HELM_EXTRA_SET_ARGS=$(echo "$HELM_SET" | awk '{print "--set " $0}')
         fi
 
+        TARGET_BRANCH="${{ steps.define-target-branch.outputs.target-branch }}"
+
         ct install \
-          --target-branch ${{ github.event.repository.default_branch }} \
-          --helm-extra-args "${HELM_EXTRA_ARGS} --wait"
+          --target-branch "$TARGET_BRANCH" \
+          --helm-extra-args "--wait" \
+          --helm-extra-set-args "$HELM_EXTRA_SET_ARGS"

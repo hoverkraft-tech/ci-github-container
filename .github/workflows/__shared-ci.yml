@@ -1,6 +1,7 @@
+---
 name: Internal - Common Continuous Integration tasks
 
-on:
+on: # yamllint disable-line rule:truthy
   workflow_call:
 
 permissions:
@@ -9,6 +10,7 @@ permissions:
   packages: write
   pull-requests: read
   statuses: write
+  # yamllint disable-line rule:line-length
   # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
   id-token: write
 
@@ -25,6 +27,7 @@ jobs:
 
   test-action-docker-prune-pull-requests-package-version:
     needs: linter
+    # yamllint disable-line rule:line-length
     uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
 
   test-action-get-image-metadata:

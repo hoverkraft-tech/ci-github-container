@@ -9,7 +9,7 @@
 <!-- end badges -->
 <!-- start description -->
 
-Action to test a Helm chart
+Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-action)
 
 <!-- end description -->
 <!-- start contents -->

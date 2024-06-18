@@ -1,5 +1,5 @@
+---
 extends: default
 
 ignore:
-  - /workspace/.github/linters/
-  - /workspace/tests/charts/
+  - /github/workspace/tests/charts/
