@@ -1,7 +1,8 @@
+---
 name: Test for "helm/release-chart" action
 run-name: Test for "helm/release-chart" action
 
-on:
+on: # yamllint disable-line rule:truthy
   workflow_call:
 
 permissions:
@@ -10,6 +11,7 @@ permissions:
 
 jobs:
   tests:
+    name: Test for "helm/release-chart" action
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,13 +35,17 @@ jobs:
           values: |
             [
               { "path": ".image.registry", "value": "ghcr.io" },
-              { "path": ".image.repository", "value": "hoverkraft-tech/ci-github-container/application-test" },
+              {
+                "path": ".image.repository",
+                "value": "hoverkraft-tech/ci-github-container/application-test"
+              },
               { "path": ".image.tag", "value": "0.1.0" }
             ]
           tag: 0.1.0
           helm-repositories: |
             bitnami https://charts.bitnami.com/bitnami
 
+      # yamllint disable rule:line-length
       - name: Check release chart output
         run: |
           if [ "${{ steps.release-chart.outputs.image }}" != "ghcr.io/hoverkraft-tech/ci-github-container/charts/application-test/ci-github-container:0.1.0" ]; then
@@ -55,3 +61,5 @@ jobs:
           helm pull --version "0.1.0" oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/application-test/ci-github-container
         env:
           HELM_EXPERIMENTAL_OCI: "1"
+
+      # yamllint enable rule:line-length
