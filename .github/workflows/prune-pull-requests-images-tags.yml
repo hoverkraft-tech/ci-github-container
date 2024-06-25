@@ -1,12 +1,13 @@
 # Prune pull requests images tags
 # ==========================
 # Workflow to performs a clean of closed pull requests images tags.
-# See <../../actions/docker/prune-pull-requests-image-tags/README.md> for more information.
+# See [prune-pull-requests-image-tags](../../actions/docker/prune-pull-requests-image-tags/README.md) for more information.
 ---
 name: Prune pull requests images tags
 
 on:
   workflow_call:
+    #checkov:skip=CKV_GHA_7: required
     inputs:
       runs-on:
         description: |
@@ -34,7 +35,10 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
   packages: write
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
 
 jobs:
   prepare-variables:
