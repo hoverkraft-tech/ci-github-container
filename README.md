@@ -21,6 +21,8 @@ Opinionated GitHub actions and workflows for continuous integration in container
 
 #### - [Release chart](actions/helm/release-chart/README.md)
 
+#### - [Test chart](actions/helm/test-chart/README.md)
+
 ## Reusable Workflows
 
 ### - [Docker build images](.github/workflows/docker-build-images.md)
