@@ -27,7 +27,10 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
   packages: write
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
 
 jobs:
   main:
