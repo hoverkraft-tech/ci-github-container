@@ -17,19 +17,24 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@v0.11.2
+- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@0.17.0
   with:
-    # The extra parameter image.tag to pass to the helm release
-    # defaults to null
-    image-tag: "1.0.0"
+    # Set values for Helm chart.
+    #  Multiple values can be set using multiline string.
+    #  Example:
+    #    key1=value1
+    #    key2=value2
+    helm-set: |
+      key1=value1
+      key2=value2
 ```
 
 <!-- end usage -->
 <!-- start inputs -->
 
-| **Input** | **Description**                                           | **Default** | **Required** |
-| --------- | --------------------------------------------------------- | ----------- | ------------ |
-| image-tag | The extra parameter image.tag to pass to the helm release | null        |  false       |
+| **Input** | **Description**                                                                                                              | **Default** | **Required** |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------ |
+| helm-set  | Set values for Helm chart. Multiple values can be set using multiline string. Example: <code>key1=value1\nkey2=value2</code> | null        |  false       |
 
 <!-- end inputs -->
 <!-- start outputs -->
