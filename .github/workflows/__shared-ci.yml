@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.13.3
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.14.0
     with:
       linter-env: |
         VALIDATE_KUBERNETES_KUBECONFORM=false

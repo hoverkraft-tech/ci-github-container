@@ -23,7 +23,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.13.3
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.14.0
       with:
         fetch-depth: 0
 
