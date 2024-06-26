@@ -1,3 +1,4 @@
+---
 name: "Create images manifests"
 description: "Action to create built images manifests"
 author: Hoverkraft
@@ -15,7 +16,10 @@ inputs:
     default: ${{ github.repository_owner }}
     required: true
   oci-registry-password:
-    description: 'Password or personal access token used to log against the OCI registry. Can be passed in using "secrets.GITHUB_TOKEN". See <https://github.com/docker/login-action#usage>'
+    description: |
+      Password or personal access token used to log against the OCI registry.
+      Can be passed in using "secrets.GITHUB_TOKEN".
+      See <https://github.com/docker/login-action#usage>.
     default: ${{ github.token }}
     required: true
   built-images:

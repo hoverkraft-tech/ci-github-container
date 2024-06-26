@@ -3,3 +3,7 @@ extends: default
 
 ignore:
   - /github/workspace/tests/charts/
+
+rules:
+  line-length:
+    max: 170

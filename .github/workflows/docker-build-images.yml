@@ -3,36 +3,40 @@
 # Workflow to build multiple docker images.
 # Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md)
 # This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build
-
+---
 name: Docker build images
 
 on:
   workflow_call:
     outputs:
       built-images:
-        description: 'Built images data. Example: {
-          "application": {
-          "name": "application",
-          "registry": "ghcr.io",
-          "repository": "my-org/my-repo/application",
-          "tags": ["pr-63-5222075","pr-63"],
-          "images": [
-          "ghcr.io/my-org/my-repo/application:pr-63-5222075",
-          "ghcr.io/my-org/my-repo/application:pr-63"
-          ],
-          "digests": [
-          "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
-          ],
-          "annotations": {
-          "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
-          "org.opencontainers.image.description": "Application image"
+        description: |
+          Built images data.
+          Example: {
+            "application": {
+              "name": "application",
+              "registry": "ghcr.io",
+              "repository": "my-org/my-repo/application",
+              "tags": ["pr-63-5222075","pr-63"],
+              "images": [
+                "ghcr.io/my-org/my-repo/application:pr-63-5222075",
+                "ghcr.io/my-org/my-repo/application:pr-63"
+              ],
+              "digests": [
+                "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
+              ],
+              "annotations": {
+                "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+                "org.opencontainers.image.description": "Application image"
+              }
+            }
           }
-          }
-          }'
         value: ${{ jobs.publish-manifests.outputs.built-images }}
     inputs:
       runs-on:
-        description: "Runner to use. Json array of runners. See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job"
+        description: |
+          Runner to use. Json array of runners.
+          See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>.
         type: string
         default: '["ubuntu-latest"]'
         required: false
@@ -42,33 +46,46 @@ on:
         default: "ghcr.io"
         required: false
       oci-registry-username:
-        description: "Username used to log against the OCI registry. See https://github.com/docker/login-action#usage"
+        description: |
+          Username used to log against the OCI registry.
+          See <https://github.com/docker/login-action#usage>.
         type: string
         default: ${{ github.repository_owner }}
         required: false
       images:
-        description: 'Images to build parameters. Example: [{
-          "name": "application",
-          "context": ".",
-          "dockerfile": "./docker/application/Dockerfile",
-          "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },
-          "target": "prod",
-          "platforms": [
-          "linux/amd64",
-          {
-          "name": "darwin/amd64",
-          "runs-on": "macos-latest"
-          }
+        description: |
+          Images to build parameters.
+          Example: [
+            {
+              "name": "application",
+              "context": ".",
+              "dockerfile": "./docker/application/Dockerfile",
+              "build-args": {
+                "APP_PATH": "./application/",
+                "PROD_MODE": "true"
+              },
+              "target": "prod",
+              "platforms": [
+                "linux/amd64",
+                {
+                  "name": "darwin/amd64",
+                  "runs-on": "macos-latest"
+                }
+              ]
+            }
           ]
-          }]'
         type: string
         required: true
     secrets:
       oci-registry-password:
-        description: "Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See https://github.com/docker/login-action#usage."
+        description: |
+          Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
+          See <https://github.com/docker/login-action#usage>.
         required: true
       build-secrets:
-        description: "List of secrets to expose to the build. See https://docs.docker.com/build/ci/github-actions/secrets/."
+        description: |
+          List of secrets to expose to the build.
+          See <https://docs.docker.com/build/ci/github-actions/secrets/>.
         required: false
 
 permissions:
@@ -145,7 +162,9 @@ jobs:
 
               // Format build-args object to string
               if (image['build-args']) {
-                const buildArgs = Object.keys(image['build-args']).map(key => `${key}=${image['build-args'][key]}`).join('\n');
+                const buildArgs = Object.keys(image['build-args'])
+                  .map(key => `${key}=${image['build-args'][key]}`)
+                  .join('\n');
                 image['build-args'] = buildArgs;
               }
 
