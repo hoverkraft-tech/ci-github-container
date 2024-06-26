@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "test-application.fullname" . }}
+  namespace: {{ .Values.namespace }}
   labels:
     {{- include "test-application.labels" . | nindent 4 }}
 spec:
@@ -20,6 +21,7 @@ spec:
       labels:
         {{- include "test-application.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

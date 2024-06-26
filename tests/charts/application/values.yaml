@@ -1,7 +1,7 @@
 # Default values for test-application.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-
+---
 application:
   dbConnection: mysql
   dbHost: "mysql"
@@ -13,12 +13,12 @@ application:
 replicaCount: 1
 
 image:
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   registry: "ghcr.io"
   repository: "hoverkraft-tech/ci-github-container/application-test"
-  tag: "latest"
-  digest: ""
+  tag: "1.0.0"
+  digest: "sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -40,13 +40,15 @@ podSecurityContext:
   # fsGroup: 2000
 
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
 service:
   type: ClusterIP
@@ -70,17 +72,16 @@ ingress:
   #      - chart-example.local
 
 resources:
-  {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
 
 autoscaling:
   enabled: false

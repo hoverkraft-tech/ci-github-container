@@ -1,3 +1,4 @@
+---
 name: "Get image name"
 description: "Action to forge the name of a given image including registry, repository and given input image name"
 author: Hoverkraft

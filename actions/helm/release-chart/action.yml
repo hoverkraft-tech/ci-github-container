@@ -1,3 +1,4 @@
+---
 name: "Release Helm Chart"
 description: "Action to release a Helm chart to OCI registry"
 branding:
@@ -6,16 +7,22 @@ branding:
 
 inputs:
   oci-registry:
-    description: "OCI registry where to push chart. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)"
+    description: |
+      OCI registry where to push chart.
+      See <https://github.com/appany/helm-oci-chart-releaser#usage>.
     required: true
     default: "ghcr.io"
   oci-registry-username:
     required: true
-    description: "OCI registry username. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)"
+    description: |
+      OCI registry username.
+      See <https://github.com/appany/helm-oci-chart-releaser#usage>.
     default: ${{ github.repository_owner }}
   oci-registry-password:
     required: true
-    description: "OCI registry password. See [https://github.com/appany/helm-oci-chart-releaser#usage](https://github.com/appany/helm-oci-chart-releaser#usage)"
+    description: |
+      OCI registry password.
+      See <https://github.com/appany/helm-oci-chart-releaser#usage>.
     default: ${{ github.token }}
   chart:
     description: "Chart name to release"
@@ -24,10 +31,21 @@ inputs:
     description: "Path to the chart to release"
     required: true
   values:
-    description: 'Define charts values to be filled. [{ file, path, value }]. Example: [{ "file": "charts/application/charts/api/values.yaml", "path": ".image.registry", "value": "ghcr.io" }]. See [https://mikefarah.gitbook.io/yq/](https://mikefarah.gitbook.io/yq/)'
+    description: |
+      Define charts values to be filled.
+      Format: `[{ file, path, value }]`.
+      Example: [
+        {
+          "file": "charts/application/charts/api/values.yaml",
+          "path": ".image.registry", "value": "ghcr.io"
+        }
+      ].
+      See <https://mikefarah.gitbook.io/yq/>
     required: false
   helm-repositories:
-    description: "List of Helm repositories to add before release charts. See [https://helm.sh/docs/helm/helm_repo_add/](https://helm.sh/docs/helm/helm_repo_add/)"
+    description: |
+      List of Helm repositories to add before release charts.
+      See <https://helm.sh/docs/helm/helm_repo_add/>.
     required: false
   tag:
     description: "The release tag to set to chart"
@@ -36,7 +54,9 @@ inputs:
 outputs:
   image:
     value: ${{ steps.chart-releaser.outputs.image }}
-    description: Chart image (Default '{registry}/{repository}/{image}:{tag}'). See [https://github.com/appany/helm-oci-chart-releaser](https://github.com/appany/helm-oci-chart-releaser)
+    description: |
+      Chart image (Default '{registry}/{repository}/{image}:{tag}').
+      See <https://github.com/appany/helm-oci-chart-releaser>.
 
 runs:
   using: "composite"
@@ -92,7 +112,7 @@ runs:
             if (!yqUpdates[filePath]) {
               yqUpdates[filePath] = [];
             }
-            
+
             yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
           }
 
