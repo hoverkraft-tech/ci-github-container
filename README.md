@@ -15,7 +15,13 @@ Opinionated GitHub Actions and workflows for continuous integration in container
 
 #### - [Build image](actions/docker/build-image/README.md)
 
+#### - [Create images manifests](actions/docker/create-images-manifests/README.md)
+
+#### - [Get image metadata](actions/docker/get-image-metadata/README.md)
+
 #### - [Get image name](actions/docker/get-image-name/README.md)
+
+#### - [Prune pull requests image tags](actions/docker/prune-pull-requests-image-tags/README.md)
 
 ### Helm
 
