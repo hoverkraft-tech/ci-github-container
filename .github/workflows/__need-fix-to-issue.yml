@@ -1,7 +1,7 @@
 ---
 name: Need fix to Issue
 
-on:
+on: # yamllint disable-line rule:truthy
   push:
     branches:
       - main
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   main:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/need-fix-to-issue.yml@0.13.3
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/need-fix-to-issue.yml@0.14.0
     with:
       manual-commit-ref: ${{ inputs.manual-commit-ref }}
       manual-base-ref: ${{ inputs.manual-base-ref }}

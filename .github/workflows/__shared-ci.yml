@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.13.3
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.14.0
     with:
       # FIXME: re-enable the following checks
       linter-env: |
