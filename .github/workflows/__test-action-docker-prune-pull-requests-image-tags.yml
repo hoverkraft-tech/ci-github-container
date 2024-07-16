@@ -1,7 +1,8 @@
+---
 name: Test for "docker/prune-pull-requests-image-tags" action
 run-name: Test for "docker/prune-pull-requests-image-tags" action
 
-on:
+on: # yamllint disable-line rule:truthy
   workflow_call:
 
 permissions:
@@ -177,7 +178,7 @@ jobs:
 
       - id: get-issue-number
         if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.13.3
+        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.14.0
 
       - name: Delete test packages
         uses: actions/github-script@v7.0.1
