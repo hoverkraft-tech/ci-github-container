@@ -26,4 +26,6 @@ jobs:
         uses: ./actions/helm/test-chart
         with:
           helm-set: |
-            image-tag=${{ steps.get-image-metadata.outputs.tags }}
+            image.tag=${{ steps.get-image-metadata.outputs.tags }}
+          helm-repositories: |
+            bitnami https://charts.bitnami.com/bitnami

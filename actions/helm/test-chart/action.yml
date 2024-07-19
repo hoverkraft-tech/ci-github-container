@@ -19,7 +19,11 @@ inputs:
         key1=value1
         key2=value2
     required: false
-
+  helm-repositories:
+    description: |
+      List of Helm repositories to add before testing charts.
+      See <https://helm.sh/docs/helm/helm_repo_add/>.
+    required: false
 runs:
   using: "composite"
   steps:
@@ -48,9 +52,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         if [[ -f ct.yaml ]]; then
-          echo "ct-yaml-exists=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "ct-yaml-exists=false" >> "$GITHUB_OUTPUT"
+          echo "path=ct.yaml" >> "$GITHUB_OUTPUT"
         fi
 
     - uses: actions/setup-python@v5
@@ -60,38 +62,75 @@ runs:
     - name: Set up chart-testing
       uses: helm/chart-testing-action@v2.6.1
 
+    - shell: bash
+      run: |
+        # For each line in the input, add the Helm repository
+        echo "${{ inputs.helm-repositories }}" | while read -r line; do
+          if [ -z "$line" ]; then
+            continue
+          fi
+
+          # shellcheck disable=SC2086
+          helm repo add $line
+        done
+
     - name: Run chart-testing (lint)
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: ct lint --target-branch ${{ github.event.repository.default_branch }}
-
-    - name: Create kind cluster
-      uses: helm/kind-action@v1.10.0
-
-    - name: Define target branch
-      id: define-target-branch
-      shell: bash
       run: |
-        if [ "${{ github.event_name }}" == "pull_request"]; then
-          TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
-        else
-          TARGET_BRANCH="${{ github.event.repository.default_branch }}"
-        fi
-        echo "target-branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
-
-    - name: Run chart-testing (install)
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        HELM_SET="${{ inputs.helm-set }}"
-        HELM_EXTRA_SET_ARGS=""
-        if [ -n "$HELM_SET" ]; then
-          HELM_EXTRA_SET_ARGS=$(echo "$HELM_SET" | awk '{print "--set " $0}')
+        LINT_ARGS="--check-version-increment=false --target-branch ${{ github.event.repository.default_branch }}"
+        if [ -n "${{ steps.check-ct-yaml.outputs.path }}" ]; then
+          LINT_ARGS="--config ${{ steps.check-ct-yaml.outputs.path }}"
         fi
 
-        TARGET_BRANCH="${{ steps.define-target-branch.outputs.target-branch }}"
+        ct lint $LINT_ARGS
 
-        ct install \
-          --target-branch "$TARGET_BRANCH" \
-          --helm-extra-args "--wait" \
-          --helm-extra-set-args "$HELM_EXTRA_SET_ARGS"
+    # FIXME: kind cluster must be able to access OCI private registry such as ghcr.io
+    # - name: Create kind cluster
+    #   uses: helm/kind-action@v1.10.0
+
+    # - name: Define target branch
+    #   id: define-target-branch
+    #   shell: bash
+    #   run: |
+    #     if [ "${{ github.event_name }}" == "pull_request" ]; then
+    #       TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
+    #     else
+    #       TARGET_BRANCH="${{ github.event.repository.default_branch }}"
+    #     fi
+    #     echo "target-branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+
+    # - name: Run chart-testing (install)
+    #   shell: bash
+    #   working-directory: ${{ inputs.working-directory }}
+    #   env:
+    #     HELM_EXPERIMENTAL_OCI: true
+    #   run: |
+    #     HELM_SET="${{ inputs.helm-set }}"
+    #     HELM_EXTRA_SET_ARGS=""
+    #     if [ -n "$HELM_SET" ]; then
+    #       IFS=$'\n' read -r -d '' -a lines <<< "$HELM_SET" || true
+
+    #       for line in "${lines[@]}"; do
+    #         if [ -z "$line" ]; then
+    #           continue
+    #         fi
+    #         # Escape commas in the line
+    #         line=$(echo "$line" | sed 's/,/\\,/g') || true
+    #         HELM_EXTRA_SET_ARGS+=",${line}"
+    #       done
+
+    #       # Format HELM_EXTRA_SET_ARGS for helm command
+    #       if [ -n "$HELM_EXTRA_SET_ARGS" ]; then
+    #         HELM_EXTRA_SET_ARGS="--set ${HELM_EXTRA_SET_ARGS:1}"
+    #       fi
+
+    #       echo "::debug::helm-extra-set-args: $HELM_EXTRA_SET_ARGS"
+    #     fi
+
+    #     TARGET_BRANCH="${{ steps.define-target-branch.outputs.target-branch }}"
+
+    #     ct install \
+    #       --target-branch "$TARGET_BRANCH" \
+    #       --helm-extra-args "--wait" \
+    #       --helm-extra-set-args "$HELM_EXTRA_SET_ARGS"

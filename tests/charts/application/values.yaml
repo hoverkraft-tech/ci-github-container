@@ -17,8 +17,8 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   registry: "ghcr.io"
   repository: "hoverkraft-tech/ci-github-container/application-test"
-  tag: "1.0.0"
-  digest: "sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2"
+  tag: ""
+  digest: "sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"
 
 imagePullSecrets: []
 nameOverride: ""
