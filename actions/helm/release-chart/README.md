@@ -27,7 +27,7 @@ Action to release a Helm chart to OCI registry
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.17.0
+- uses: hoverkraft-tech/ci-github-container@0.17.2
   with:
     # Description: OCI registry where to push chart. See
     # <https://github.com/appany/helm-oci-chart-releaser#usage>.
