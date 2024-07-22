@@ -23,7 +23,7 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.17.0
+- uses: hoverkraft-tech/ci-github-container@0.17.2
   with:
     # Description: Working directory
     #
@@ -34,6 +34,11 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
     # multiline string. Example: key1=value1 key2=value2
     #
     helm-set: ""
+
+    # Description: List of Helm repositories to add before testing charts. See
+    # <https://helm.sh/docs/helm/helm_repo_add/>.
+    #
+    helm-repositories: ""
 ```
 
 <!-- end usage -->
@@ -43,6 +48,7 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ------------ |
 | <code>working-directory</code> | Working directory                                                                                                                    | <code>${{ github.workspace }}</code> | **false**    |
 | <code>helm-set</code>          | Set values for Helm chart.<br />Multiple values can be set using multiline string.<br />Example:<br /> key1=value1<br /> key2=value2 |                                      | **false**    |
+| <code>helm-repositories</code> | List of Helm repositories to add before testing charts.<br />See <https://helm.sh/docs/helm/helm_repo_add/>.                         |                                      | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
