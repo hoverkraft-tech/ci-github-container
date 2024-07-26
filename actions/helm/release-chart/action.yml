@@ -67,53 +67,72 @@ runs:
       uses: actions/github-script@v7.0.1
       with:
         script: |
-          const chartValuesInput = `${{ inputs.values }}`;
-          if(!chartValuesInput) {
-            return;
-          }
+          const path = require('node:path');
 
-          // Check if is valid Json
-          let chartValues = null;
-          try {
-            chartValues = JSON.parse(chartValuesInput);
-          } catch (error) {
-            throw new Error(`"values" input is not a valid JSON: ${error}`);
-          }
-
-          // Check if is an array
-          if (!Array.isArray(chartValues)) {
-            throw new Error(`"values" input is not an array`);
-          }
-
-          if (!chartValues.length) {
-            return;
-          }
-
-          const defaultValuesPath = "values.yaml";
-
-          // Check each item
           const yqUpdates = {};
-          for (const key in chartValues) {
-            const chartValue = chartValues[key];
-            if (typeof chartValue !== 'object') {
-              throw new Error(`"values[${key}]" input is not an object`);
-            }
 
-            // Check mandatory properties
-            for (const property of ['path', 'value']) {
-              if (!chartValue.hasOwnProperty(property)) {
-                throw new Error(`"values[${key}].${property}" input is missing`);
-              }
-            }
-
-            const valueFilePath = chartValue['file'] ? chartValue['file'] : defaultValuesPath;
-            const filePath = `${{ inputs.path }}/${valueFilePath}`;
-
+          // Chart.yml files
+          const globber = await glob.create(`${{ inputs.path }}/**/Chart.yaml`, {followSymbolicLinks: false})
+          for await (const chartFile of globber.globGenerator()) {
+            const filePath = path.relative(`${{ github.workspace }}`, chartFile);
             if (!yqUpdates[filePath]) {
               yqUpdates[filePath] = [];
             }
 
-            yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
+            // Update name for root chart
+            if (filePath === '${{ inputs.path }}/Chart.yaml') {
+              yqUpdates[filePath].push(`.name = "${{ github.event.repository.name }}"`);
+            }
+
+            // Update version fields
+            yqUpdates[filePath].push(`.version = "${{ inputs.tag }}"`);
+            yqUpdates[filePath].push(`.appVersion = "${{ inputs.tag }}"`);
+          }
+
+          // values.yml files
+          const chartValuesInput = `${{ inputs.values }}`;
+          if(chartValuesInput) {
+
+            // Check if is valid Json
+            let chartValues = null;
+            try {
+              chartValues = JSON.parse(chartValuesInput);
+            } catch (error) {
+              throw new Error(`"values" input is not a valid JSON: ${error}`);
+            }
+
+            // Check if is an array
+            if (!Array.isArray(chartValues)) {
+              throw new Error(`"values" input is not an array`);
+            }
+
+            if (chartValues.length) {
+              const defaultValuesPath = "values.yaml";
+
+              // Check each item
+              for (const key in chartValues) {
+                const chartValue = chartValues[key];
+                if (typeof chartValue !== 'object') {
+                  throw new Error(`"values[${key}]" input is not an object`);
+                }
+
+                // Check mandatory properties
+                for (const property of ['path', 'value']) {
+                  if (!chartValue.hasOwnProperty(property)) {
+                    throw new Error(`"values[${key}].${property}" input is missing`);
+                  }
+                }
+
+                const valueFilePath = chartValue['file'] ? chartValue['file'] : defaultValuesPath;
+                const filePath = `${{ inputs.path }}/${valueFilePath}`;
+
+                if (!yqUpdates[filePath]) {
+                  yqUpdates[filePath] = [];
+                }
+
+                yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
+              }
+            }
           }
 
           // Build yq commands
@@ -126,7 +145,6 @@ runs:
     - uses: mikefarah/yq@v4.44.2
       with:
         cmd: |
-          yq -i '.name = "${{ github.event.repository.name }}" | .version = "${{ inputs.tag }}" | .appVersion = "${{ inputs.tag }}"' ${{ inputs.path }}/Chart.yaml
           ${{ steps.chart-values-updates.outputs.yq-command }}
 
     - uses: azure/setup-helm@v4
