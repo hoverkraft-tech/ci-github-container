@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   main:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@0.17.3
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@0.17.4
     # Optional customizations.
     with:
       # Json array of runner(s) to use.
