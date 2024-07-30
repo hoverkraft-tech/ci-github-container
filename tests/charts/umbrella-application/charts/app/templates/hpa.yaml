@@ -1,17 +1,15 @@
-# jscpd:ignore-start
----
 {{- if .Values.autoscaling.enabled }}
 apiVersion: autoscaling/v2beta1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "test-application.fullname" . }}
+  name: {{ include "app.fullname" . }}
   labels:
-    {{- include "test-application.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "test-application.fullname" . }}
+    name: {{ include "app.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
@@ -28,5 +26,3 @@ spec:
         targetAverageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
 {{- end }}
-
-# jscpd:ignore-end

@@ -1,9 +1,8 @@
-# jscpd:ignore-start
-# Default values for test-application.
+# Default values for test-umbrella-application/app.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 ---
-application:
+app:
   dbConnection: mysql
   dbHost: "mysql"
   dbPort: 3306
@@ -106,4 +105,3 @@ mysql:
     username: test
     password: test
     rootPassword: root
-# jscpd:ignore-end

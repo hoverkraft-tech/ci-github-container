@@ -1,0 +1,6 @@
+/values-local*.yaml
+/.helm
+/.env
+
+charts/*.tgz
+charts/*/charts/*.tgz

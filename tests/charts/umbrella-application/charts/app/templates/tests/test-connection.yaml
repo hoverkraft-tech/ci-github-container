@@ -1,12 +1,10 @@
-# jscpd:ignore-start
----
 apiVersion: v1
 kind: Pod
 metadata:
-  name: "{{ include "test-application.fullname" . }}-test-connection"
+  name: "{{ include "app.fullname" . }}-test-connection"
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "test-application.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test
 spec:
@@ -16,7 +14,7 @@ spec:
     - name: wget
       image: busybox@sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87b2b85a32def253c7
       command: ['wget']
-      args: ['{{ include "test-application.fullname" . }}:{{ .Values.service.port }}']
+      args: ['{{ include "app.fullname" . }}:{{ .Values.service.port }}']
       readinessProbe:
         exec:
           command:
@@ -24,7 +22,7 @@ spec:
             - -O
             - /dev/null
             - -q
-            - {{ include "test-application.fullname" . }}:{{ .Values.service.port }}
+            - {{ include "app.fullname" . }}:{{ .Values.service.port }}
         initialDelaySeconds: 5
         periodSeconds: 5
         timeoutSeconds: 1
@@ -37,7 +35,7 @@ spec:
             - -O
             - /dev/null
             - -q
-            - {{ include "test-application.fullname" . }}:{{ .Values.service.port }}
+            - {{ include "app.fullname" . }}:{{ .Values.service.port }}
         initialDelaySeconds: 5
         periodSeconds: 5
         timeoutSeconds: 1
@@ -61,4 +59,3 @@ spec:
             - NET_RAW
             - ALL
   restartPolicy: Never
-# jscpd:ignore-end
