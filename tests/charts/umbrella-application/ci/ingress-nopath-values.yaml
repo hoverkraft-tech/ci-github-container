@@ -1,0 +1,10 @@
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: ''
+          pathType: ImplementationSpecific
+  tls: []

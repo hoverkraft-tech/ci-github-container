@@ -1,19 +1,17 @@
-# jscpd:ignore-start
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "test-application.fullname" . }}
+  name: {{ include "app.fullname" . }}
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "test-application.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "test-application.selectorLabels" . | nindent 6 }}
+      {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -21,14 +19,14 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "test-application.selectorLabels" . | nindent 8 }}
+        {{- include "app.selectorLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "test-application.serviceAccountName" . }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -39,7 +37,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
             - configMapRef:
-                name: {{ template "test-application.fullname" . }}-config
+                name: {{ template "app.fullname" . }}-config
           ports:
             - name: http
               containerPort: 8080
@@ -66,5 +64,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
-# jscpd:ignore-end

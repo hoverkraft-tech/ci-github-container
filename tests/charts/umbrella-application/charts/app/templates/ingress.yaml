@@ -1,7 +1,5 @@
-# jscpd:ignore-start
----
 {{- if .Values.ingress.enabled -}}
-{{- $fullName := include "test-application.fullname" . -}}
+{{- $fullName := include "app.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
 {{- if and .Values.ingress.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
   {{- if not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class") }}
@@ -19,7 +17,7 @@ kind: Ingress
 metadata:
   name: {{ $fullName }}
   labels:
-    {{- include "test-application.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -61,5 +59,3 @@ spec:
           {{- end }}
     {{- end }}
 {{- end }}
-
-# jscpd:ignore-end

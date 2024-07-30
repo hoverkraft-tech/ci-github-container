@@ -1,0 +1,19 @@
+# !!! this is an umbrella chart !!!
+# the only values that should be defined must be under the 'global' key
+# we also use components key to conditionally include dependencies (check Chart.yaml)
+
+global:
+  nameOverride: ""
+  fullnameOverride: ""
+
+# components
+
+app:
+  enabled: true
+
+database:
+  enabled: true
+  fullnameOverride: database
+  auth:
+    database: test-umbrella-application
+    username: test-umbrella-application

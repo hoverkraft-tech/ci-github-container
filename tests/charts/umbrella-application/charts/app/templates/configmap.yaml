@@ -1,12 +1,10 @@
-# jscpd:ignore-start
----
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: {{ template "test-application.fullname" . }}-config
+  name: {{ template "app.fullname" . }}-config
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "test-application.labels" . | nindent 4 }}
+    {{- include "app.labels" . | nindent 4 }}
 data:
   {{- with .Values.application }}
   DB_CONNECTION: {{ .dbConnection | quote }}
@@ -16,5 +14,3 @@ data:
   DB_USERNAME: {{ .dbUsername | quote }}
   DB_PASSWORD: {{ .dbPassword | quote }}
   {{- end }}
-
-# jscpd:ignore-end

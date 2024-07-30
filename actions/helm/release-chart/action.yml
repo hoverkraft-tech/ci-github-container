@@ -79,9 +79,13 @@ runs:
               yqUpdates[filePath] = [];
             }
 
-            // Update name for root chart
-            if (filePath === '${{ inputs.path }}/Chart.yaml') {
+            const isRootChart = filePath === `${{ inputs.path }}/Chart.yaml`;
+            if (isRootChart) {
+              // Update name for root chart
               yqUpdates[filePath].push(`.name = "${{ github.event.repository.name }}"`);
+
+              // Update dependencies version where repository starts with file://
+              yqUpdates[filePath].push(`(.dependencies[] | select(.repository == "file://*")).version = "${{ inputs.tag }}"`);
             }
 
             // Update version fields
