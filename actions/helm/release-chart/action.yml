@@ -1,6 +1,9 @@
 ---
 name: "Release Helm Chart"
-description: "Action to release a Helm chart to OCI registry"
+description: |
+  Action to release a Helm chart to OCI registry.
+  Supports umbrella charts: if a chart has local dependencies having version 0.0.0,
+  the action will update those dependencies version with the given tag, then update the Chart.lock accordingly.
 branding:
   icon: upload-cloud
   color: gray-dark
@@ -70,29 +73,41 @@ runs:
           const path = require('node:path');
 
           const yqUpdates = {};
+          const basePath = `${{ inputs.path }}`;
+          if (!basePath) {
+            throw new Error(`"path" input is missing`);
+          }
+
+          const tag = `${{ inputs.tag }}`;
+          if (!tag) {
+            throw new Error(`"tag" input is missing`);
+          }
 
           // Chart.yml files
-          const globber = await glob.create(`${{ inputs.path }}/**/Chart.yaml`, {followSymbolicLinks: false})
+          const globber = await glob.create(`${basePath}/**/Chart.yaml`, {followSymbolicLinks: false})
           for await (const chartFile of globber.globGenerator()) {
             const filePath = path.relative(`${{ github.workspace }}`, chartFile);
             if (!yqUpdates[filePath]) {
               yqUpdates[filePath] = [];
             }
 
-            const isRootChart = filePath === `${{ inputs.path }}/Chart.yaml`;
+            const isRootChart = filePath === `${basePath}/Chart.yaml`;
             if (isRootChart) {
               // Update name for root chart
               yqUpdates[filePath].push(`.name = "${{ github.event.repository.name }}"`);
 
-              // Update version fields
-              yqUpdates[filePath].push(`.version = "${{ inputs.tag }}"`);
-              yqUpdates[filePath].push(`.appVersion = "${{ inputs.tag }}"`);
+              // Update dependencies version where repository starts with file://
+              yqUpdates[filePath].push(`(.dependencies[] | select(.repository == "file://*")).version = "${tag}"`);
             }
+
+            // Update version fields
+            yqUpdates[filePath].push(`.version = "${tag}"`);
+            yqUpdates[filePath].push(`.appVersion = "${tag}"`);
           }
 
           // values.yml files
           const chartValuesInput = `${{ inputs.values }}`;
-          if(chartValuesInput) {
+          if (chartValuesInput) {
 
             // Check if is valid Json
             let chartValues = null;
@@ -125,7 +140,7 @@ runs:
                 }
 
                 const valueFilePath = chartValue['file'] ? chartValue['file'] : defaultValuesPath;
-                const filePath = `${{ inputs.path }}/${valueFilePath}`;
+                const filePath = `${basePath}/${valueFilePath}`;
 
                 if (!yqUpdates[filePath]) {
                   yqUpdates[filePath] = [];
@@ -147,6 +162,105 @@ runs:
       with:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
+
+    - uses: actions/setup-node@v4
+
+    - shell: bash
+      run: npm install yaml
+
+    - name: Rewrite the Chart.lock to match with updated ombrella dependencies if any
+      uses: actions/github-script@v7.0.1
+      with:
+        script: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const yaml = require("yaml");
+
+          const chartLockFile = `${{ inputs.path }}/Chart.lock`;
+          const chartLockFileContent = yaml.parse(fs.readFileSync(chartLockFile, 'utf8'));
+
+          // Update ombrella dependencies versions
+          let hasLocalDependencies = false;
+          const dependencies = chartLockFileContent.dependencies;
+
+          // Check if dependencies are empt
+          for (const dependency of dependencies) {
+            const isLocalDependency = dependency.repository.startsWith("file://") && dependency.version === "0.0.0";
+
+            // Check if the dependency is a local file
+            if (isLocalDependency) {
+              // Update the version to the tag
+              dependency.version = `${{ inputs.tag }}`;
+              hasLocalDependencies = true;
+            }
+          }
+
+          // If no local dependencies, exit
+          if (!hasLocalDependencies) {
+            return;
+          }
+
+          // Update generated
+          chartLockFileContent.generated = new Date().toISOString();
+
+          // Update global digest.
+
+          // See Helm hashReq function: https://github.com/helm/helm/blob/99c065789ef8c45bade24d4bc2d33432595de956/internal/resolver/resolver.go#L214
+          function hashReq(req, lock) {
+            // Sort the dependencies
+            req = req.map(sortDependencyFields);
+            lock = lock.map(sortDependencyFields);
+
+            const data = JSON.stringify([req, lock]);
+            const hash = digest(data);
+            return `sha256:${hash}`;
+          }
+
+          function digest(input) {
+            const hash = crypto.createHash('sha256');
+            hash.update(input);
+            return hash.digest('hex');
+          }
+
+          // Should respect the Helm struct order
+          // See https://github.com/helm/helm/blob/99c065789ef8c45bade24d4bc2d33432595de956/pkg/chart/v2/dependency.go#L24
+          function sortDependencyFields(dependency) {
+            const fieldOrder = [
+              'name',
+              'version',
+              'repository',
+              'condition',
+              'tags',
+              'enabled',
+              'import-values',
+              'alias',
+            ];
+            // Sort the dependency fields
+            const sortedDependency = {};
+            for (const field of fieldOrder) {
+              if (dependency.hasOwnProperty(field)) {
+                sortedDependency[field] = dependency[field];
+              }
+            }
+
+            return sortedDependency;
+          }
+
+          const rootChartFile = `${{ inputs.path }}/Chart.yaml`;
+          const rootChartFileContent = yaml.parse(fs.readFileSync(rootChartFile, 'utf8'));
+
+          const req = rootChartFileContent.dependencies;
+          const lock = dependencies;
+
+          const hash = hashReq(req, lock);
+          chartLockFileContent.digest = hash;
+
+          const updatedChartLockFileContent = yaml.stringify(chartLockFileContent);
+          core.debug(`Updated Chart.lock file content:\n${updatedChartLockFileContent}`);
+
+          // Update Chart.lock file
+          fs.writeFileSync(chartLockFile, updatedChartLockFileContent, 'utf8');
 
     - uses: azure/setup-helm@v4
 
@@ -196,4 +310,4 @@ runs:
         registry: ${{ inputs.oci-registry }}
         registry_username: ${{ inputs.oci-registry-username }}
         registry_password: ${{ inputs.oci-registry-password }}
-        update_dependencies: "true"
+        update_dependencies: "true" # FIXME: Should be false, because updating dependencies during release is risky
