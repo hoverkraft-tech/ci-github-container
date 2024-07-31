@@ -84,13 +84,10 @@ runs:
               // Update name for root chart
               yqUpdates[filePath].push(`.name = "${{ github.event.repository.name }}"`);
 
-              // Update dependencies version where repository starts with file://
-              yqUpdates[filePath].push(`(.dependencies[] | select(.repository == "file://*")).version = "${{ inputs.tag }}"`);
+              // Update version fields
+              yqUpdates[filePath].push(`.version = "${{ inputs.tag }}"`);
+              yqUpdates[filePath].push(`.appVersion = "${{ inputs.tag }}"`);
             }
-
-            // Update version fields
-            yqUpdates[filePath].push(`.version = "${{ inputs.tag }}"`);
-            yqUpdates[filePath].push(`.appVersion = "${{ inputs.tag }}"`);
           }
 
           // values.yml files
@@ -142,7 +139,7 @@ runs:
           // Build yq commands
           const yqCommands = Object.entries(yqUpdates).map(([filePath, updates]) => {
             return `yq -i '${updates.join(' | ')}' ${filePath}`;
-          })
+          });
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 

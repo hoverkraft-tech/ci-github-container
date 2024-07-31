@@ -1,0 +1,9 @@
+dependencies:
+- name: app
+  repository: file://./charts/app
+  version: 0.0.0
+- name: mysql
+  repository: https://charts.bitnami.com/bitnami
+  version: 9.12.1
+digest: sha256:0faef00d594681a7e9b2814ddd6be2c5403bea16f9640af8d495074018b11bcb
+generated: "2024-07-31T09:49:17.09302034+02:00"
