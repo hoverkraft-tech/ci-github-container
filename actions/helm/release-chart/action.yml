@@ -143,7 +143,7 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@v4.44.2
+    - uses: mikefarah/yq@v4.44.3
       with:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
