@@ -142,6 +142,7 @@ runs:
         image: ${{ steps.metadata.outputs.image }}/cache
         flavor: ${{ steps.get-platform-config.outputs.cache-flavor }}
         pull-request-cache: true
+        cache-type: gha
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.15.0
       with:
