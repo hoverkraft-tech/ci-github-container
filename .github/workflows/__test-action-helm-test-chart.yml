@@ -29,3 +29,6 @@ jobs:
             image.tag=${{ steps.get-image-metadata.outputs.tags }}
           helm-repositories: |
             bitnami https://charts.bitnami.com/bitnami
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.actor }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
