@@ -17,11 +17,6 @@ permissions:
 jobs:
   linter:
     uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.15.0
-    with:
-      # FIXME: re-enable the following checks
-      linter-env: |
-        VALIDATE_KUBERNETES_KUBECONFORM=false
-        VALIDATE_CHECKOV=false
 
   test-action-docker-build-image:
     needs: linter
