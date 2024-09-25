@@ -24,6 +24,24 @@ inputs:
       List of Helm repositories to add before testing charts.
       See <https://helm.sh/docs/helm/helm_repo_add/>.
     required: false
+  oci-registry:
+    description: "OCI registry where to pull and push images"
+    default: "ghcr.io"
+    required: false
+  oci-registry-username:
+    description: |
+      Username used to log against the OCI registry.
+      See <https://github.com/docker/login-action#usage>.
+    default: ${{ github.repository_owner }}
+    required: false
+  oci-registry-password:
+    description: |
+      Password or personal access token used to log against the OCI registry.
+      Can be passed in using "secrets.GITHUB_TOKEN".
+      See <https://github.com/docker/login-action#usage>.
+    default: ${{ github.token }}
+    required: false
+
 runs:
   using: "composite"
   steps:
@@ -85,52 +103,70 @@ runs:
 
         ct lint $LINT_ARGS
 
-    # FIXME: kind cluster must be able to access OCI private registry such as ghcr.io
-    # - name: Create kind cluster
-    #   uses: helm/kind-action@v1.10.0
+    - name: Create kind cluster
+      uses: helm/kind-action@v1.10.0
 
-    # - name: Define target branch
-    #   id: define-target-branch
-    #   shell: bash
-    #   run: |
-    #     if [ "${{ github.event_name }}" == "pull_request" ]; then
-    #       TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
-    #     else
-    #       TARGET_BRANCH="${{ github.event.repository.default_branch }}"
-    #     fi
-    #     echo "target-branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+    - name: install default registry secrets
+      shell: bash
+      run: |
+        echo "DOCKER_REGISTRY=$DOCKER_REGISTRY"
+        echo "DOCKER_USERNAME=${DOCKER_USERNAME: -4}" # last 4 characters
+        echo "DOCKER_PASSWORD=${DOCKER_PASSWORD: -4}" # last 4 characters
+        if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PASSWORD" ]; then
+          kubectl create secret docker-registry regcred \
+            --docker-server=$DOCKER_REGISTRY \
+            --docker-username=$DOCKER_USERNAME \
+            --docker-password=$DOCKER_PASSWORD
+        else
+          echo "Docker credentials not provided, skipping secret creation"
+        fi
+      env:
+        DOCKER_REGISTRY: ${{ inputs.oci-registry }}
+        DOCKER_USERNAME: ${{ inputs.oci-registry-username }}
+        DOCKER_PASSWORD: ${{ inputs.oci-registry-password }}
 
-    # - name: Run chart-testing (install)
-    #   shell: bash
-    #   working-directory: ${{ inputs.working-directory }}
-    #   env:
-    #     HELM_EXPERIMENTAL_OCI: true
-    #   run: |
-    #     HELM_SET="${{ inputs.helm-set }}"
-    #     HELM_EXTRA_SET_ARGS=""
-    #     if [ -n "$HELM_SET" ]; then
-    #       IFS=$'\n' read -r -d '' -a lines <<< "$HELM_SET" || true
+    - name: Define target branch
+      id: define-target-branch
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
+        else
+          TARGET_BRANCH="${{ github.event.repository.default_branch }}"
+        fi
+        echo "target-branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
 
-    #       for line in "${lines[@]}"; do
-    #         if [ -z "$line" ]; then
-    #           continue
-    #         fi
-    #         # Escape commas in the line
-    #         line=$(echo "$line" | sed 's/,/\\,/g') || true
-    #         HELM_EXTRA_SET_ARGS+=",${line}"
-    #       done
+    - name: Run chart-testing (install)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        HELM_EXPERIMENTAL_OCI: true
+      run: |
+        HELM_SET="${{ inputs.helm-set }}"
+        HELM_EXTRA_SET_ARGS="imagePullSecrets[0].name=regcred"
+        if [ -n "$HELM_SET" ]; then
+          IFS=$'\n' read -r -d '' -a lines <<< "$HELM_SET" || true
 
-    #       # Format HELM_EXTRA_SET_ARGS for helm command
-    #       if [ -n "$HELM_EXTRA_SET_ARGS" ]; then
-    #         HELM_EXTRA_SET_ARGS="--set ${HELM_EXTRA_SET_ARGS:1}"
-    #       fi
+          for line in "${lines[@]}"; do
+            if [ -z "$line" ]; then
+              continue
+            fi
+            # Escape commas in the line
+            line=$(echo "$line" | sed 's/,/\\,/g') || true
+            HELM_EXTRA_SET_ARGS+=",${line}"
+          done
 
-    #       echo "::debug::helm-extra-set-args: $HELM_EXTRA_SET_ARGS"
-    #     fi
+          # Format HELM_EXTRA_SET_ARGS for helm command
+          if [ -n "$HELM_EXTRA_SET_ARGS" ]; then
+            HELM_EXTRA_SET_ARGS="--set ${HELM_EXTRA_SET_ARGS:1}"
+          fi
 
-    #     TARGET_BRANCH="${{ steps.define-target-branch.outputs.target-branch }}"
+          echo "::debug::helm-extra-set-args: $HELM_EXTRA_SET_ARGS"
+        fi
 
-    #     ct install \
-    #       --target-branch "$TARGET_BRANCH" \
-    #       --helm-extra-args "--wait" \
-    #       --helm-extra-set-args "$HELM_EXTRA_SET_ARGS"
+        TARGET_BRANCH="${{ steps.define-target-branch.outputs.target-branch }}"
+
+        ct install \
+          --target-branch "$TARGET_BRANCH" \
+          --helm-extra-args "--wait" \
+          --helm-extra-set-args "$HELM_EXTRA_SET_ARGS"
