@@ -104,7 +104,7 @@ runs:
         ct lint $LINT_ARGS
 
     - name: Create kind cluster
-      uses: helm/kind-action@v1.10.0
+      uses: helm/kind-action@v1.11.0
 
     - name: install default registry secrets
       shell: bash
