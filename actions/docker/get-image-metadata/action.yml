@@ -60,9 +60,9 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.15.0
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@0.16.0
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.15.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.16.0
 
     - id: define-metadata-inputs
       uses: actions/github-script@v7.0.1
