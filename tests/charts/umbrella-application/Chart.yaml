@@ -32,6 +32,6 @@ dependencies:
 
   - name: mysql
     alias: database
-    version: 9.12.1
+    version: 12.2.1
     repository: https://charts.bitnami.com/bitnami
     condition: database.enabled
