@@ -33,7 +33,7 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.18.0
+- uses: hoverkraft-tech/ci-github-container@0.19.0
   with:
     # Description: OCI registry where to pull and push images
     #
