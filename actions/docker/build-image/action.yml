@@ -126,7 +126,7 @@ runs:
       with:
         value: ${{ inputs.platform }}
 
-    - id: get-platform-config
+    - id: get-docker-config
       shell: bash
       run: |
         TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
@@ -136,11 +136,55 @@ runs:
 
         echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
 
+        # Check if docker exists
+        if command -v docker &> /dev/null; then
+          echo "docker-exists=true" >> "$GITHUB_OUTPUT"
+        fi
+
+        PLATFORM="${{ inputs.platform }}"
+        if [ -z "$PLATFORM" ]; then
+          echo "platform-exists=true" >> "$GITHUB_OUTPUT"
+        else
+          PLATFORM_OS=$(echo "$PLATFORM" | cut -d'/' -f1)
+          RUNNER_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+          echo "::debug::PLATFORM_OS=$PLATFORM_OS"
+          echo "::debug::RUNNER_OS=$RUNNER_OS"
+
+          if [ "$PLATFORM_OS" = "$RUNNER_OS" ]; then
+            PLATFORM_ARCH=$(echo "$PLATFORM" | cut -d'/' -f2-)
+            RUNNER_ARCH=$(uname -m)
+
+            echo "::debug::PLATFORM_ARCH=$PLATFORM_ARCH"
+            echo "::debug::RUNNER_ARCH=$RUNNER_ARCH"
+
+            # Convert runner arch to docker arch
+            case $RUNNER_ARCH in
+              x86_64)
+                RUNNER_ARCH="amd64"
+                ;;
+              aarch64)
+                RUNNER_ARCH="arm64"
+                ;;
+              armv7l)
+                RUNNER_ARCH="arm/v7"
+                ;;
+              *)
+                echo "::warning::Unsupported architecture: $RUNNER_ARCH"
+                ;;
+            esac
+
+            if [ "$PLATFORM_ARCH" = "$RUNNER_ARCH" ]; then
+              echo "platform-exists=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+        fi
+
     - id: cache
       uses: int128/docker-build-cache-config-action@v1.37.0
       with:
         image: ${{ steps.metadata.outputs.image }}/cache
-        flavor: ${{ steps.get-platform-config.outputs.cache-flavor }}
+        flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
         cache-type: gha
 
@@ -151,17 +195,21 @@ runs:
     - shell: bash
       run: git lfs pull
 
-    - uses: docker/setup-qemu-action@v3
+    - if: steps.get-docker-config.outputs.docker-exists != 'true'
+      uses: docker/setup-docker-action@v4
+
+    - if: steps.get-docker-config.outputs.platform-exists != 'true'
+      uses: docker/setup-qemu-action@v3
       with:
         platforms: ${{ inputs.platform }}
 
     - uses: docker/setup-buildx-action@v3
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.19.2
+        version: v0.20.1
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
-          image=moby/buildkit:v0.18.1
+          image=moby/buildkit:v0.19.0
 
     - uses: docker/login-action@v3
       with:

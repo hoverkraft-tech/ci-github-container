@@ -64,7 +64,7 @@ jobs:
       # Default: "${{ github.repository_owner }}"
       oci-registry-username: ""
 
-      # Images to build parameters.
+      # Images to build parameters. Json array of objects.
       # Example: [{
       #    "name": "application",
       #    "dockerfile": "./docker/application/Dockerfile",
@@ -116,6 +116,20 @@ jobs:
 | **<code>build-args</code>** | List of build-time variables. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                  |                         | **false**    |
 | **<code>target</code>**     | Sets the target stage to build. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                |                         | **true**     |
 | **<code>platforms</code>**  | List of platforms to build for. It is used as `platform` in [Docker build-image action](../../actions/docker/build-image/README.md). Can be a string (Example: `linux/amd64`) or an object (Example: `{"name": "darwin/amd64","runs-on": "macos-latest"}`) |                         | **true**     |
+
+#### Platforms entry parameters
+
+| **Parameter**            | **Description**                                                                                                   | **Default** | **Required** |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- | ----------- | ------------ |
+| **<code>name</code>**    | Platform name. Example: `linux/amd64`                                                                             |             | **true**     |
+| **<code>runs-on</code>** | Json array of runner(s) to use. See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job> |             | **false**    |
+
+##### Default `runs-on` strategy
+
+If a platform entry omits the <code>runs-on</code> field, the following default strategy applies:
+
+- When the main <code>docker-build-images</code> job uses a standard hosted runner, that runner is automatically matched to each platform.
+- If the main <code>docker-build-images</code> job uses a custom or self-hosted runner, all platforms use the same runner.
 
 <!-- start outputs -->
 

@@ -54,7 +54,7 @@ on: # yamllint disable-line rule:truthy
         required: false
       images:
         description: |
-          Images to build parameters.
+          Images to build parameters. Json array of objects.
           Example: [
             {
               "name": "application",
@@ -99,8 +99,8 @@ permissions:
 jobs:
   prepare-variables:
     outputs:
-      images: ${{ steps.validate-inputs.outputs.images }}
       artifact-name: ${{ steps.define-artifact-name.outputs.artifact-name }}
+      images: ${{ steps.define-images-by-platform.outputs.images }}
     runs-on: ${{ fromJson(inputs.runs-on) }}
     steps:
       - id: validate-inputs
@@ -138,7 +138,6 @@ jobs:
             // jscpd:ignore-end
 
             // Check each item
-            const imagesByPlatform = [];
             for (const key in images) {
               const image = images[key];
               if (typeof image !== 'object') {
@@ -172,12 +171,56 @@ jobs:
               if (!image['repository']) {
                 image['repository'] = `${{ github.repository }}`;
               }
+            }
+
+            core.setOutput('images', JSON.stringify(images));
+
+      - id: define-images-by-platform
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const images = JSON.parse(`${{ steps.validate-inputs.outputs.images }}`);
+
+            const runsOnInput = `${{ inputs.runs-on }}`;
+            const isDefaultRunsOn = runsOnInput === '["ubuntu-latest"]';
+            runsOn = JSON.parse(runsOnInput);
+
+            // See https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners
+            const standardHostedRunnerByPlatform = [
+              { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available
+              { runner: "macos-latest", platformPattern: /^darwin\// },
+              { runner: "windows-latest", platformPattern: /^windows\// }
+            ];
+
+            function getPlatformRunsOn(platform) {
+              if (platform.hasOwnProperty('runs-on')) {
+                return platform['runs-on'];
+              }
+
+              if (!isDefaultRunsOn) {
+                return runsOn;
+              }
+
+              for (const { runner, platformPattern } of standardHostedRunnerByPlatform) {
+                if (platformPattern.test(platform.name)) {
+                  return [runner];
+                }
+              }
+
+              return runsOn;
+            }
+
+            // Check each item
+            const imagesByPlatform = [];
+            for (const key in images) {
+              const image = images[key];
 
               // Add image for each platform
               const platforms = image['platforms'];
+
               for (const platform of platforms) {
-                let platformName = platform;
-                let platformRunsOn = runsOn;
+                let platformName;
+                let platformRunsOn;
 
                 // Platform can be a string or an object
                 if (typeof platform === 'object') {
@@ -185,11 +228,11 @@ jobs:
                     throw new Error(`"images[${key}].platforms[${platform}].name" input is missing`);
                   }
                   platformName = platform['name'];
-
-                  if (platform.hasOwnProperty('runs-on')) {
-                    platformRunsOn = platform['runs-on'];
-                  }
-                } else if (typeof platform !== 'string') {
+                  platformRunsOn = getPlatformRunsOn(platform);
+                } else if (typeof platform === 'string') {
+                  platformName = platform;
+                  platformRunsOn = getPlatformRunsOn({ name: platform });
+                } else {
                   throw new Error(`"images[${key}].platforms[${platform}]" input is not a string or an object`);
                 }
 
