@@ -187,10 +187,16 @@ jobs:
 
             // See https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners
             const standardHostedRunnerByPlatform = [
-              { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available
               { runner: "macos-latest", platformPattern: /^darwin\// },
               { runner: "windows-latest", platformPattern: /^windows\// }
             ];
+
+            const isRepositoryPrivate = `${{ github.event.repository.private }}` === 'true';
+            if (!isRepositoryPrivate) {
+              standardHostedRunnerByPlatform.push(
+                { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available
+              );
+            }
 
             function getPlatformRunsOn(platform) {
               if (platform.hasOwnProperty('runs-on')) {
