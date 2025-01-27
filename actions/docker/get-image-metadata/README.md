@@ -24,7 +24,7 @@ Action to retrieve required metadata to build Docker image
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.20.0
+- uses: hoverkraft-tech/ci-github-container@0.20.1
   with:
     # Description: OCI registry where to pull and push images
     #
