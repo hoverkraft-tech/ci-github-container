@@ -29,13 +29,15 @@ jobs:
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
     with:
+      # First image is multi arch, multi build-args
+      # Second image is mono arch, single build-args
       images: |
         [
           {
             "name": "application-multi-arch",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
-            "build-args": { "PROD_MODE": "true" },
+            "build-args": { "PROD_MODE": "true", "BUILD_ID": "${{ github.run_id }}" },
             "target": "prod",
             "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
           },
