@@ -179,11 +179,12 @@ jobs:
         uses: actions/github-script@v7.0.1
         with:
           script: |
-            const images = JSON.parse(`${{ steps.validate-inputs.outputs.images }}`);
+            const imagesInput = `${{ steps.validate-inputs.outputs.images }}`;
+            const images = JSON.parse(imagesInput.replace(/\n/g, '\\n'));
 
             const runsOnInput = `${{ inputs.runs-on }}`;
             const isDefaultRunsOn = runsOnInput === '["ubuntu-latest"]';
-            runsOn = JSON.parse(runsOnInput);
+            const runsOn = JSON.parse(runsOnInput);
 
             // See https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners
             const standardHostedRunnerByPlatform = [
