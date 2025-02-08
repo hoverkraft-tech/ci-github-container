@@ -79,6 +79,18 @@ jobs:
       #    ]
       # }]
       images: ""
+
+      # Optional Github Application ID to generate token via actions/create-github-app-token
+      # Need that app-key secret defined to be used.
+      # Minimal permissions needed are:
+      # - contents:read
+      # - issues:read
+      app-id: ""
+
+      # Used only if app-id input and app-key secret are set.
+      # List of keys to set with the Github application token generated and set as docker secrets.
+      # (string with keys separated by ',')
+      app-token-to-docker-secret-envs-keys: ""
 ```
 
 <!-- end usage -->
@@ -89,6 +101,8 @@ jobs:
 | **Secret**                             | **Description**                                                                                                                                              |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **<code>oci-registry-password</code>** | Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See <https://github.com/docker/login-action#usage>. |
+| **<code>build-secrets</code>** | List of secrets to expose to the build. See <https://docs.docker.com/build/ci/github-actions/secrets/>. |
+| **<code>app-key</code>** | Github Application private key to generate token via actions/create-github-app-token. |
 
 <!-- end secrets -->
 <!-- start inputs -->
@@ -102,6 +116,8 @@ jobs:
 | **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See <https://github.com/docker/login-action#usage>                                                                                                                                                                                   | <code>${{ github.repository_owner }}</code> | **false**    |
 | **<code>images</code>**                | Images to build parameters.                                                                                                                                                                                                                                                         |                                             | **true**     |
 |                                        | Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64",{"name": "darwin/amd64","runs-on": "macos-latest"}]}]</code> |                                             |              |
+| **<code>app-id</code>** | Optional Github Application ID to generate token via actions/create-github-app-token. Need that app-key secret defined to be used. Minimal permissions needed are: - contents:read - issues:read |  | **false** |
+| **<code>app-token-to-docker-secret-envs-keys</code>** | Used only if app-id input and app-key secret are set. List of keys to set with the Github application token generated and set as docker secrets. (string with keys separated by ',') |  | **false** |
 
 <!-- end inputs -->
 

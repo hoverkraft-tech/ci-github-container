@@ -7,9 +7,11 @@
 // jscpd:ignore-start
 -->
 <!-- start badges -->
+<!-- markdownlint-disable MD013 -->
 
 <a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
 
+<!-- markdownlint-enable MD013 -->
 <!-- end badges -->
 <!--
 // jscpd:ignore-end
@@ -45,6 +47,10 @@ Action to retrieve required metadata to build Docker image
     # Description: Force image tag to publish
     #
     tag: ""
+
+    # Description: Optional token to use for checking out the repository instead of the default GITHUB_TOKEN.
+    #
+    token: ""
 ```
 
 <!-- end usage -->
@@ -56,6 +62,7 @@ Action to retrieve required metadata to build Docker image
 | <code>repository</code>   | Repository name. Example: 'my-org/my-repo'. See [Docker get-image-name action](../get-image-name/README.md)    | <code>${{ github.repository }}</code> | **false**    |
 | <code>image</code>        | Additional image name. Example: 'application'. See [Docker get-image-name action](../get-image-name/README.md) |                                       | **false**    |
 | <code>tag</code>          | Force image tag to publish                                                                                     |                                       | **false**    |
+| <code>token</code>        | Optional token to use for checking out the repository instead of the default GITHUB_TOKEN.                     |                                       | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->

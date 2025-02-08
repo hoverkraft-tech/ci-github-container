@@ -7,9 +7,11 @@
 // jscpd:ignore-start
 -->
 <!-- start badges -->
+<!-- markdownlint-disable MD013 -->
 
 <a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
 
+<!-- markdownlint-enable MD013 -->
 <!-- end badges -->
 <!--
 // jscpd:ignore-end
@@ -99,6 +101,15 @@ permissions:
     # <https://docs.docker.com/build/ci/github-actions/secrets/>.
     #
     secrets: ""
+
+    # Description: List of secret-envs to expose to the build. See
+    # <https://docs.docker.com/build/ci/github-actions/secrets/>.
+    #
+    secret-envs: ""
+
+    # Description: Token to use to interact with GitHub instead of the default GITHUB_TOKEN.
+    #
+    token: ""
 ```
 
 <!-- end usage -->
@@ -118,14 +129,18 @@ permissions:
 | <code>build-args</code>            | List of build-time variables.<br />See <https://github.com/docker/build-push-action#inputs>.                                                                                         |                                             | **false**    |
 | <code>target</code>                | Sets the target stage to build.<br />See <https://github.com/docker/build-push-action#inputs>.                                                                                       |                                             | **false**    |
 | <code>secrets</code>               | List of secrets to expose to the build.<br />See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                                         |                                             | **false**    |
+| <code>secret-envs</code>           | List of secret-envs to expose to the build.<br />See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                                     |                                             | **false**    |
+| <code>token</code>                 | Token to use to interact with GitHub instead of the default GITHUB_TOKEN.>.                                                                                                          |                                             | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
+<!-- markdownlint-disable MD013 -->
 
 | **Output**               | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <code>built-image</code> | Built image data.<br />Example: {<br /> "name": "application",<br /> "registry": "ghcr.io",<br /> "repository": "my-org/my-repo/application",<br /> "tags": [<br /> "pr-63-5222075",<br /> "pr-63"<br /> ],<br /> "images": [<br /> "ghcr.io/my-org/my-repo/application:pr-63-5222075",<br /> "ghcr.io/my-org/my-repo/application:pr-63"<br /> ],<br /> "digests": [<br /> "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"<br /> ],<br /> "annotations": {<br /> "org.opencontainers.image.created": "2021-09-30T14:00:00Z",<br /> "org.opencontainers.image.description": "Application image"<br /> }<br />} |
 
+<!-- markdownlint-enable MD013 -->
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->
 <!-- end [.github/ghadocs/examples/] -->
