@@ -99,6 +99,15 @@ permissions:
     # <https://docs.docker.com/build/ci/github-actions/secrets/>.
     #
     secrets: ""
+
+    # Description: List of secret-envs to expose to the build. See
+    # <https://docs.docker.com/build/ci/github-actions/secrets/>.
+    #
+    secret-envs: ""
+
+    # Description: Token to use to interact with Github instead of the default GITHUB_TOKEN.
+    #
+    token: ""
 ```
 
 <!-- end usage -->
@@ -118,6 +127,8 @@ permissions:
 | <code>build-args</code>            | List of build-time variables.<br />See <https://github.com/docker/build-push-action#inputs>.                                                                                         |                                             | **false**    |
 | <code>target</code>                | Sets the target stage to build.<br />See <https://github.com/docker/build-push-action#inputs>.                                                                                       |                                             | **false**    |
 | <code>secrets</code>               | List of secrets to expose to the build.<br />See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                                         |                                             | **false**    |
+| <code>secret-envs</code>           | List of secret-envs to expose to the build.<br />See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                                         |                                             | **false**    |
+| <code>token</code>                 | Token to use to interact with Github instead of the default GITHUB_TOKEN.>.                                                                         |                                             | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
