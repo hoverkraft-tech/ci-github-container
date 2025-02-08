@@ -45,6 +45,10 @@ Action to retrieve required metadata to build Docker image
     # Description: Force image tag to publish
     #
     tag: ""
+
+    # Description: Optional token to use for checking out the repository instead of the default GITHUB_TOKEN.
+    #
+    token: ""
 ```
 
 <!-- end usage -->
@@ -56,6 +60,7 @@ Action to retrieve required metadata to build Docker image
 | <code>repository</code>   | Repository name. Example: 'my-org/my-repo'. See [Docker get-image-name action](../get-image-name/README.md)    | <code>${{ github.repository }}</code> | **false**    |
 | <code>image</code>        | Additional image name. Example: 'application'. See [Docker get-image-name action](../get-image-name/README.md) |                                       | **false**    |
 | <code>tag</code>          | Force image tag to publish                                                                                     |                                       | **false**    |
+| <code>token</code>        | Optional token to use for checking out the repository instead of the default GITHUB_TOKEN.                                                                                      |                                       | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
