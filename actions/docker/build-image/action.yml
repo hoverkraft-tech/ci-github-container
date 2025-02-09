@@ -122,7 +122,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.16.1
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@0.17.0
       with:
         value: ${{ inputs.platform }}
 
@@ -188,7 +188,7 @@ runs:
         pull-request-cache: true
         cache-type: gha
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.16.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.17.0
       with:
         lfs: true
 
