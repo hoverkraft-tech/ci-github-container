@@ -98,6 +98,15 @@ inputs:
       List of secrets to expose to the build.
       See <https://docs.docker.com/build/ci/github-actions/secrets/>.
     required: false
+  secret-envs:
+    description: |
+      List of secret-envs to expose to the build.
+      See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+    required: false
+  token:
+    description: |
+      Token to use to interact with Github instead of the default GITHUB_TOKEN.
+    required: false
 
 runs:
   using: "composite"
@@ -115,6 +124,7 @@ runs:
         repository: ${{ inputs.repository }}
         image: ${{ inputs.image }}
         tag: ${{ inputs.tag }}
+        token: ${{ inputs.token }}
 
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
@@ -191,6 +201,7 @@ runs:
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.17.0
       with:
         lfs: true
+        token: ${{ inputs.token }}
 
     - shell: bash
       run: git lfs pull
@@ -225,6 +236,7 @@ runs:
         target: ${{ inputs.target }}
         file: ${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}
         secrets: ${{ inputs.secrets }}
+        secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
         cache-from: ${{ steps.cache.outputs.cache-from }}
         cache-to: ${{ steps.cache.outputs.cache-to }}

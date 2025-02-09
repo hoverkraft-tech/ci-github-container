@@ -76,6 +76,24 @@ on: # yamllint disable-line rule:truthy
           ]
         type: string
         required: true
+      app-id:
+        type: string
+        default: ""
+        description: |
+          Optional Github Application ID to generate token via actions/create-github-app-token.
+          Need that app-key secret defined to be used.
+          Minimal permissions needed are:
+          - contents:read
+          - issues:read
+        required: false
+      app-token-to-docker-secret-envs-keys:
+        type: string
+        default: ""
+        description: |
+          Used only if app-id input and app-key secret are set.
+          List of keys to set with the Github application token generated and set as docker secrets.
+          (string with keys separated by ',')
+        required: false
     secrets:
       oci-registry-password:
         description: |
@@ -86,6 +104,10 @@ on: # yamllint disable-line rule:truthy
         description: |
           List of secrets to expose to the build.
           See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+        required: false
+      app-key:
+        description: |
+          Optional Github Application private key to generate token via actions/create-github-app-token.
         required: false
 
 permissions:
@@ -282,6 +304,14 @@ jobs:
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       id-token: write
     steps:
+      - name: Creates a Github Application token and inputs.app-id is set
+        id: app-token
+        if: inputs.app-id
+        uses: actions/create-github-app-token@v1.11.3
+        with:
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-key }}
+          owner: ${{ github.repository_owner }}
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       - id: oidc
         uses: ChristopherHX/oidc@v3
@@ -290,9 +320,28 @@ jobs:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
+          persist-credentials: ${{ steps.app-token.outputs.token == '' }}
       - run: |
           echo "self-workflow" >> .gitignore
           echo "self-workflow" >> .dockerignore
+
+      - id: generate-app-token-to-docker-secret-envs-keys
+        name: Generate app token to docker secrets env keys
+        shell: bash
+        if: steps.app-token.outputs.token && inputs.app-token-to-docker-secret-envs-keys
+        env:
+          SECRETS_ENV_KEYS: ${{ inputs.app-token-to-docker-secret-envs-keys }}
+        run: |
+          SECRETS_ENV_KEYS=$(echo "$SECRETS_ENV_KEYS" | tr ',' '|')
+
+          echo 'secret-envs<<EOF' >> "$GITHUB_OUTPUT"
+          for key in $(echo "$SECRETS_ENV_KEYS" | tr ',' ' '); do
+            echo "\"${key}=APP_TOKEN\"" >> "$GITHUB_OUTPUT"
+          done
+          echo EOF >> "$GITHUB_OUTPUT"
+
+          echo "APP_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
 
       - id: build
         uses: ./self-workflow/actions/docker/build-image
@@ -309,6 +358,8 @@ jobs:
           target: ${{ matrix.image.target }}
           platform: ${{ matrix.image.platform }}
           secrets: ${{ secrets.build-secrets }}
+          secret-envs: ${{ steps.generate-app-token-to-docker-secret-envs-keys.outputs.secret-envs || '' }}
+          token: ${{ steps.app-token.outputs.token }}
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
@@ -371,6 +422,14 @@ jobs:
 
             core.setOutput('built-images', JSON.stringify(images));
 
+      - name: Creates a Github Application token if inputs.app-id is set
+        id: app-token
+        if: inputs.app-id
+        uses: actions/create-github-app-token@v1.11.3
+        with:
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-key }}
+          owner: ${{ github.repository_owner }}
       # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
       - id: oidc
         uses: ChristopherHX/oidc@v3
@@ -379,6 +438,8 @@ jobs:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
+          persist-credentials: ${{ steps.app-token.outputs.token == '' }}
       - name: ignore self-worfklow changes
         run: |
           echo "self-workflow" >> .gitignore
