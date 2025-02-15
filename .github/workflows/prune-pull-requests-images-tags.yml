@@ -104,6 +104,8 @@ jobs:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
           ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
+          sparse-checkout: |
+            actions
 
       - id: build
         uses: ./self-workflow/actions/docker/prune-pull-requests-image-tags
