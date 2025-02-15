@@ -102,6 +102,7 @@ jobs:
 | **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See <https://github.com/docker/login-action#usage>                                                                                                                                                                                   | <code>${{ github.repository_owner }}</code> | **false**    |
 | **<code>images</code>**                | Images to build parameters.                                                                                                                                                                                                                                                         |                                             | **true**     |
 |                                        | Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64",{"name": "darwin/amd64","runs-on": "macos-latest"}]}]</code> |                                             |              |
+| **<code>lfs</code>**                   | Enable Git LFS. See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.                                                                                                                                                                                                 | <code>true</code>                           | **false**    |
 
 <!-- end inputs -->
 

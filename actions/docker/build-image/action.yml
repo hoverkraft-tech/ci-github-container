@@ -188,13 +188,6 @@ runs:
         pull-request-cache: true
         cache-type: gha
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.17.0
-      with:
-        lfs: true
-
-    - shell: bash
-      run: git lfs pull
-
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
       uses: docker/setup-docker-action@v4
 
