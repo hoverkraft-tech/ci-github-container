@@ -98,6 +98,11 @@ inputs:
       List of secrets to expose to the build.
       See <https://docs.docker.com/build/ci/github-actions/secrets/>.
     required: false
+  secret-envs:
+    description: |
+      List of secret environment variables to expose to the build (e.g., key=envname, MY_SECRET=MY_ENV_VAR).
+      See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+    required: false
 
 runs:
   using: "composite"
@@ -218,6 +223,7 @@ runs:
         target: ${{ inputs.target }}
         file: ${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}
         secrets: ${{ inputs.secrets }}
+        secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
         cache-from: ${{ steps.cache.outputs.cache-from }}
         cache-to: ${{ steps.cache.outputs.cache-to }}

@@ -65,6 +65,9 @@ on: # yamllint disable-line rule:truthy
                 "APP_PATH": "./application/",
                 "PROD_MODE": "true"
               },
+              "secret-envs": {
+                "GH_TOKEN": "GITHUB_TOKEN"
+              },
               "platforms": [
                 "linux/amd64",
                 {
@@ -172,6 +175,14 @@ jobs:
                   .map(key => `${key}=${image['build-args'][key]}`)
                   .join('\n');
                 image['build-args'] = buildArgs;
+              }
+
+              // Format secret-envs object to string
+              if (image['secret-envs']) {
+                const secretEnvs = Object.keys(image['secret-envs'])
+                  .map(key => `${key}=${image['secret-envs'][key]}`)
+                  .join('\n');
+                image['secret-envs'] = secretEnvs;
               }
 
               // Set default repository
@@ -325,6 +336,7 @@ jobs:
           build-args: ${{ matrix.image.build-args }}
           target: ${{ matrix.image.target }}
           platform: ${{ matrix.image.platform }}
+          secret-envs: ${{ matrix.image.secret-envs }}
           secrets: ${{ secrets.build-secrets }}
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix

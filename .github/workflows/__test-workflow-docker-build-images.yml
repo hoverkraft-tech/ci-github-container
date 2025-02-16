@@ -64,6 +64,10 @@ jobs:
               "BUILD_RUN_ID": "${{ github.run_id }}",
               "BUILD_REPOSITORY_OWNER": "${{ github.repository_owner }}",
               "BUILD_REPOSITORY": "${{ github.repository }}"
+            },
+            "secret-envs": {
+              "SECRET_ENV_REPOSITORY_OWNER": "GITHUB_REPOSITORY_OWNER",
+              "SECRET_ENV_REPOSITORY": "GITHUB_REPOSITORY"
             }
           }
         ]
