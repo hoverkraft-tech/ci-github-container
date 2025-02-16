@@ -60,11 +60,11 @@ on: # yamllint disable-line rule:truthy
               "name": "application",
               "context": ".",
               "dockerfile": "./docker/application/Dockerfile",
+              "target": "prod",
               "build-args": {
                 "APP_PATH": "./application/",
                 "PROD_MODE": "true"
               },
-              "target": "prod",
               "platforms": [
                 "linux/amd64",
                 {
