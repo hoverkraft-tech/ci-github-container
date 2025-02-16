@@ -28,16 +28,20 @@ jobs:
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+      build-secrets: |
+        SECRET_REPOSITORY_OWNER=${{ github.repository_owner }}
+        SECRET_REPOSITORY=${{ github.repository }}
     with:
-      # First image is multi arch, multi build-args
-      # Second image is mono arch, single build-args
+      # First image is multi arch
+      # Second image is mono arch
+      # Third image tests build args, secrets
       images: |
         [
           {
             "name": "test-multi-arch",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
-            "build-args": { "PROD_MODE": "true", "BUILD_ID": "${{ github.run_id }}" },
+            "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
             "target": "prod",
             "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
           },
@@ -45,10 +49,22 @@ jobs:
             "name": "test-mono-arch",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
-            "build-args": { "PROD_MODE": "true" },
+            "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
             "target": "prod",
             "platforms": ["linux/amd64"],
             "tag": "0.1.0"
+          },
+          {
+            "name": "test-build-args-secrets",
+            "context": ".",
+            "target": "test",
+            "dockerfile": "./tests/application/Dockerfile",
+            "platforms": ["linux/amd64"],
+            "build-args": {
+              "BUILD_RUN_ID": "${{ github.run_id }}",
+              "BUILD_REPOSITORY_OWNER": "${{ github.repository_owner }}",
+              "BUILD_REPOSITORY": "${{ github.repository }}"
+            }
           }
         ]
 
@@ -73,10 +89,17 @@ jobs:
               throw new Error(`"built-images" output is not a valid JSON: ${error}`);
             }
 
+            const expectedCreatedImages = [
+              "test-multi-arch",
+              "test-mono-arch",
+              "test-build-args-secrets"
+            ];
             assert(typeof builtImages === "object" && !Array.isArray(builtImages), `"built-images" output is not an object`);
-            assert.equal(Object.keys(builtImages).length, 2, `"built-images" output does not contain 2 images`);
+            assert.equal(Object.keys(builtImages).length, expectedCreatedImages.length, `"built-images" output does not contain ${expectedCreatedImages.length} images`);
 
-            assert(builtImages["test-multi-arch"], `"built-images" output does not contain "test-multi-arch" image`);
+            for (const image of expectedCreatedImages) {
+              assert(builtImages[image], `"built-images" output does not contain "${image}" image`);
+            }
 
             const applicationMultiArchImage = builtImages["test-multi-arch"];
             assert.equal(applicationMultiArchImage.name, "test-multi-arch");

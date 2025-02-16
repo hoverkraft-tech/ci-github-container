@@ -64,20 +64,26 @@ jobs:
       # Default: "${{ github.repository_owner }}"
       oci-registry-username: ""
 
-      # Images to build parameters. Json array of objects.
-      # Example: [{
-      #    "name": "application",
-      #    "dockerfile": "./docker/application/Dockerfile",
-      #    "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },
-      #    "target": "prod",
-      #    "platforms": [
+      #  Images to build parameters. Json array of objects.
+      #  Example: [
+      #    {
+      #      "name": "application",
+      #      "context": ".",
+      #      "dockerfile": "./docker/application/Dockerfile",
+      #      "target": "prod",
+      #      "build-args": {
+      #        "APP_PATH": "./application/",
+      #        "PROD_MODE": "true"
+      #      },
+      #      "platforms": [
       #        "linux/amd64",
       #        {
-      #           "name": "darwin/amd64",
-      #           "runs-on": "macos-latest"
+      #          "name": "darwin/amd64",
+      #          "runs-on": "macos-latest"
       #        }
-      #    ]
-      # }]
+      #      ]
+      #    }
+      #  ]
       images: ""
 ```
 
@@ -86,23 +92,23 @@ jobs:
 
 ## Secrets
 
-| **Secret**                             | **Description**                                                                                                                                              |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **<code>oci-registry-password</code>** | Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry. See <https://github.com/docker/login-action#usage>. |
+| **Secret**                             | **Description**                                                                                                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **<code>oci-registry-password</code>** | Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry. See <https://github.com/docker/login-action#usage>. |
 
 <!-- end secrets -->
 <!-- start inputs -->
 
 ## Inputs
 
-| **Input**                              | **Description**                                                                                                                                                                                                                                                                     | **Default**                                 | **Required** |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
-| **<code>runs-on</code>**               | Json array of runner(s) to use. See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>                                                                                                                                                                   | <code>["ubuntu-latest"]</code>              | **false**    |
-| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                          | <code>ghcr.io</code>                        | **false**    |
-| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See <https://github.com/docker/login-action#usage>                                                                                                                                                                                   | <code>${{ github.repository_owner }}</code> | **false**    |
-| **<code>images</code>**                | Images to build parameters.                                                                                                                                                                                                                                                         |                                             | **true**     |
-|                                        | Example: <code>[{"name": "application","context": ".","dockerfile": "./docker/application/Dockerfile","build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" },"target": "prod","platforms": ["linux/amd64",{"name": "darwin/amd64","runs-on": "macos-latest"}]}]</code> |                                             |              |
-| **<code>lfs</code>**                   | Enable Git LFS. See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.                                                                                                                                                                                                 | <code>true</code>                           | **false**    |
+| **Input**                              | **Description**                                                                                                                                                                                                                                                                                | **Default**                                 | **Required** |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ |
+| **<code>runs-on</code>**               | Json array of runner(s) to use. See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>                                                                                                                                                                              | <code>["ubuntu-latest"]</code>              | **false**    |
+| **<code>oci-registry</code>**          | OCI registry where to pull and push images                                                                                                                                                                                                                                                     | <code>ghcr.io</code>                        | **false**    |
+| **<code>oci-registry-username</code>** | Username used to log against the OCI registry. See <https://github.com/docker/login-action#usage>                                                                                                                                                                                              | <code>${{ github.repository_owner }}</code> | **false**    |
+| **<code>images</code>**                | Images to build parameters.                                                                                                                                                                                                                                                                    |                                             | **true**     |
+|                                        | Example: <code>[{ "name": "application", "context": ".", "dockerfile": "./docker/application/Dockerfile", "target": "prod", "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" }, "platforms": ["linux/amd64", { "name": "darwin/amd64", "runs-on": "macos-latest" }] }]</code> |                                             |              |
+| **<code>lfs</code>**                   | Enable Git LFS. See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.                                                                                                                                                                                                            | <code>true</code>                           | **false**    |
 
 <!-- end inputs -->
 
@@ -114,8 +120,8 @@ jobs:
 | **<code>repository</code>** | Repository name. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                               |                         | **false**    |
 | **<code>context</code>**    | Build context. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                                 | <code>.</code>          | **false**    |
 | **<code>dockerfile</code>** | Location of Dockerfile. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                        | <code>Dockerfile</code> | **false**    |
-| **<code>build-args</code>** | List of build-time variables. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                  |                         | **false**    |
 | **<code>target</code>**     | Sets the target stage to build. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                |                         | **true**     |
+| **<code>build-args</code>** | List of build-time variables. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                  |                         | **false**    |
 | **<code>platforms</code>**  | List of platforms to build for. It is used as `platform` in [Docker build-image action](../../actions/docker/build-image/README.md). Can be a string (Example: `linux/amd64`) or an object (Example: `{"name": "darwin/amd64","runs-on": "macos-latest"}`) |                         | **true**     |
 
 #### Platforms entry parameters

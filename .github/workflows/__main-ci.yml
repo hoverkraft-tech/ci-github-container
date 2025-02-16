@@ -33,7 +33,8 @@ jobs:
         [
           "application-test",
           "test-multi-arch",
-          "test-mono-arch"
+          "test-mono-arch",
+          "test-build-args-secrets"
         ]
 
   release:
