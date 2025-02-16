@@ -33,4 +33,11 @@ RUN --mount=type=secret,id=SECRET_REPOSITORY_OWNER test "$(cat /run/secrets/SECR
 RUN --mount=type=secret,id=SECRET_REPOSITORY test -f /run/secrets/SECRET_REPOSITORY || (echo "Error: SECRET_REPOSITORY is not set" && exit 1);
 RUN --mount=type=secret,id=SECRET_REPOSITORY test "$(cat /run/secrets/SECRET_REPOSITORY)" = "$EXPECTED_REPOSITORY" || (echo "Error: SECRET_REPOSITORY is not \"$EXPECTED_REPOSITORY\"" && exit 1);
 
+# Test that secret envs are passed
+RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY_OWNER test -f /run/secrets/SECRET_ENV_REPOSITORY_OWNER || (echo "Error: SECRET_ENV_REPOSITORY_OWNER is not set" && exit 1);
+RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY_OWNER test "$(cat /run/secrets/SECRET_ENV_REPOSITORY_OWNER)" = "$EXPECTED_REPOSITORY_OWNER" || (echo "Error: SECRET_ENV_REPOSITORY_OWNER is not \"$EXPECTED_REPOSITORY_OWNER\"" && exit 1);
+
+RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY test -f /run/secrets/SECRET_ENV_REPOSITORY || (echo "Error: SECRET_ENV_REPOSITORY is not set" && exit 1);
+RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY test "$(cat /run/secrets/SECRET_ENV_REPOSITORY)" = "$EXPECTED_REPOSITORY" || (echo "Error: SECRET_ENV_REPOSITORY is not \"$EXPECTED_REPOSITORY\"" && exit 1);
+
 USER test

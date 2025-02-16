@@ -75,6 +75,9 @@ jobs:
       #        "APP_PATH": "./application/",
       #        "PROD_MODE": "true"
       #      },
+      #      "secret-envs": {
+      #        "GH_TOKEN": "GITHUB_TOKEN"
+      #      },
       #      "platforms": [
       #        "linux/amd64",
       #        {
@@ -114,15 +117,16 @@ jobs:
 
 ### Images entry parameters
 
-| **Parameter**               | **Description**                                                                                                                                                                                                                                            | **Default**             | **Required** |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------ |
-| **<code>name</code>**       | Image name. Must be unique. It is used as `image` in [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                               |                         | **true**     |
-| **<code>repository</code>** | Repository name. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                               |                         | **false**    |
-| **<code>context</code>**    | Build context. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                                 | <code>.</code>          | **false**    |
-| **<code>dockerfile</code>** | Location of Dockerfile. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                        | <code>Dockerfile</code> | **false**    |
-| **<code>target</code>**     | Sets the target stage to build. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                |                         | **true**     |
-| **<code>build-args</code>** | List of build-time variables. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                  |                         | **false**    |
-| **<code>platforms</code>**  | List of platforms to build for. It is used as `platform` in [Docker build-image action](../../actions/docker/build-image/README.md). Can be a string (Example: `linux/amd64`) or an object (Example: `{"name": "darwin/amd64","runs-on": "macos-latest"}`) |                         | **true**     |
+| **Parameter**                | **Description**                                                                                                                                                                                                                                            | **Default**             | **Required** |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------ |
+| **<code>name</code>**        | Image name. Must be unique. It is used as `image` in [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                               |                         | **true**     |
+| **<code>repository</code>**  | Repository name. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                               |                         | **false**    |
+| **<code>context</code>**     | Build context. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                                 | <code>.</code>          | **false**    |
+| **<code>dockerfile</code>**  | Location of Dockerfile. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                        | <code>Dockerfile</code> | **false**    |
+| **<code>target</code>**      | Sets the target stage to build. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                |                         | **true**     |
+| **<code>build-args</code>**  | List of build-time variables. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                                                  |                         | **false**    |
+| **<code>secret-envs</code>** | List of secret environment variables to expose to the build. See [Docker build-image action](../../actions/docker/build-image/README.md)                                                                                                                   |                         | **false**    |
+| **<code>platforms</code>**   | List of platforms to build for. It is used as `platform` in [Docker build-image action](../../actions/docker/build-image/README.md). Can be a string (Example: `linux/amd64`) or an object (Example: `{"name": "darwin/amd64","runs-on": "macos-latest"}`) |                         | **true**     |
 
 #### Platforms entry parameters
 
