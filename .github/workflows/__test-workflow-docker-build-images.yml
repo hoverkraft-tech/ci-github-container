@@ -34,7 +34,7 @@ jobs:
       images: |
         [
           {
-            "name": "application-multi-arch",
+            "name": "test-multi-arch",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "PROD_MODE": "true", "BUILD_ID": "${{ github.run_id }}" },
@@ -42,7 +42,7 @@ jobs:
             "platforms": ["linux/amd64","linux/arm64","linux/arm/v7"]
           },
           {
-            "name": "application-mono-arch",
+            "name": "test-mono-arch",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "PROD_MODE": "true" },
@@ -76,25 +76,25 @@ jobs:
             assert(typeof builtImages === "object" && !Array.isArray(builtImages), `"built-images" output is not an object`);
             assert.equal(Object.keys(builtImages).length, 2, `"built-images" output does not contain 2 images`);
 
-            assert(builtImages["application-multi-arch"], `"built-images" output does not contain "application-multi-arch" image`);
+            assert(builtImages["test-multi-arch"], `"built-images" output does not contain "test-multi-arch" image`);
 
-            const applicationMultiArchImage = builtImages["application-multi-arch"];
-            assert.equal(applicationMultiArchImage.name, "application-multi-arch");
+            const applicationMultiArchImage = builtImages["test-multi-arch"];
+            assert.equal(applicationMultiArchImage.name, "test-multi-arch");
             assert.equal(applicationMultiArchImage.registry, "ghcr.io");
-            assert.equal(applicationMultiArchImage.repository,"hoverkraft-tech/ci-github-container/application-multi-arch");
+            assert.equal(applicationMultiArchImage.repository,"hoverkraft-tech/ci-github-container/test-multi-arch");
             assert(applicationMultiArchImage.tags.length);
             assert(applicationMultiArchImage.images.length);
             applicationMultiArchImage.images.forEach(
               image => assert.match(
                 image,
-                /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-multi-arch:[\.a-z0-9-]+$/
+                /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/test-multi-arch:[\.a-z0-9-]+$/
               )
             );
 
-            const applicationMonoArchImage = builtImages["application-mono-arch"];
+            const applicationMonoArchImage = builtImages["test-mono-arch"];
             assert.equal(
               applicationMonoArchImage.name,
-              "application-mono-arch"
+              "test-mono-arch"
             );
             assert.equal(
               applicationMonoArchImage.registry,
@@ -102,7 +102,7 @@ jobs:
             );
             assert.equal(
               applicationMonoArchImage.repository,
-              "hoverkraft-tech/ci-github-container/application-mono-arch"
+              "hoverkraft-tech/ci-github-container/test-mono-arch"
             );
             assert.equal(
               applicationMonoArchImage.tags.length,
@@ -114,7 +114,7 @@ jobs:
             );
             assert.equal(
               applicationMonoArchImage.images[0],
-              "ghcr.io/hoverkraft-tech/ci-github-container/application-mono-arch:0.1.0"
+              "ghcr.io/hoverkraft-tech/ci-github-container/test-mono-arch:0.1.0"
             );
 
       - uses: docker/login-action@v3
@@ -129,7 +129,7 @@ jobs:
           script: |
             const assert = require("assert");
 
-            const image = `${{ fromJson(needs.act.outputs.built-images).application-multi-arch.images[0] }}`;
+            const image = `${{ fromJson(needs.act.outputs.built-images).test-multi-arch.images[0] }}`;
 
             await exec.exec('docker', ['pull', image]);
 
@@ -191,7 +191,7 @@ jobs:
           script: |
             const assert = require("assert");
 
-            const image = `${{ fromJson(needs.act.outputs.built-images).application-mono-arch.images[0] }}`;
+            const image = `${{ fromJson(needs.act.outputs.built-images).test-mono-arch.images[0] }}`;
 
             await exec.exec('docker', ['pull', image]);
 
