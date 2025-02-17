@@ -32,8 +32,8 @@ jobs:
       images: |
         [
           "application-test",
-          "application-multi-arch",
-          "application-mono-arch"
+          "test-multi-arch",
+          "test-mono-arch"
         ]
 
   release:
