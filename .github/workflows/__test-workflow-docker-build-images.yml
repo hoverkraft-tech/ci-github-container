@@ -124,101 +124,110 @@ jobs:
           password: ${{ github.token }}
 
       - name: Check multi-arch docker image and manifest
-        run: |
-          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-multi-arch.images[0] }}"
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const assert = require("assert");
 
-          docker pull "$IMAGE"
+            const image = `${{ fromJson(needs.act.outputs.built-images).application-multi-arch.images[0] }}`;
 
-          if ! MANIFEST=$(docker manifest inspect "$IMAGE"); then
-            echo "Failed to inspect manifest for image: ${IMAGE}"
-            exit 1
-          fi
+            await exec.exec('docker', ['pull', image]);
 
-          # Check that there are 3 platforms
-          if ! PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]'); then
-            echo "Failed to get platforms for image: ${IMAGE}"
-            echo "${MANIFEST}"
-            exit 1
-          fi
+            let manifestOutput = null;
+            const {
+              exitCode,
+              stdout,
+              stderr
+            } = await exec.getExecOutput('docker', ['manifest', 'inspect', '-v', image]);
 
-          NB_PLATFORMS=$(echo "${PLATFORMS}" | jq -e '. | length')
-          if [ "$NB_PLATFORMS" != "3" ]; then
-            echo "Expected 3 platforms, got: $NB_PLATFORMS"
-            echo "${MANIFEST}"
-            exit 1
-          fi
+            if (exitCode !== 0 || stderr) {
+              throw new Error(`Failed to inspect manifest for image: ${image}: ${stderr || stdout}`);
+            }
 
-          # Check if all platforms are valid
+            manifest = JSON.parse(stdout);
 
-          ## os=linux,architecture=amd64,variant=null
-          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
-          test "$PLATFORM_EXISTS" = "true" || (echo "Expected platform not found: os=linux,architecture=amd64,variant=null" && echo "$PLATFORMS" && exit 1)
+            // Check if all platforms are valid
+            const expectedPlatforms = [
+              { os: "linux", architecture: "amd64", variant: undefined },
+              { os: "linux", architecture: "arm64", variant: undefined },
+              { os: "linux", architecture: "arm", variant: "v7" }
+            ];
 
-          ## os=linux,architecture=arm64,variant=null
-          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "arm64" and .os == "linux" and .variant == null)')
-          test "$PLATFORM_EXISTS" = "true" || (echo "Expected platform not found: os=linux,architecture=arm64,variant=null" && echo "$PLATFORMS" && exit 1)
+            assert.equal(manifest.length, expectedPlatforms.length, `Expected ${expectedPlatforms.length} platforms, got: ${manifest.length}`);
 
-          ## os=linux,architecture=arm,variant=v7
-          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "arm" and .os == "linux" and .variant == "v7")')
-          test "$PLATFORM_EXISTS" = "true" || (echo "Expected platform not found: os=linux,architecture=arm,variant=v7" && echo "$PLATFORMS" && exit 1)
+            expectedPlatforms.forEach(expectedPlatform => {
+              const platformExists = manifest.some(
+                platform => (
+                  platform?.Descriptor?.platform?.architecture === expectedPlatform.architecture &&
+                  platform?.Descriptor?.platform?.os === expectedPlatform.os &&
+                  platform?.Descriptor?.platform?.variant === expectedPlatform.variant
+                )
+              );
 
-          # FIXME: workaround to get manifest annotations
-          if ! MANIFEST=$(docker buildx imagetools inspect --raw "$IMAGE"); then
-            echo "Failed to inspect manifest for image: ${IMAGE}"
-            exit 1
-          fi
+              assert(
+                platformExists,
+                `Expected platform not found: os=${expectedPlatform.os},architecture=${expectedPlatform.architecture},variant=${expectedPlatform.variant}`
+              );
+            });
 
-          # Check annotations
-          if ! ANNOTATIONS=$(echo "${MANIFEST}" | jq -e '.annotations'); then
-            echo "Failed to get annotations for image: ${IMAGE}"
-            echo "${MANIFEST}"
-            exit 1
-          fi
+            // Check annotations
+            const annotations = manifest[0]?.OCIManifest?.annotations;
+            assert(annotations, `Failed to get annotations for image: ${image}`);
 
-          # Check expected annotations
+            // Check expected annotations
+            const expectedAnnotations = {
+              "org.opencontainers.image.source": "https://github.com/hoverkraft-tech/ci-github-container",
+              "org.opencontainers.image.title": "ci-github-container",
+              "org.opencontainers.image.url": "https://github.com/hoverkraft-tech/ci-github-container"
+            };
 
-          ## org.opencontainers.image.source
-          ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.source"] == "https://github.com/hoverkraft-tech/ci-github-container"')
-          test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.source" && echo "$ANNOTATIONS" && exit 1)
-
-          ## org.opencontainers.image.title
-          ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.title"] == "ci-github-container"')
-          test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.title" && echo "$ANNOTATIONS" && exit 1)
-
-          ## org.opencontainers.image.url
-          ANNOTATION_EXISTS=$(echo "${ANNOTATIONS}" | jq -e '.["org.opencontainers.image.url"] == "https://github.com/hoverkraft-tech/ci-github-container"')
-          test "$ANNOTATION_EXISTS" = "true" || (echo "Expected annotation not found: org.opencontainers.image.url" && echo "$ANNOTATIONS" && exit 1)
+            Object.entries(expectedAnnotations).forEach(([key, value]) => {
+              assert.equal(annotations[key], value, `Expected annotation not found: ${key}`);
+            });
 
       - name: Check mono-arch docker image
-        run: |
-          IMAGE="${{ fromJson(needs.act.outputs.built-images).application-mono-arch.images[0] }}"
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const assert = require("assert");
 
-          docker pull "$IMAGE"
+            const image = `${{ fromJson(needs.act.outputs.built-images).application-mono-arch.images[0] }}`;
 
-          if ! MANIFEST=$(docker manifest inspect "$IMAGE"); then
-            echo "Failed to inspect manifest for image: ${IMAGE}"
-            echo "${MANIFEST}"
-            exit 1
-          fi
+            await exec.exec('docker', ['pull', image]);
 
-          # Check that there is only platforms
-          if ! PLATFORMS=$(echo "${MANIFEST}" | jq -e '[.manifests[].platform]'); then
-            echo "Failed to get platforms for image: ${IMAGE}"
-            echo "${MANIFEST}"
-            exit 1
-          fi
+            let manifestOutput = null;
+            const {
+              exitCode,
+              stdout,
+              stderr
+            } = await exec.getExecOutput('docker', ['manifest', 'inspect', '-v', image]);
 
-          NB_PLATFORMS=$(echo "${PLATFORMS}" | jq -e '. | length')
-          if [ "$NB_PLATFORMS" != "1" ]; then
-            echo "Expected 1 platform, got: $NB_PLATFORMS"
-            echo "${MANIFEST}"
-            exit 1
-          fi
+            if (exitCode !== 0 || stderr) {
+              throw new Error(`Failed to inspect manifest for image: ${image}: ${stderr || stdout}`);
+            }
 
-          # Check if platform is valid
+            manifest = JSON.parse(stdout);
 
-          ## os=linux,architecture=amd64,variant=null
-          PLATFORM_EXISTS=$(echo "${PLATFORMS}" | jq -e 'any(.architecture == "amd64" and .os == "linux" and .variant == null)')
-          test "$PLATFORM_EXISTS" = "true"
+            // Check if all platforms are valid
+            const expectedPlatforms = [
+              { os: "linux", architecture: "amd64", variant: undefined }
+            ];
+
+            assert.equal(manifest.length, expectedPlatforms.length, `Expected ${expectedPlatforms.length} platforms, got: ${manifest.length}`);
+
+            expectedPlatforms.forEach(expectedPlatform => {
+              const platformExists = manifest.some(
+                platform => (
+                  platform?.Descriptor?.platform?.architecture === expectedPlatform.architecture &&
+                  platform?.Descriptor?.platform?.os === expectedPlatform.os &&
+                  platform?.Descriptor?.platform?.variant === expectedPlatform.variant
+                )
+              );
+
+              assert(
+                platformExists,
+                `Expected platform not found: os=${expectedPlatform.os},architecture=${expectedPlatform.architecture},variant=${expectedPlatform.variant}`
+              );
+            });
 
 # jscpd:ignore-end
