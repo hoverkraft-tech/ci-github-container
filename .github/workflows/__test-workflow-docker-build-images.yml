@@ -17,12 +17,27 @@ permissions:
 jobs:
   arrange:
     runs-on: ubuntu-latest
+    outputs:
+      github-app-token: ${{ steps.generate-token.outputs.token }}
     steps:
       - run: |
           if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
-            echo "GitHub token secrets is not set"
+            echo "GitHub token secret is not set"
             exit 1
           fi
+
+          if [ -z "${{ secrets.CI_BOT_APP_PRIVATE_KEY }}" ]; then
+            echo "CI Bot App private key secret is not set"
+            exit 1
+          fi
+
+      - id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.CI_BOT_APP_ID }}
+          private-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+
+      - run: echo "::add-mask::${{ steps.generate-token.outputs.token }}"
   act:
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
@@ -31,6 +46,7 @@ jobs:
       build-secrets: |
         SECRET_REPOSITORY_OWNER=${{ github.repository_owner }}
         SECRET_REPOSITORY=${{ github.repository }}
+        SECRET_TOKEN=${{ needs.arrange.outputs.github-app-token }}
     with:
       # First image is multi arch
       # Second image is mono arch
