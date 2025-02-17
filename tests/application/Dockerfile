@@ -33,4 +33,7 @@ RUN --mount=type=secret,id=SECRET_REPOSITORY_OWNER test "$(cat /run/secrets/SECR
 RUN --mount=type=secret,id=SECRET_REPOSITORY test -f /run/secrets/SECRET_REPOSITORY || (echo "Error: SECRET_REPOSITORY is not set" && exit 1);
 RUN --mount=type=secret,id=SECRET_REPOSITORY test "$(cat /run/secrets/SECRET_REPOSITORY)" = "$EXPECTED_REPOSITORY" || (echo "Error: SECRET_REPOSITORY is not \"$EXPECTED_REPOSITORY\"" && exit 1);
 
+RUN --mount=type=secret,id=SECRET_TOKEN test -f /run/secrets/SECRET_TOKEN || (echo "Error: SECRET_TOKEN is not set" && exit 1);
+RUN --mount=type=secret,id=SECRET_TOKEN test "$(cat /run/secrets/SECRET_TOKEN)" != "" || (echo "Error: SECRET_TOKEN is empty" && exit 1);
+
 USER test
