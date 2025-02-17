@@ -52,3 +52,4 @@ jobs:
     name: Test docker build images
     needs: linter
     uses: ./.github/workflows/__test-workflow-docker-build-images.yml
+    secrets: inherit

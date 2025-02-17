@@ -20,9 +20,10 @@ jobs:
     steps:
       - run: |
           if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
-            echo "GitHub token secrets is not set"
+            echo "GitHub token secret is not set"
             exit 1
           fi
+
   act:
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
@@ -31,6 +32,7 @@ jobs:
       build-secrets: |
         SECRET_REPOSITORY_OWNER=${{ github.repository_owner }}
         SECRET_REPOSITORY=${{ github.repository }}
+      build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
     with:
       # First image is multi arch
       # Second image is mono arch
@@ -71,6 +73,10 @@ jobs:
             }
           }
         ]
+      build-secret-github-app-id: ${{ vars.CI_BOT_APP_ID }}
+      build-secret-github-app-token-env: |
+        SECRET_ENV_GITHUB_APP_TOKEN_1
+        SECRET_ENV_GITHUB_APP_TOKEN_2
 
   assert:
     needs: act
