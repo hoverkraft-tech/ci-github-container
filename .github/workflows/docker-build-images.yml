@@ -101,6 +101,13 @@ on: # yamllint disable-line rule:truthy
           See <https://github.com/actions/create-github-app-token>.
         required: false
         type: string
+      build-secret-github-app-owner:
+        description: |
+          The owner of the GitHub App installation.
+          See <https://github.com/actions/create-github-app-token>.
+        required: false
+        type: string
+        default: ${{ github.repository_owner }}
     secrets:
       oci-registry-password:
         description: |
@@ -347,6 +354,7 @@ jobs:
         id: generate-token
         with:
           app-id: ${{ inputs.build-secret-github-app-id }}
+          owner: ${{  inputs.build-secret-github-app-owner }}
           private-key: ${{ secrets.build-secret-github-app-key }}
 
       - id: prepare-secret-envs
