@@ -375,17 +375,20 @@ jobs:
 
             core.exportVariable(githubAppTokenEnvName, githubAppToken);
 
-            const buildSecretGithubAppTokenEnv = `${{ inputs.build-secret-github-app-token-env }}`;
-            if (!buildSecretGithubAppTokenEnv) {
-              throw new Error(`"build-secret-github-app-token-env" input is missing`);
+            const buildSecretGithubAppTokenEnv = `${{ inputs.build-secret-github-app-token-env }}`.trim();
+            if (!buildSecretGithubAppTokenEnv.length) {
+              throw new Error(`"build-secret-github-app-token-env" input is empty`);
             }
 
-            secretEnvs += '\n' + buildSecretGithubAppTokenEnv
-              .split('\n')
-              .filter(Boolean)
-              .map(key => `${key}=${githubAppTokenEnvName}`).join('\n');
+            const mappedBuildSecretGithubAppTokenEnv = buildSecretGithubAppTokenEnv
+            .split('\n')
+            .map(key => key.trim())
+            .filter(Boolean)
+            .map(key => `${key}=${githubAppTokenEnvName}`).join('\n')
 
-            core.setOutput('secret-envs', secretEnvs);
+            secretEnvs = secretEnvs.trim() + '\n' + mappedBuildSecretGithubAppTokenEnv.trim();
+
+            core.setOutput('secret-envs', secretEnvs.trim());
 
       - id: build
         uses: ./self-workflow/actions/docker/build-image
