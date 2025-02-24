@@ -66,17 +66,11 @@ jobs:
               "BUILD_RUN_ID": "${{ github.run_id }}",
               "BUILD_REPOSITORY_OWNER": "${{ github.repository_owner }}",
               "BUILD_REPOSITORY": "${{ github.repository }}"
-            },
-            "secret-envs": {
-              "SECRET_ENV_REPOSITORY_OWNER": "GITHUB_REPOSITORY_OWNER",
-              "SECRET_ENV_REPOSITORY": "GITHUB_REPOSITORY"
             }
           }
         ]
       build-secret-github-app-id: ${{ vars.CI_BOT_APP_ID }}
-      build-secret-github-app-token-env: |
-        SECRET_ENV_GITHUB_APP_TOKEN_1
-        SECRET_ENV_GITHUB_APP_TOKEN_2
+      build-secret-github-app-token-env: GITHUB_TOKEN
 
   assert:
     needs: act

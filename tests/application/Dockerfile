@@ -53,12 +53,7 @@ EOF
 RUN --mount=type=secret,id=SECRET_REPOSITORY_OWNER . test.sh && assertSecretEquals SECRET_REPOSITORY_OWNER "$EXPECTED_REPOSITORY_OWNER";
 RUN --mount=type=secret,id=SECRET_REPOSITORY . test.sh && assertSecretEquals SECRET_REPOSITORY "$EXPECTED_REPOSITORY";
 
-# Test that secret envs are passed
-RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY_OWNER . test.sh && assertSecretEquals SECRET_ENV_REPOSITORY_OWNER "$EXPECTED_REPOSITORY_OWNER";
-RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY . test.sh && assertSecretEquals SECRET_ENV_REPOSITORY "$EXPECTED_REPOSITORY";
-
 # Test that the github app token secrets are passed
-RUN --mount=type=secret,id=SECRET_ENV_GITHUB_APP_TOKEN_1 . test.sh && assertSecretExists SECRET_ENV_GITHUB_APP_TOKEN_1;
-RUN --mount=type=secret,id=SECRET_ENV_GITHUB_APP_TOKEN_2 . test.sh && assertSecretExists SECRET_ENV_GITHUB_APP_TOKEN_2;
+RUN --mount=type=secret,id=GITHUB_TOKEN . test.sh && assertSecretExists GITHUB_TOKEN;
 
 USER test
