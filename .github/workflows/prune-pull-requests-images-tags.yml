@@ -21,7 +21,7 @@ on:
         type: string
         required: true
       prune-cache-images:
-        description: 'Prune cache image tags  (like "application-1/cache"). Default: true'
+        description: 'Prune cache image tags (like "application-1/cache"). Useful when building image with "registry" cache backend.'
         type: boolean
         default: true
         required: false
