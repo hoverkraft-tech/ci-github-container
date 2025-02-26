@@ -24,7 +24,7 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.20.2
+- uses: hoverkraft-tech/ci-github-container@0.21.0
   with:
     # Description: Working directory
     #
