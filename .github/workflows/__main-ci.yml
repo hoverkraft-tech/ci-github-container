@@ -34,7 +34,16 @@ jobs:
         [
           "application-test",
           "test-multi-arch",
-          "test-mono-arch",
+          "test-mono-arch"
+        ]
+
+  clean-with-cache:
+    needs: ci
+    uses: ./.github/workflows/prune-pull-requests-images-tags.yml
+    with:
+      prune-cache-images: true
+      images: |
+        [
           "test-build-args-secrets"
         ]
 
