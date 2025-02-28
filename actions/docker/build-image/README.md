@@ -33,7 +33,7 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.21.0
+- uses: hoverkraft-tech/ci-github-container@0.22.0
   with:
     # Description: OCI registry where to pull and push images
     #
@@ -105,6 +105,11 @@ permissions:
     # <https://docs.docker.com/build/ci/github-actions/secrets/>.
     #
     secret-envs: ""
+
+    # Description: Cache type. See <https://docs.docker.com/build/cache/backends>.
+    #
+    # Default: gha
+    cache-type: ""
 ```
 
 <!-- end usage -->
@@ -125,6 +130,7 @@ permissions:
 | <code>target</code>                | Sets the target stage to build.<br />See <https://github.com/docker/build-push-action#inputs>.                                                                                       |                                             | **false**    |
 | <code>secrets</code>               | List of secrets to expose to the build.<br />See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                                         |                                             | **false**    |
 | <code>secret-envs</code>           | List of secret environment variables to expose to the build (e.g., key=envname, MY_SECRET=MY_ENV_VAR).<br />See <https://docs.docker.com/build/ci/github-actions/secrets/>.          |                                             | **false**    |
+| <code>cache-type</code>            | Cache type.<br />See <https://docs.docker.com/build/cache/backends>.                                                                                                                 | <code>gha</code>                            | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->

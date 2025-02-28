@@ -24,7 +24,7 @@ Action to forge the name of a given image including registry, repository and giv
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.21.0
+- uses: hoverkraft-tech/ci-github-container@0.22.0
   with:
     # Description: OCI registry to prefix the image full name
     #
