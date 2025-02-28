@@ -108,6 +108,13 @@ on: # yamllint disable-line rule:truthy
         required: false
         type: string
         default: ${{ github.repository_owner }}
+      cache-type:
+        description: |
+          Cache type.
+          See <https://docs.docker.com/build/cache/backends>.
+        default: "gha"
+        type: string
+        required: false
     secrets:
       oci-registry-password:
         description: |
@@ -406,6 +413,7 @@ jobs:
           platform: ${{ matrix.image.platform }}
           secret-envs: ${{ steps.prepare-secret-envs.outputs.secret-envs }}
           secrets: ${{ secrets.build-secrets }}
+          cache-type: ${{ inputs.cache-type }}
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639

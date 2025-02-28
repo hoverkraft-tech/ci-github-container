@@ -103,6 +103,12 @@ inputs:
       List of secret environment variables to expose to the build (e.g., key=envname, MY_SECRET=MY_ENV_VAR).
       See <https://docs.docker.com/build/ci/github-actions/secrets/>.
     required: false
+  cache-type:
+    description: |
+      Cache type.
+      See <https://docs.docker.com/build/cache/backends>.
+    default: "gha"
+    required: false
 
 runs:
   using: "composite"
@@ -140,6 +146,14 @@ runs:
         CACHE_FLAVOR="suffix=$TAG_SUFFIX"
 
         echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
+
+        # Define cache image
+        CACHE_TYPE="${{ inputs.cache-type }}"
+        if [ "$CACHE_TYPE" = "registry" ]; then
+          echo "cache-image=${{ steps.metadata.outputs.image }}/cache" >> "$GITHUB_OUTPUT"
+        else
+          echo "cache-image=${{ steps.metadata.outputs.image }}" >> "$GITHUB_OUTPUT"
+        fi
 
         # Check if docker exists
         if command -v docker &> /dev/null; then
@@ -188,10 +202,10 @@ runs:
     - id: cache
       uses: int128/docker-build-cache-config-action@v1.37.0
       with:
-        image: ${{ steps.metadata.outputs.image }}/cache
+        image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
-        cache-type: gha
+        cache-type: ${{ inputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
