@@ -23,7 +23,7 @@ on:
       prune-cache-images:
         description: 'Prune cache image tags (like "application-1/cache"). Useful when building image with "registry" cache backend.'
         type: boolean
-        default: true
+        default: false
         required: false
       pull-request-tag-filter:
         description: |
