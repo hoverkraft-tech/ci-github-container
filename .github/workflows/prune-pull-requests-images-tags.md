@@ -46,8 +46,8 @@ jobs:
       images: ""
 
       # Prune cache image tags (like "application-1/cache"). Useful when building image with "registry" cache backend.
-      # Default: true
-      prune-cache-images: true
+      # Default: false
+      prune-cache-images: false
 
       # The regular expression to match pull request tags. Must have a capture group for the pull request number.
       pull-request-tag-filter: "^pr-([0-9]+)(?:-|$)"
