@@ -41,10 +41,28 @@ inputs:
       See <https://github.com/docker/login-action#usage>.
     default: ${{ github.token }}
     required: false
+  enable-lint:
+    description: |
+      Enable linting of the Helm chart.
+      See <https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md>.
+    required: false
+    default: "true"
+  enable-test:
+    description: |
+      Enable testing of the Helm chart.
+      See <https://github.com/helm/chart-testing/blob/main/doc/ct_install.md>.
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
   steps:
+    - shell: bash
+      if: ${{ inputs.enable-lint != 'true' && inputs.enable-test != 'true' }}
+      run: |
+        echo "::error ::At least one of 'enable-lint' or 'enable-test' input must be true"
+        exit 1
+
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.17.0
       with:
         fetch-depth: 0
@@ -61,7 +79,7 @@ runs:
         fi
 
     - name: Install tools with asdf
-      if: steps.check-tools-version.outputs.tools-version-exists == 'true'
+      if: ${{ steps.check-tools-version.outputs.tools-version-exists == 'true' }}
       uses: asdf-vm/actions/install@v3
 
     - name: Check for ct.yaml file
@@ -93,6 +111,7 @@ runs:
         done
 
     - name: Run chart-testing (lint)
+      if: ${{ inputs.enable-lint == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
@@ -104,9 +123,11 @@ runs:
         ct lint $LINT_ARGS
 
     - name: Create kind cluster
+      if: ${{ inputs.enable-test == 'true' }}
       uses: helm/kind-action@v1.12.0
 
-    - name: install default registry secrets
+    - name: Install default registry secrets
+      if: ${{ inputs.enable-test == 'true' }}
       shell: bash
       run: |
         echo "DOCKER_REGISTRY=$DOCKER_REGISTRY"
@@ -126,6 +147,7 @@ runs:
         DOCKER_PASSWORD: ${{ inputs.oci-registry-password }}
 
     - name: Define target branch
+      if: ${{ inputs.enable-test == 'true' }}
       id: define-target-branch
       shell: bash
       run: |
@@ -137,6 +159,7 @@ runs:
         echo "target-branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
 
     - name: Run chart-testing (install)
+      if: ${{ inputs.enable-test == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
