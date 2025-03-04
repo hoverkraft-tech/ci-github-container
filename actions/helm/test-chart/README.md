@@ -58,6 +58,18 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
     #
     # Default: ${{ github.token }}
     oci-registry-password: ""
+
+    # Description: Enable linting of the Helm chart. See
+    # <https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md>.
+    #
+    # Default: true
+    enable-lint: ""
+
+    # Description: Enable testing of the Helm chart. See
+    # <https://github.com/helm/chart-testing/blob/main/doc/ct_install.md>.
+    #
+    # Default: true
+    enable-test: ""
 ```
 
 <!-- end usage -->
@@ -71,6 +83,8 @@ Action to test a Helm chart. Mainly using [helm/chart-testing-action](https://gi
 | <code>oci-registry</code>          | OCI registry where to pull and push images                                                                                                                                           | <code>ghcr.io</code>                        | **false**    |
 | <code>oci-registry-username</code> | Username used to log against the OCI registry.<br />See <https://github.com/docker/login-action#usage>.                                                                              | <code>${{ github.repository_owner }}</code> | **false**    |
 | <code>oci-registry-password</code> | Password or personal access token used to log against the OCI registry.<br />Can be passed in using "secrets.GITHUB_TOKEN".<br />See <https://github.com/docker/login-action#usage>. | <code>${{ github.token }}</code>            | **false**    |
+| <code>enable-lint</code>           | Enable linting of the Helm chart.<br />See <https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md>.                                                                         | <code>true</code>                           | **false**    |
+| <code>enable-test</code>           | Enable testing of the Helm chart.<br />See <https://github.com/helm/chart-testing/blob/main/doc/ct_install.md>.                                                                      | <code>true</code>                           | **false**    |
 
 <!-- end inputs -->
 <!-- start outputs -->
