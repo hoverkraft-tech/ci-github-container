@@ -6,6 +6,8 @@ USER test
 
 FROM base AS prod
 
+CMD ["tail", "-f", "/dev/null"]
+
 FROM alpine:3 AS test
 
 # Create user and group
