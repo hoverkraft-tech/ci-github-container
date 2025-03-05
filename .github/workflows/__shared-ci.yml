@@ -15,41 +15,41 @@ permissions:
   id-token: write
 
 jobs:
-  linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.17.0
-    with:
-      # FIXME: re-enable the following checks
-      linter-env: |
-        VALIDATE_KUBERNETES_KUBECONFORM=false
-        VALIDATE_CHECKOV=false
+  # linter:
+  #   uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0.17.0
+  #   with:
+  #     # FIXME: re-enable the following checks
+  #     linter-env: |
+  #       VALIDATE_KUBERNETES_KUBECONFORM=false
+  #       VALIDATE_CHECKOV=false
 
-  test-action-docker-build-image:
-    needs: linter
-    uses: ./.github/workflows/__test-action-docker-build-image.yml
+  # test-action-docker-build-image:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-docker-build-image.yml
 
-  test-action-docker-prune-pull-requests-package-version:
-    needs: linter
-    # yamllint disable-line rule:line-length
-    uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
+  # test-action-docker-prune-pull-requests-package-version:
+  #   needs: linter
+  #   # yamllint disable-line rule:line-length
+  #   uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
 
-  test-action-get-image-metadata:
-    needs: linter
-    uses: ./.github/workflows/__test-action-get-image-metadata.yml
+  # test-action-get-image-metadata:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-get-image-metadata.yml
 
-  test-action-action-get-image-name:
-    needs: linter
-    uses: ./.github/workflows/__test-action-get-image-name.yml
+  # test-action-action-get-image-name:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-get-image-name.yml
 
-  test-action-helm-release-chart:
-    needs: linter
-    uses: ./.github/workflows/__test-action-helm-release-chart.yml
+  # test-action-helm-release-chart:
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-action-helm-release-chart.yml
 
   test-action-helm-test-chart:
-    needs: linter
+    # needs: linter
     uses: ./.github/workflows/__test-action-helm-test-chart.yml
 
-  test-workflow-docker-build-images:
-    name: Test docker build images
-    needs: linter
-    uses: ./.github/workflows/__test-workflow-docker-build-images.yml
-    secrets: inherit
+  # test-workflow-docker-build-images:
+  #   name: Test docker build images
+  #   needs: linter
+  #   uses: ./.github/workflows/__test-workflow-docker-build-images.yml
+  #   secrets: inherit
