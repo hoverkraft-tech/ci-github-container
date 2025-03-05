@@ -46,7 +46,8 @@ jobs:
             "name": "test-prune-${{ github.run_number }}",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
-            "target": "prod",
+            "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
+            "target": "base",
             "platforms": ["linux/amd64","linux/arm64"]
           }
         ]
@@ -67,7 +68,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push extra docker image tags for test
+      - name: Generate a image tag that should be deleted
         run: |
           BASE_IMAGE=$(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[0]')
           NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ needs.setup.outputs.tag }}
@@ -112,7 +113,7 @@ jobs:
               assert.equal(deletedImageTagsForCurrentPullRequest.length, 0, `"deleted-image-tags" output contains current pull request image tag`);
             }
 
-      - name: Assert - Ensure packages versions have been deleted
+      - name: Assert - Ensure expected packages versions have been deleted
         uses: actions/github-script@v7.0.1
         with:
           github-token: ${{ github.token }}

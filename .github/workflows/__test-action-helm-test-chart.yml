@@ -7,28 +7,45 @@ on:
 
 permissions:
   contents: read
-  packages: read
+  issues: read
+  packages: write
+  pull-requests: read
+  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
+  id-token: write
 
 jobs:
-  tests:
+  build-test-images:
+    uses: ./.github/workflows/docker-build-images.yml
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      images: |
+        [
+          {
+            "name": "application-test",
+            "context": ".",
+            "dockerfile": "./tests/application/Dockerfile",
+            "target": "prod",
+            "platforms": ["linux/amd64"],
+            "tag": "0.1.0"
+          }
+        ]
+
+  test-lint-and-install:
     name: Test for "helm/test-chart" action
+    needs: build-test-images
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - id: get-image-metadata
-        uses: ./actions/docker/get-image-metadata
-        with:
-          oci-registry: ghcr.io
-          image: application-test
-
       - id: test-chart
         uses: ./actions/helm/test-chart
         with:
+          check-diff-only: false
           helm-set: |
-            image.tag=${{ steps.get-image-metadata.outputs.tags }}
+            image.tag=0.1.0
           helm-repositories: |
             bitnami https://charts.bitnami.com/bitnami
           oci-registry: ghcr.io
-          oci-registry-username: ${{ github.actor }}
+          oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}

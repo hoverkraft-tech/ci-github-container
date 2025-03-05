@@ -15,34 +15,13 @@ spec:
   containers:
     - name: wget
       image: busybox@sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87b2b85a32def253c7
-      command: ['wget']
-      args: ['{{ include "test-application.fullname" . }}:{{ .Values.service.port }}']
-      readinessProbe:
-        exec:
-          command:
-            - wget
-            - -O
-            - /dev/null
-            - -q
-            - {{ include "test-application.fullname" . }}:{{ .Values.service.port }}
-        initialDelaySeconds: 5
-        periodSeconds: 5
-        timeoutSeconds: 1
-        successThreshold: 1
-        failureThreshold: 3
-      livenessProbe:
-        exec:
-          command:
-            - wget
-            - -O
-            - /dev/null
-            - -q
-            - {{ include "test-application.fullname" . }}:{{ .Values.service.port }}
-        initialDelaySeconds: 5
-        periodSeconds: 5
-        timeoutSeconds: 1
-        successThreshold: 1
-        failureThreshold: 3
+      command:
+        - /bin/sh
+        - -c
+        - |
+            echo "+ testing the application using wget"
+            set -x
+            wget -O /dev/null -q '{{ include "test-application.fullname" . }}:{{ .Values.service.port }}'
       resources:
         limits:
           cpu: "100m"
