@@ -22,6 +22,7 @@ image:
   digest: "sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"
 
 imagePullSecrets: []
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -53,7 +54,7 @@ securityContext:
 
 service:
   type: ClusterIP
-  port: 80
+  port: 8080
 
 ingress:
   enabled: false
