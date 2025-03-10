@@ -27,6 +27,7 @@ jobs:
                 },
                 { "path": ".image.tag", "value": "0.1.0" }
               ]
+
           - name: umbrella-application
             values: |
               [
@@ -52,7 +53,7 @@ jobs:
         with:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}
-          chart: ${{ matrix.chart.name }}-test
+          name: ${{ matrix.chart.name }}-test
           path: tests/charts/${{ matrix.chart.name }}
           values: ${{ matrix.chart.values }}
           tag: 0.1.0
@@ -62,7 +63,7 @@ jobs:
       # yamllint disable rule:line-length
       - name: Check release chart output
         run: |
-          if [ "${{ steps.release-chart.outputs.image }}" != "ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container:0.1.0" ]; then
+          if [ "${{ steps.release-chart.outputs.image }}" != "ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test:0.1.0" ]; then
             echo "Unexpected chart image name"
             exit 1
           fi
@@ -72,7 +73,7 @@ jobs:
       - name: Check chart status
         run: |
           echo ${{ github.token }} | helm registry login -u ${{ github.repository_owner }} --password-stdin ghcr.io
-          helm pull --version "0.1.0" oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container
+          helm pull --version "0.1.0" oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test
         env:
           HELM_EXPERIMENTAL_OCI: "1"
     # yamllint enable rule:line-length
