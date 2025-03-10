@@ -16,7 +16,9 @@
 -->
 <!-- start description -->
 
-Action to release a Helm chart to OCI registry
+Action to release a Helm chart to OCI registry.
+Supports umbrella charts: if a chart has local dependencies having version 0.0.0,
+the action will update those dependencies version with the given tag, then update the Chart.lock accordingly.
 
 <!-- end description -->
 <!-- start contents -->
