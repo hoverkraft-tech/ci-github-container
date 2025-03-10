@@ -310,4 +310,3 @@ runs:
         registry: ${{ inputs.oci-registry }}
         registry_username: ${{ inputs.oci-registry-username }}
         registry_password: ${{ inputs.oci-registry-password }}
-        update_dependencies: "true" # FIXME: Should be false, because updating dependencies during release is risky
