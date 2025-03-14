@@ -5,9 +5,9 @@
 ---
 name: Prune pull requests images tags
 
-on:
+on: # yamllint disable-line rule:truthy
   workflow_call:
-    #checkov:skip=CKV_GHA_7: required
+    # checkov:skip=CKV_GHA_7: required
     inputs:
       runs-on:
         description: |

@@ -2,7 +2,7 @@
 name: Test for "helm/test-chart" action
 run-name: Test for "helm/test-chart" action
 
-on:
+on: # yamllint disable-line rule:truthy
   workflow_call:
 
 permissions:

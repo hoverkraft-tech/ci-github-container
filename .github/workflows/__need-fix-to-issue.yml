@@ -6,7 +6,7 @@ on: # yamllint disable-line rule:truthy
     branches:
       - main
   workflow_dispatch:
-    #checkov:skip=CKV_GHA_7: required
+    # checkov:skip=CKV_GHA_7: required
     inputs:
       manual-commit-ref:
         description: "The SHA of the commit to get the diff for"

@@ -2,7 +2,7 @@
 name: Test for "docker/get-image-metadata" action
 run-name: Test for "docker/get-image-metadata" action
 
-on:
+on: # yamllint disable-line rule:truthy
   workflow_call:
 
 permissions:
@@ -15,13 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - id: get-image-metadata
+      - name: Act
+        id: get-image-metadata
         uses: ./actions/docker/get-image-metadata
         with:
           oci-registry: ghcr.io
           image: application-test
 
-      - name: Check get image metadata ouputs
+      - name: Assert - Check get image metadata ouputs
         uses: actions/github-script@v7.0.1
         with:
           script: |
@@ -67,14 +68,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - id: get-image-metadata
+      - name: Act
+        id: get-image-metadata
         uses: ./actions/docker/get-image-metadata
         with:
           oci-registry: ghcr.io
           image: application-test
           tag: 1.0.0
 
-      - name: Check get image metadata ouputs
+      - name: Assert - Check get image metadata ouputs
         uses: actions/github-script@v7.0.1
         with:
           script: |

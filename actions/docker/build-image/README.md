@@ -6,11 +6,13 @@
 <!--
 // jscpd:ignore-start
 -->
+<!-- markdownlint-disable MD013 -->
 <!-- start badges -->
 
 <a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
 
 <!-- end badges -->
+<!-- markdownlint-enable MD013 -->
 <!--
 // jscpd:ignore-end
 -->
@@ -133,6 +135,7 @@ permissions:
 | <code>cache-type</code>            | Cache type.<br />See <https://docs.docker.com/build/cache/backends>.                                                                                                                 | <code>gha</code>                            | **false**    |
 
 <!-- end inputs -->
+<!-- markdownlint-disable MD013 -->
 <!-- start outputs -->
 
 | **Output**               | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -140,5 +143,6 @@ permissions:
 | <code>built-image</code> | Built image data.<br />Example: {<br /> "name": "application",<br /> "registry": "ghcr.io",<br /> "repository": "my-org/my-repo/application",<br /> "tags": [<br /> "pr-63-5222075",<br /> "pr-63"<br /> ],<br /> "images": [<br /> "ghcr.io/my-org/my-repo/application:pr-63-5222075",<br /> "ghcr.io/my-org/my-repo/application:pr-63"<br /> ],<br /> "digests": [<br /> "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"<br /> ],<br /> "annotations": {<br /> "org.opencontainers.image.created": "2021-09-30T14:00:00Z",<br /> "org.opencontainers.image.description": "Application image"<br /> }<br />} |
 
 <!-- end outputs -->
+<!-- markdownlint-enable MD013 -->
 <!-- start [.github/ghadocs/examples/] -->
 <!-- end [.github/ghadocs/examples/] -->
