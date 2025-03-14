@@ -78,5 +78,4 @@ jobs:
           helm pull --version "0.1.0" oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container
         env:
           HELM_EXPERIMENTAL_OCI: "1"
-
       # yamllint enable rule:line-length
