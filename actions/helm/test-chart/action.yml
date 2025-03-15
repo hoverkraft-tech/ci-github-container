@@ -158,9 +158,12 @@ runs:
       if: ${{ inputs.enable-install == 'true' && inputs.oci-registry != '' && inputs.oci-registry-username != '' && inputs.oci-registry-password != '' }}
       shell: bash
       run: |
+        SECRET_NAME="regcred"
+        echo "oci-registry-secret=$SECRET_NAME" >> "$GITHUB_OUTPUT"
+
         # See https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
         NAMESPACE="${{ steps.prepare-ct-variables.outputs.namespace }}"
-        kubectl --context kind-chart-testing create namespace "$NAMESPACE"
+        kubectl create namespace "$NAMESPACE"
 
         SECRET_NAME="regcred"
         DOCKER_REGISTRY="${{ inputs.oci-registry }}"
@@ -172,8 +175,6 @@ runs:
           --docker-server=$DOCKER_REGISTRY \
           --docker-username=$DOCKER_USERNAME \
           --docker-password=$DOCKER_PASSWORD
-
-        echo "oci-registry-secret=$SECRET_NAME" >> "$GITHUB_OUTPUT"
 
     - name: Run chart-testing (install)
       if: ${{ inputs.enable-install == 'true' }}
@@ -190,7 +191,7 @@ runs:
         OCI_REGISTRY_SECRET="${{ steps.oci-registry-secret.outputs.oci-registry-secret }}"
         if [ -n "$OCI_REGISTRY_SECRET" ]; then
           # Ensure secret exists
-          kubectl --context kind-chart-testing get secret "$OCI_REGISTRY_SECRET" --output=yaml --namespace=$NAMESPACE
+          kubectl get secret "$OCI_REGISTRY_SECRET" --output=yaml --namespace=$NAMESPACE
 
           HELM_SET="$HELM_SET
           imagePullSecrets[0].name=${OCI_REGISTRY_SECRET}"
@@ -203,6 +204,9 @@ runs:
             if [ -z "$line" ]; then
               continue
             fi
+            # Remove leading and trailing whitespace
+            line=$(echo "$line" | xargs) || true
+
             # Escape commas in the line
             line=$(echo "$line" | sed 's/,/\\,/g') || true
 
@@ -216,8 +220,8 @@ runs:
 
         HELM_EXTRA_SET_ARGS="--set=${HELM_EXTRA_SET_ARGS}"
 
-        echo "::debug::ct install ${{ steps.prepare-ct-variables.outputs.args }} --helm-extra-set-args ${HELM_EXTRA_SET_ARGS}"
+        COMMAND="ct install ${{ steps.prepare-ct-variables.outputs.args }} --namespace $NAMESPACE --helm-extra-set-args='${HELM_EXTRA_SET_ARGS}'"
+        echo "::debug ::$COMMAND"
 
-        ct install ${{ steps.prepare-ct-variables.outputs.args }} \
-          --namespace $NAMESPACE \
-          --helm-extra-set-args ${HELM_EXTRA_SET_ARGS}
+        # shellcheck disable=SC2086
+        eval $COMMAND
