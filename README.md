@@ -25,7 +25,7 @@ Opinionated GitHub Actions and workflows for continuous integration in container
 
 ### Helm
 
-#### - [Parse chart URI](actions/helm/prse-chart-uri/README.md)
+#### - [Parse chart URI](actions/helm/parse-chart-uri/README.md)
 
 #### - [Release chart](actions/helm/release-chart/README.md)
 
