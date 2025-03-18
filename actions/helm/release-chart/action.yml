@@ -178,7 +178,19 @@ runs:
           const crypto = require('node:crypto');
           const yaml = require("yaml");
 
+          const rootChartFile = `${{ inputs.path }}/Chart.yaml`;
+          const rootChartFileContent = yaml.parse(fs.readFileSync(rootChartFile, 'utf8'));
+
+          // Check if the root chart has dependencies
+          if (!rootChartFileContent.dependencies || rootChartFileContent.dependencies.length === 0) {
+            return;
+          }
+
           const chartLockFile = `${{ inputs.path }}/Chart.lock`;
+          if (!fs.existsSync(chartLockFile)) {
+            return core.setFailed(`Chart.lock file not found: ${chartLockFile}`);
+          }
+
           const chartLockFileContent = yaml.parse(fs.readFileSync(chartLockFile, 'utf8'));
 
           // Update ombrella dependencies versions
@@ -247,9 +259,6 @@ runs:
 
             return sortedDependency;
           }
-
-          const rootChartFile = `${{ inputs.path }}/Chart.yaml`;
-          const rootChartFileContent = yaml.parse(fs.readFileSync(rootChartFile, 'utf8'));
 
           const req = rootChartFileContent.dependencies;
           const lock = dependencies;
