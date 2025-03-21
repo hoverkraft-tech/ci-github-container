@@ -25,7 +25,7 @@
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.22.0
+- uses: hoverkraft-tech/ci-github-container@0.24.1
   with:
     # Description: Chart URI to parse
     #
