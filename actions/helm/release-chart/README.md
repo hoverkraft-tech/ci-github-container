@@ -31,7 +31,7 @@ the action will update those dependencies version with the given tag, then updat
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.24.0
+- uses: hoverkraft-tech/ci-github-container@0.24.1
   with:
     # Description: OCI registry where to push chart. See
     # <https://github.com/appany/helm-oci-chart-releaser#usage>.
