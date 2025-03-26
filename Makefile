@@ -8,6 +8,9 @@ lint: ## Execute linting
 
 lint-fix: ## Execute linting and fix
 	$(call run_linter, \
+		-e FIX_JSON_PRETTIER=true \
+		-e FIX_JAVASCRIPT_PRETTIER=true \
+		-e FIX_JAVASCRIPT_STANDARD=true \
 		-e FIX_YAML_PRETTIER=true \
 		-e FIX_MARKDOWN=true \
 		-e FIX_MARKDOWN_PRETTIER=true \

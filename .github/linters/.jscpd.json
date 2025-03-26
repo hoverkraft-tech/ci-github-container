@@ -1,6 +1,4 @@
 {
   "threshold": 5,
-  "ignore": [
-    "/workspace/actions/**/README.md"
-  ]
+  "ignore": ["/workspace/actions/**/README.md"]
 }

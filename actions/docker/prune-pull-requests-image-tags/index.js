@@ -11,7 +11,7 @@ module.exports = async ({
 
   let currentPage = 1
   const allDeletedTags = []
-  while (true) {
+  for (;;) {
     const data = await getAllPackageVersions({
       github,
       context,

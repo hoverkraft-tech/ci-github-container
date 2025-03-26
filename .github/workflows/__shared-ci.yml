@@ -23,6 +23,7 @@ jobs:
       linter-env: |
         VALIDATE_KUBERNETES_KUBECONFORM=false
         VALIDATE_CHECKOV=false
+        VALIDATE_JAVASCRIPT_PRETTIER=false
 
   test-action-docker-build-image:
     needs: linter
