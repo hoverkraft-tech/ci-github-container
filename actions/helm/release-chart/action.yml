@@ -65,10 +65,10 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0.18.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@edc1e53751a82ce335e7c3208a32b6ee03856a9f # 0.20.0
 
     - id: chart-values-updates
-      uses: actions/github-script@v7.0.1
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
           const path = require('node:path');
@@ -159,18 +159,18 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@v4.45.1
+    - uses: mikefarah/yq@8bf425b4d1344db7cd469a8d10a390876e0c77fd # v4.45.1
       with:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
 
     - shell: bash
       run: npm install yaml
 
     - name: Rewrite the Chart.lock to match with updated ombrella dependencies if any
-      uses: actions/github-script@v7.0.1
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
           const fs = require('node:fs');
@@ -272,7 +272,7 @@ runs:
           // Update Chart.lock file
           fs.writeFileSync(chartLockFile, updatedChartLockFileContent, 'utf8');
 
-    - uses: azure/setup-helm@v4
+    - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
 
     - shell: bash
       run: |
@@ -311,7 +311,7 @@ runs:
         done
 
     - id: chart-releaser
-      uses: appany/helm-oci-chart-releaser@v0.4.2
+      uses: appany/helm-oci-chart-releaser@dd0551c15abe174eb57824ecde62e976091094da # v0.4.2
       with:
         name: ${{ github.event.repository.name }}
         repository: ${{ github.repository }}/charts/${{ inputs.chart }}

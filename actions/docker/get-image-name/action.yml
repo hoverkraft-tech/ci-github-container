@@ -31,7 +31,6 @@ runs:
     - id: image-name-generator
       shell: bash
       run: |
-
         REPOSITORY="$(echo "${{ inputs.repository }}" | awk '{print tolower($0)}')"
         if [ -z "$REPOSITORY" ]; then echo "Repository name is required"; exit 1; fi
         IMAGE_NAME="$REPOSITORY"
