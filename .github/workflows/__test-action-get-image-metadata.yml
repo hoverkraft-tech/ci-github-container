@@ -60,7 +60,36 @@ jobs:
 
             const tagsOutput = `${{ steps.get-image-metadata.outputs.tags }}`;
             assert(tagsOutput.length, `"tags" output is empty`);
-            assert(tagsOutput.startsWith("ghcr.io/hoverkraft-tech/ci-github-container/application-test:"), `"tags" output is not valid`);
+
+            const tags = tagsOutput.split("\n").filter(Boolean);
+            assert(tags.length, `"tags" output is empty`);
+
+            if (`${{ github.event_name }}` === "pull_request") {
+              assert.equal(
+                tags.length,
+                2,
+                `"tags" output must contain 2 tags for pull_request event`
+              );
+
+              assert(
+                tags[0].startsWith("ghcr.io/hoverkraft-tech/ci-github-container/application-test:pr-${{ github.event.pull_request.number }}-"),
+                `"tags" output is not valid`
+              );
+
+              assert.equal(
+                tags[1],
+                "ghcr.io/hoverkraft-tech/ci-github-container/application-test:pr-${{ github.event.pull_request.number }}", `"tags" output is not valid`
+              );
+            } else {
+              assert.equal(
+                tags.length,
+                2,
+                `"tags" output must contain 2 tags for push event`
+              );
+
+              assert.equal(tag[0],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:main", `"tags" output is not valid`);
+              assert.equal(tags[1],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:latest", `"tags" output is not valid`);
+            }
 
   tests-with-given-tag:
     name: Test for "docker/get-image-metadata" action with given tag

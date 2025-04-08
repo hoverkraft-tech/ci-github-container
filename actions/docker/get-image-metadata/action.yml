@@ -67,7 +67,7 @@ runs:
         result-encoding: string
         script: |
           // If push on default branch set tag to latest
-          const isPushOnDefaultBranch = context.eventName === 'push' && context.ref === `refs/heads/${{ github.base_ref }}`;
+          const isPushOnDefaultBranch = context.eventName === 'push' && `${{ github.ref }}` === `${{ github.event.repository.default_branch }}`;
           core.setOutput('flavor', isPushOnDefaultBranch ? 'latest=true' : 'latest=false');
 
           const tagInput = `${{ inputs.tag }}`
