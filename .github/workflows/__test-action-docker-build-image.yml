@@ -46,59 +46,69 @@ jobs:
           script: |
             const assert = require("assert");
 
-            const builtImageOutput = ${{ steps.build-image.outputs.built-image }};
+            const builtImageOutput = ${{ toJSON(steps.build-image.outputs.built-image) }};
             assert(builtImageOutput, `"built-image" output is empty`);
-            assert.equal(builtImageOutput.name, "application-test", `"name" output is not valid`);
-            assert.equal(builtImageOutput.registry, "ghcr.io", `"registry" output is not valid`);
+
+            let builtImage;
+            try {
+              builtImage = JSON.parse(builtImageOutput);
+            } catch (error) {
+              assert.fail(`Failed to parse built image output: ${error}`);
+            }
+
+            assert(builtImage, `"built-image" output is empty`);
+
+            assert.equal(builtImage.name, "application-test", `"name" output is not valid`);
+            assert.equal(builtImage.registry, "ghcr.io", `"registry" output is not valid`);
             assert.equal(
-              builtImageOutput.repository,
+              builtImage.repository,
               "hoverkraft-tech/ci-github-container/application-test",
               `"repository" output is not valid`
             );
             assert.equal(
-              builtImageOutput.digests.length,
+              builtImage.digests.length,
               1,
               `"digests" output is not valid`
             );
             assert.match(
-              builtImageOutput.digests[0],
+              builtImage.digests[0],
               /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-test@sha256:[a-f0-9]{64}$/,
               `"digests" output is not valid`
             );
 
             // Annotations
             assert.match(
-              builtImageOutput.annotations["org.opencontainers.image.created"],
+              builtImage.annotations["org.opencontainers.image.created"],
               /[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z/,
               `"annotations.org.opencontainers.image.created" output is not valid`
             );
             assert.equal(
-              builtImageOutput.annotations["org.opencontainers.image.description"],
+              builtImage.annotations["org.opencontainers.image.description"],
               "Opinionated GitHub Actions and workflows for continuous integration in container (OCI) context",
               `"annotations.org.opencontainers.image.authors" output is not valid`
             );
             assert.equal(
-              builtImageOutput.annotations["org.opencontainers.image.licenses"],
+              builtImage.annotations["org.opencontainers.image.licenses"],
               "MIT",
               `"annotations.org.opencontainers.image.licenses" output is not valid`
             );
             assert.match(
-              builtImageOutput.annotations["org.opencontainers.image.revision"],
+              builtImage.annotations["org.opencontainers.image.revision"],
               /^[a-f0-9]{40}$/,
               `"annotations.org.opencontainers.image.revision" output is not valid`
             );
             assert.equal(
-              builtImageOutput.annotations["org.opencontainers.image.source"],
+              builtImage.annotations["org.opencontainers.image.source"],
               "https://github.com/hoverkraft-tech/ci-github-container",
               `"annotations.org.opencontainers.image.source" output is not valid`
             );
             assert.equal(
-              builtImageOutput.annotations["org.opencontainers.image.title"],
+              builtImage.annotations["org.opencontainers.image.title"],
               "ci-github-container",
               `"annotations.org.opencontainers.image.title" output is not valid`
             );
             assert.equal(
-              builtImageOutput.annotations["org.opencontainers.image.url"],
+              builtImage.annotations["org.opencontainers.image.url"],
               "https://github.com/hoverkraft-tech/ci-github-container",
               `"annotations.org.opencontainers.image.url" output is not valid`
             );
@@ -108,28 +118,28 @@ jobs:
               const prShaTag = `pr-${{ github.event.pull_request.number }}-${shortSha}`;
               const prTag = `pr-${{ github.event.pull_request.number }}`;
 
-              assert.equal(builtImageOutput.tags.length, 2, `"tags" output is not valid`);
+              assert.equal(builtImage.tags.length, 2, `"tags" output is not valid`);
 
-              assert.equal(builtImageOutput.tags[0], prShaTag, `"tags" output is not valid`);
-              assert.equal(builtImageOutput.tags[1], prTag, `"tags" output is not valid`);
+              assert.equal(builtImage.tags[0], prShaTag, `"tags" output is not valid`);
+              assert.equal(builtImage.tags[1], prTag, `"tags" output is not valid`);
 
               assert.equal(
-                builtImageOutput.images.length,
+                builtImage.images.length,
                 2,
                 `"images" output is not valid`
               );
               assert.equal(
-                builtImageOutput.images[0],
+                builtImage.images[0],
                 `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${prShaTag}`,
                 `"images" output is not valid`
               );
               assert.equal(
-                builtImageOutput.images[1],
+                builtImage.images[1],
                 `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${prTag}`,
                 `"images" output is not valid`
               );
               assert.equal(
-                builtImageOutput.annotations["org.opencontainers.image.version"],
+                builtImage.annotations["org.opencontainers.image.version"],
                 prTag,
                 `"annotations.org.opencontainers.image.version" output is not valid`
               );
@@ -137,18 +147,18 @@ jobs:
             } else {
               const refTag = `${{ github.ref_name }}`;
 
-              assert.equal(builtImageOutput.tags.length, 1, `"tags" output is not valid`);
-              assert.equal(builtImageOutput.tags[0], refTag, `"tags" output is not valid`);
+              assert.equal(builtImage.tags.length, 1, `"tags" output is not valid`);
+              assert.equal(builtImage.tags[0], refTag, `"tags" output is not valid`);
 
-              assert.equal(builtImageOutput.images.length, 1, `"images" output is not valid`);
+              assert.equal(builtImage.images.length, 1, `"images" output is not valid`);
               assert.equal(
-                builtImageOutput.images[0],
+                builtImage.images[0],
                 `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${refTag}`,
                 `"images" output is not valid`
               );
 
               assert.equal(
-                builtImageOutput.annotations["org.opencontainers.image.version"],
+                builtImage.annotations["org.opencontainers.image.version"],
                 refTag,
                 `"annotations.org.opencontainers.image.version" output is not valid`
               );
@@ -211,11 +221,20 @@ jobs:
           script: |
             const assert = require("assert");
 
-            const builtImageOutput = ${{ steps.build-image.outputs.built-image }};
+            const builtImageOutput = ${{ toJSON(steps.build-image.outputs.built-image) }};
             assert(builtImageOutput, `"built-image" output is empty`);
 
-            assert.equal(builtImageOutput.tags.length, 1, `"tags" output is not valid`);
-            assert.equal(builtImageOutput.tags[0], '0.1.0', `"tags" output is not valid`);
+            let builtImage;
+            try {
+              builtImage = JSON.parse(builtImageOutput);
+            } catch (error) {
+              assert.fail(`Failed to parse built image output: ${error}`);
+            }
+
+            assert(builtImage, `"built-image" output is empty`);
+
+            assert.equal(builtImage.tags.length, 1, `"tags" output is not valid`);
+            assert.equal(builtImage.tags[0], '0.1.0', `"tags" output is not valid`);
 
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
