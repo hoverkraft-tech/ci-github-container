@@ -87,7 +87,7 @@ jobs:
                 `"tags" output must contain 2 tags for push event`
               );
 
-              assert.equal(tag[0],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:main", `"tags" output is not valid`);
+              assert.equal(tags[0],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:main", `"tags" output is not valid`);
               assert.equal(tags[1],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:latest", `"tags" output is not valid`);
             }
 

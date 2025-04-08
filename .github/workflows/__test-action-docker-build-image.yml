@@ -147,13 +147,20 @@ jobs:
             } else {
               const refTag = `${{ github.ref_name }}`;
 
-              assert.equal(builtImage.tags.length, 1, `"tags" output is not valid`);
+              assert.equal(builtImage.tags.length, 2, `"tags" output is not valid`);
               assert.equal(builtImage.tags[0], refTag, `"tags" output is not valid`);
+              assert.equal(builtImage.tags[1], "latest", `"tags" output is not valid`);
 
-              assert.equal(builtImage.images.length, 1, `"images" output is not valid`);
+              assert.equal(builtImage.images.length, 2, `"images" output is not valid`);
               assert.equal(
                 builtImage.images[0],
                 `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${refTag}`,
+                `"images" output is not valid`
+              );
+
+              assert.equal(
+                builtImage.images[1],
+                `ghcr.io/hoverkraft-tech/ci-github-container/application-test:latest`,
                 `"images" output is not valid`
               );
 

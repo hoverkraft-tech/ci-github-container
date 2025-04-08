@@ -66,15 +66,16 @@ runs:
       with:
         result-encoding: string
         script: |
-          // If push on default branch set tag to latest
-          const isPushOnDefaultBranch = context.eventName === 'push' && `${{ github.ref }}` === `${{ github.event.repository.default_branch }}`;
-          core.setOutput('flavor', isPushOnDefaultBranch ? 'latest=true' : 'latest=false');
-
           const tagInput = `${{ inputs.tag }}`
           if (tagInput.length) {
             core.setOutput('tags',`type=semver,pattern={{raw}},value=${tagInput}`);
+            core.setOutput('flavor', 'latest=false');
             return;
           }
+
+          // If push on default branch set tag to latest
+          const isPushOnDefaultBranch = context.eventName === 'push' && `${{ github.ref }}` === `refs/heads/${{ github.event.repository.default_branch }}`;
+          core.setOutput('flavor', isPushOnDefaultBranch ? 'latest=true' : 'latest=false');
 
           const isPullRequestOrIssueComment =
             context.eventName === 'pull_request'
@@ -122,9 +123,21 @@ runs:
           core.setOutput('annotations', annotations);
 
           const tags = `${{ steps.docker-metadata.outputs.tags }}`;
+
           const sortedTags = tags
             .split("\n")
-            .sort((a, b) => b.length - a.length)
+            .sort((a, b) => {
+              // Move "latest" at the end
+              if (a.includes("latest")) {
+                return 1
+              };
+              if (b.includes("latest")) {
+                return -1
+              };
+
+              // Sort by length
+              return b.length - a.length;
+            })
             .join("\n");
 
           core.setOutput('tags', sortedTags);
