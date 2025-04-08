@@ -122,9 +122,21 @@ runs:
           core.setOutput('annotations', annotations);
 
           const tags = `${{ steps.docker-metadata.outputs.tags }}`;
+
           const sortedTags = tags
             .split("\n")
-            .sort((a, b) => b.length - a.length)
+            .sort((a, b) => {
+              // Move "latest" at the end
+              if (a.includes("latest")) {
+                return 1
+              };
+              if (b.includes("latest")) {
+                return -1
+              };
+
+              // Sort by length
+              return b.length - a.length;
+            })
             .join("\n");
 
           core.setOutput('tags', sortedTags);
