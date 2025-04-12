@@ -85,7 +85,7 @@ jobs:
             assert.equal(
               builtImage.annotations["org.opencontainers.image.description"],
               "Opinionated GitHub Actions and workflows for continuous integration in container (OCI) context",
-              `"annotations.org.opencontainers.image.authors" output is not valid`
+              `"org.opencontainers.image.description" output is not valid`
             );
             assert.equal(
               builtImage.annotations["org.opencontainers.image.licenses"],
