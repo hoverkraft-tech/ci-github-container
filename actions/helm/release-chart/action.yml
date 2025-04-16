@@ -65,7 +65,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@198d391bd7046a3c8ca503d3387ad9c5ba8f9f29 # 0.22.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@f80f6471c4a3be99c8997cfab00f21925151dbe9 # 0.22.1
 
     - id: chart-values-updates
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
@@ -164,7 +164,7 @@ runs:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
 
-    - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
 
     - shell: bash
       run: npm install yaml
