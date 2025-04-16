@@ -36,7 +36,7 @@ permissions:
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.24.1
+- uses: hoverkraft-tech/ci-github-container@0.25.0
   with:
     # Description: Image name
     #
