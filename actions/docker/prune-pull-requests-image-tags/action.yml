@@ -42,7 +42,7 @@ runs:
         rm -fr ./self-actions
 
     - id: is-organization-or-user
-      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@f80f6471c4a3be99c8997cfab00f21925151dbe9 # 0.22.1
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@abd5469ef96aaa3fa1508e2cbaa3e76734533e8a # 0.22.2
 
     - id: delete-image-tags
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
