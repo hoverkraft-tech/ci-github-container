@@ -70,7 +70,7 @@ runs:
         echo "::error ::At least one of 'enable-lint' or 'enable-install' input must be true"
         exit 1
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@abd5469ef96aaa3fa1508e2cbaa3e76734533e8a # 0.22.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@95664be4ec235bfc221c4356c7153cbab3fb8f93 # 0.22.3
       with:
         fetch-depth: 0
 
@@ -98,7 +98,7 @@ runs:
           echo "path=ct.yaml" >> "$GITHUB_OUTPUT"
         fi
 
-    - uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
 
     - name: Set up chart-testing
       uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
