@@ -200,7 +200,7 @@ runs:
         fi
 
     - id: cache
-      uses: int128/docker-build-cache-config-action@622932dfa73db7d3a65e40d5fcc094f2101e659a # v1.37.0
+      uses: int128/docker-build-cache-config-action@338206c80bf9eeb2b9694b7b4fc8c247c317e2a8 # v1.38.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
