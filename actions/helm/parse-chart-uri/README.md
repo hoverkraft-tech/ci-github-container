@@ -42,9 +42,9 @@ This action does not requires any permissions.
 
 <!-- start inputs -->
 
-| **Input**        | **Description**    | **Default** | **Required** |
-| ---------------- | ------------------ | ----------- | ------------ |
-| <code>uri</code> | Chart URI to parse |             | **true**     |
+| **Input**          | **Description**    | **Default** | **Required** |
+| ------------------ | ------------------ | ----------- | ------------ |
+| <code>`uri`</code> | Chart URI to parse |             | **true**     |
 
 <!-- end inputs -->
 <!-- start outputs -->
