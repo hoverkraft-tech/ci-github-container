@@ -23,7 +23,6 @@ jobs:
       # FIXME: re-enable the following checks
       linter-env: |
         VALIDATE_KUBERNETES_KUBECONFORM=false
-        VALIDATE_CHECKOV=false
         VALIDATE_JAVASCRIPT_PRETTIER=false
 
   test-action-docker-build-image:
