@@ -133,7 +133,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@95664be4ec235bfc221c4356c7153cbab3fb8f93 # 0.22.3
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@9a3d71ca9f68bc1061db8ea1442084ac31a0f8bf # 0.23.0
       with:
         value: ${{ inputs.platform }}
 

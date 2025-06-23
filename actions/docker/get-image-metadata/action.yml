@@ -59,7 +59,7 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@95664be4ec235bfc221c4356c7153cbab3fb8f93 # 0.22.3
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@9a3d71ca9f68bc1061db8ea1442084ac31a0f8bf # 0.23.0
 
     - id: define-metadata-inputs
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
