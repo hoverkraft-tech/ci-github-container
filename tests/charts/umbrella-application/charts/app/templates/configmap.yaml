@@ -1,13 +1,13 @@
 ---
-kind: ConfigMap
 apiVersion: v1
+kind: ConfigMap
 metadata:
-  name: {{ template "app.fullname" . }}-config
-  namespace: {{ .Values.namespace }}
+  name: {{ include "app.fullname" . }}-config
+  namespace: {{ .Values.namespace | default "app-system" }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
 data:
-  {{- with .Values.application }}
+  {{- with .Values.app }}
   DB_CONNECTION: {{ .dbConnection | quote }}
   DB_HOST: {{ .dbHost | quote }}
   DB_PORT: {{ .dbPort | quote }}
