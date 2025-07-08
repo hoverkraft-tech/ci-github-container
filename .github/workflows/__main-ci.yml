@@ -55,7 +55,7 @@ jobs:
   release:
     needs: ci
     if: github.event_name != 'schedule'
-    uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@e38260241de6b96a9f21834ca2d399789013e7ff # 0.5.1
+    uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@96630200183ad2374b71f20a6cb6d828c5e8b2c2 # 0.6.0
     with:
       update-all: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
       github-app-id: ${{ vars.CI_BOT_APP_ID }}
