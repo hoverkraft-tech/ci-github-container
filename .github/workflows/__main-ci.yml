@@ -53,6 +53,17 @@ jobs:
           "test-build-args-secrets"
         ]
 
+  helm-docs:
+    needs: ci
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./actions/helm/generate-docs
+        with:
+          working-directory: ./tests/charts
+          github-app-id: ${{ vars.CI_BOT_APP_ID }}
+          github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+
   release:
     needs: ci
     if: github.event_name != 'schedule'
