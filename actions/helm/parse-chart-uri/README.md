@@ -25,7 +25,7 @@
 <!-- start usage -->
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.25.0
+- uses: hoverkraft-tech/ci-github-container@0.26.0
   with:
     # Description: Chart URI to parse
     #
@@ -42,9 +42,9 @@ This action does not requires any permissions.
 
 <!-- start inputs -->
 
-| **Input**          | **Description**    | **Default** | **Required** |
-| ------------------ | ------------------ | ----------- | ------------ |
-| <code>`uri`</code> | Chart URI to parse |             | **true**     |
+| **Input**        | **Description**    | **Default** | **Required** |
+| ---------------- | ------------------ | ----------- | ------------ |
+| <code>uri</code> | Chart URI to parse |             | **true**     |
 
 <!-- end inputs -->
 <!-- start outputs -->
