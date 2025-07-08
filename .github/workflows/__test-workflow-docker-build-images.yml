@@ -10,12 +10,12 @@ permissions:
   issues: read
   packages: write
   pull-requests: read
-  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
   id-token: write
 
 # jscpd:ignore-start
 jobs:
   arrange:
+    name: Arrange
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -24,7 +24,8 @@ jobs:
             exit 1
           fi
 
-  act-build-arch:
+  act-build-images:
+    name: Act - Build multi-arch and mono-arch images
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
@@ -55,17 +56,18 @@ jobs:
           }
         ]
 
-  assert-build-arch:
-    needs: act-build-arch
+  assert-build-arch-mono-arch:
+    name: Assert - multi-arch and mono-arch builds
+    needs: act-build-images
     runs-on: "ubuntu-latest"
     steps:
-      - name: Check built images ouput
+      - name: Assert - built images output
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
             const assert = require("assert");
 
-            const builtImagesOutput = `${{ needs.act-build-arch.outputs.built-images }}`;
+            const builtImagesOutput = `${{ needs.act-build-images.outputs.built-images }}`;
             assert(builtImagesOutput.length, `"built-images" output is empty`);
 
             // Check if is valid Json
@@ -132,13 +134,13 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Check multi-arch docker image and manifest
+      - name: Assert - multi-arch docker image and manifest
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
             const assert = require("assert");
 
-            const image = `${{ fromJson(needs.act-build-arch.outputs.built-images).test-multi-arch.images[0] }}`;
+            const image = `${{ fromJson(needs.act-build-images.outputs.built-images).test-multi-arch.images[0] }}`;
 
             await exec.exec('docker', ['pull', image]);
 
@@ -194,13 +196,32 @@ jobs:
               assert.equal(annotations[key], value, `Expected annotation not found: ${key}`);
             });
 
-      - name: Check mono-arch docker image
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
+      - name: Assert - signed multi-arch docker image
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const images = ${{ toJson(fromJson(needs.act-build-images.outputs.built-images).test-multi-arch.images) }};
+
+            for(const image of images) {
+              await exec.exec(
+                'cosign',
+                [
+                  'verify', image,
+                  '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+                  '--certificate-identity-regexp', 'https://github.com/hoverkraft-tech/ci-github-container',
+                ]
+              );
+            }
+
+      - name: Assert - mono-arch docker image
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
             const assert = require("assert");
 
-            const image = `${{ fromJson(needs.act-build-arch.outputs.built-images).test-mono-arch.images[0] }}`;
+            const image = `${{ fromJson(needs.act-build-images.outputs.built-images).test-mono-arch.images[0] }}`;
 
             await exec.exec('docker', ['pull', image]);
 
@@ -239,7 +260,25 @@ jobs:
               );
             });
 
+      - name: Assert - signed mono-arch docker image
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const images = ${{ toJson(fromJson(needs.act-build-images.outputs.built-images).test-mono-arch.images) }};
+
+            for(const image of images) {
+              await exec.exec(
+                'cosign',
+                [
+                  'verify', image,
+                  '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+                  '--certificate-identity-regexp', 'https://github.com/hoverkraft-tech/ci-github-container',
+                ]
+              );
+            }
+
   act-build-args-secrets-and-registry-caching:
+    name: Act - Build with args, secrets and registry caching
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
@@ -275,6 +314,7 @@ jobs:
         SECRET_ENV_GITHUB_APP_TOKEN_2
 
   assert-build-args-secrets-and-registry-caching:
+    name: Assert - Build with args, secrets and registry caching
     needs: act-build-args-secrets-and-registry-caching
     runs-on: "ubuntu-latest"
     steps:

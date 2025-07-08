@@ -137,7 +137,6 @@ permissions:
   issues: read
   packages: write
   pull-requests: read
-  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
   id-token: write
 
 jobs:
@@ -500,3 +499,23 @@ jobs:
           oci-registry-username: ${{ inputs.oci-registry-username }}
           oci-registry-password: ${{ secrets.oci-registry-password }}
           built-images: ${{ steps.built-images.outputs.built-images }}
+
+      - id: get-images-to-sign
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const builtImagesInput = `${{ steps.built-images.outputs.built-images }}`;
+            let builtImages = null;
+            try {
+              builtImages = JSON.parse(builtImagesInput);
+            } catch (error) {
+              throw new Error(`"built-images" input is not a valid JSON: ${error}`);
+            }
+
+            // Get images to sign
+            const imagesToSign = Object.values(builtImages).map(image => image.images).flat();
+            core.setOutput('images-to-sign', JSON.stringify(imagesToSign));
+      - uses: ./self-workflow/actions/docker/sign-images
+        with:
+          images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

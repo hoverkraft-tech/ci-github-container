@@ -1,0 +1,102 @@
+---
+name: "Docker - Sign images"
+description: |
+  Action to sign OCI images.
+  It is based on [cosign](https://github.com/sigstore/cosign).
+  It signs the images with the GitHub Actions OIDC token.
+  If the provided image does not have a digest, it will retrieve the digest using `docker buildx imagetools inspect`.
+
+author: hoverkraft
+branding:
+  icon: award
+  color: blue
+
+inputs:
+  images:
+    description: |
+      Images to sign.
+      Can be a single image or a list of images separated by commas or newlines or spaces.
+      The images should be in the format `ghcr.io/my-org/my-repo/application:pr-63-5222075`.
+      It can also be a list of images in JSON format.
+      Example:
+      ```
+        [
+          "ghcr.io/my-org/my-repo/application:pr-63-5222075",
+          "ghcr.io/my-org/my-repo/application:pr-63"
+        ]
+      ```
+    required: true
+  github-token:
+    description: |
+      GitHub Token to sign the image.
+      Permissions:
+        - id-token: write
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
+    - name: Sign the images with GitHub OIDC Token
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const images = `${{ inputs.images }}`;
+          let imagesList = null;
+          try {
+            // Try to parse the input as JSON
+            imagesList = JSON.parse(images);
+          } catch (error) {
+            // If it fails, split the input by commas, newlines or spaces
+            imagesList = images.split(/[\s,]+/).filter(image => image.trim() !== "");
+          }
+
+          if (!Array.isArray(imagesList) || imagesList.length === 0) {
+            throw new Error(`"images" input is not a valid JSON array or a non-empty string: ${images}`);
+          }
+
+          const getImageDigest = async function(image) {
+            // Check if the image already has a digest
+            if (image.match(/@/)) {
+              core.debug(`Image "${image}" already has a digest, skipping inspection.`);
+              return image;
+            }
+
+            const inspectImageCommand = `docker buildx imagetools inspect ${image}`;
+            core.debug(`Inspecting image "${image}" with command: "${inspectImageCommand}"`);
+
+            const { stdout } = await exec.getExecOutput(inspectImageCommand);
+
+            core.debug(`Inspect image "${image}" ("${inspectImageCommand}") executed: ${stdout}`);
+
+            if (!stdout) {
+              throw new Error(`Failed to retrieve manifest for image "${image}": "${inspectImageCommand}" returned empty output`);
+            }
+
+            // Retrieve digest from the manifest
+            const digestRegex = /Digest:\s+([a-z0-9]+:[a-z0-9]{64})/;
+            const digestMatch = stdout.match(digestRegex);
+            if (!digestMatch || digestMatch.length < 2) {
+              throw new Error(`Failed to retrieve digest for image "${image}": "${inspectImageCommand}" returned unexpected output: ${stdout}`);
+            }
+
+            const digest = digestMatch[1];
+            if (!digest) {
+              throw new Error(`Failed to retrieve digest for image "${image}": "${inspectImageCommand}" returned empty digest`);
+            }
+
+            core.debug(`Digest for image "${image}" is "${digest}"`);
+            return `${image}@${digest}`;
+          }
+
+          // Wait for all images to be inspected and digests retrieved
+          const imagesWithDigests = await Promise.all(imagesList.map(image => getImageDigest(image)));
+
+          // Create manifest for each image
+          const signImageCommand = `cosign sign --recursive --yes ${imagesWithDigests.map(image => `"${image}"`).join(" ")}`;
+
+          core.debug(`Signing images with command: "${signImageCommand}"`);
+          await exec.exec(signImageCommand);
+          core.debug("All images signed successfully");

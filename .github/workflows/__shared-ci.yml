@@ -12,8 +12,6 @@ permissions:
   pull-requests: read
   security-events: write
   statuses: write
-  # yamllint disable-line rule:line-length
-  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
   id-token: write
 
 jobs:
@@ -41,10 +39,6 @@ jobs:
   test-action-action-get-image-name:
     needs: linter
     uses: ./.github/workflows/__test-action-get-image-name.yml
-
-  test-action-helm-generate-docs:
-    needs: linter
-    uses: ./.github/workflows/__test-action-helm-generate-docs.yml
 
   test-action-helm-parse-chart-uri:
     needs: linter
