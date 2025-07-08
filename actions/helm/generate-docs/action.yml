@@ -1,0 +1,66 @@
+---
+name: "Helm - Generate Chart Documentation"
+description: |
+  Action to generate documentation for a Helm chart.
+  It will generate the documentation in the `docs/` directory of the chart.
+  Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-docs-github-action).
+author: Hoverkraft
+branding:
+  icon: book-open
+  color: blue
+
+inputs:
+  working-directory:
+    description: "Working directory"
+    required: false
+    default: "${{ github.workspace }}"
+  github-token:
+    description: |
+      GitHub Token to create and merge pull request.
+      Permissions:
+        - contents: write
+        - pull-requests: write
+    default: ${{ github.token }}
+  github-app-id:
+    description: |
+      GitHub App ID to generate GitHub token in place of github-token.
+      See <https://github.com/actions/create-github-app-token>.
+    required: false
+  github-app-key:
+    description: |
+      GitHub App private key to generate GitHub token in place of github-token.
+      See <https://github.com/actions/create-github-app-token>.
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      id: prepare-variables
+      run: |
+        echo "working-directory-name=$(basename "${{ inputs.working-directory }}")" >> "$GITHUB_OUTPUT"
+
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@9a3d71ca9f68bc1061db8ea1442084ac31a0f8bf # 0.23.0
+
+    - uses: losisin/helm-docs-github-action@8dc2304e986afbbb0b7db0a9980b6bf68c1307cf # v1.5.2
+      with:
+        chart-search-root: ${{ inputs.working-directory }}
+
+    - uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+      if: inputs.github-app-id
+      id: generate-token
+      with:
+        app-id: ${{ inputs.github-app-id }}
+        private-key: ${{ inputs.github-app-key }}
+
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@9a3d71ca9f68bc1061db8ea1442084ac31a0f8bf # 0.23.0
+      with:
+        github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
+        branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}
+        title: "docs: update Helm chart documentation for ${{ steps.prepare-variables.outputs.working-directory-name }}"
+        body: |
+          This pull request updates the documentation for the Helm chart `${{ steps.prepare-variables.outputs.working-directory-name }}`.
+        commit-message: |
+          docs: update Helm chart documentation for ${{ steps.prepare-variables.outputs.working-directory-name }}
+
+          [skip ci]

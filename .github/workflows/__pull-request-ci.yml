@@ -8,10 +8,10 @@ on: # yamllint disable-line rule:truthy
 
 permissions:
   actions: read
-  contents: read
+  contents: write
   issues: read
   packages: write
-  pull-requests: read
+  pull-requests: write
   security-events: write
   statuses: write
   # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
