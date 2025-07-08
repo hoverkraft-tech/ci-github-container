@@ -42,6 +42,10 @@ jobs:
     needs: linter
     uses: ./.github/workflows/__test-action-get-image-name.yml
 
+  test-action-helm-generate-docs:
+    needs: linter
+    uses: ./.github/workflows/__test-action-helm-generate-docs.yml
+
   test-action-helm-parse-chart-uri:
     needs: linter
     uses: ./.github/workflows/__test-action-helm-parse-chart-uri.yml
