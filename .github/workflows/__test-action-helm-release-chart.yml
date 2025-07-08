@@ -13,9 +13,6 @@ jobs:
   tests:
     name: Test for "helm/release-chart" action with simple chart
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     strategy:
       fail-fast: false
       matrix:

@@ -91,12 +91,13 @@ runs:
               )
               .flat().join(" ");
 
-            createManifestCommand = `docker buildx imagetools create ${annotations} ${tags} ${digests}`;
+            const createManifestCommand = `docker buildx imagetools create ${annotations} ${tags} ${digests}`;
 
             return new Promise(async (resolve, reject)  => {
               try {
                 await exec.exec(createManifestCommand);
                 core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+
                 resolve();
               } catch(error){
                 reject(error);

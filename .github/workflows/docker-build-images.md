@@ -19,7 +19,7 @@ Needs the following permissions:
 - `issues`: `read`
 - `packages`: `write`
 - `pull-requests`: `read`
-- `id-token`: `write` <!-- FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659 -->
+- `id-token`: `write`
 
 <!-- end description -->
 <!-- start contents -->
@@ -39,7 +39,6 @@ permissions:
   issues: read
   packages: write
   pull-requests: read
-  # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
   id-token: write
 
 jobs:
