@@ -62,6 +62,7 @@ permissions:
 ````
 
 <!-- end usage -->
+<!-- markdownlint-disable MD013 -->
 <!-- start inputs -->
 
 | **Input**                 | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                   | **Default**                      | **Required** |
@@ -70,7 +71,6 @@ permissions:
 | <code>github-token</code> | GitHub Token to sign the image.<br />Permissions:<br /> - id-token: write                                                                                                                                                                                                                                                                                                                                                                                         | <code>${{ github.token }}</code> | **false**    |
 
 <!-- end inputs -->
-<!-- markdownlint-disable MD013 -->
 <!-- start outputs -->
 <!-- end outputs -->
 <!-- markdownlint-enable MD013 -->
