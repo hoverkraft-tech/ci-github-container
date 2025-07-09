@@ -44,7 +44,7 @@ This action does not requires any permissions.
 
 | **Input**        | **Description**    | **Default** | **Required** |
 | ---------------- | ------------------ | ----------- | ------------ |
-| <code>URI</code> | Chart URI to parse |             | **true**     |
+| <code>uri</code> | Chart URI to parse |             | **true**     |
 
 <!-- end inputs -->
 <!-- start outputs -->
