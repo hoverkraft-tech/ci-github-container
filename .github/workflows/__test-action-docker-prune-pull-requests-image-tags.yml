@@ -155,7 +155,7 @@ jobs:
 
             echo "$MANIFEST"
 
-            # Ensure all manifest digests didn't get deleted
+            # Ensure all manifests digest didn't get deleted
             for DIGEST in $(echo "$MANIFEST" | jq -r '.manifests[].digest'); do
               IMAGE_MANIFEST="ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}@$DIGEST"
               docker pull "$IMAGE_MANIFEST"

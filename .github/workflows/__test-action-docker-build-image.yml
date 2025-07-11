@@ -65,16 +65,12 @@ jobs:
               "hoverkraft-tech/ci-github-container/application-test",
               `"repository" output is not valid`
             );
-            assert.equal(
-              builtImage.digests.length,
-              1,
-              `"digests" output is not valid`
-            );
             assert.match(
-              builtImage.digests[0],
-              /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/application-test@sha256:[a-f0-9]{64}$/,
-              `"digests" output is not valid`
+              builtImage.digest,
+              /^sha256:[a-f0-9]{64}$/,
+              `"digest" output is not valid`
             );
+            assert.equal(builtImage.image, `ghcr.io/hoverkraft-tech/ci-github-container/application-test@${builtImage.digest}`, `"image" output is not valid`);
 
             // Annotations
             assert.match(
@@ -124,45 +120,16 @@ jobs:
               assert.equal(builtImage.tags[1], prTag, `"tags" output is not valid`);
 
               assert.equal(
-                builtImage.images.length,
-                2,
-                `"images" output is not valid`
-              );
-              assert.equal(
-                builtImage.images[0],
-                `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${prShaTag}`,
-                `"images" output is not valid`
-              );
-              assert.equal(
-                builtImage.images[1],
-                `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${prTag}`,
-                `"images" output is not valid`
-              );
-              assert.equal(
                 builtImage.annotations["org.opencontainers.image.version"],
                 prTag,
                 `"annotations.org.opencontainers.image.version" output is not valid`
               );
-
             } else {
               const refTag = `${{ github.ref_name }}`;
 
               assert.equal(builtImage.tags.length, 2, `"tags" output is not valid`);
               assert.equal(builtImage.tags[0], refTag, `"tags" output is not valid`);
               assert.equal(builtImage.tags[1], "latest", `"tags" output is not valid`);
-
-              assert.equal(builtImage.images.length, 2, `"images" output is not valid`);
-              assert.equal(
-                builtImage.images[0],
-                `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${refTag}`,
-                `"images" output is not valid`
-              );
-
-              assert.equal(
-                builtImage.images[1],
-                `ghcr.io/hoverkraft-tech/ci-github-container/application-test:latest`,
-                `"images" output is not valid`
-              );
 
               assert.equal(
                 builtImage.annotations["org.opencontainers.image.version"],
@@ -177,20 +144,18 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Assert - Check docker digests
+      - name: Assert - Check docker image
         run: |
-          DIGESTS=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.digests[]')
-          for DIGEST in $DIGESTS; do
-            if ! docker pull "$DIGEST"; then
-              echo "Failed to pull $DIGEST"
-              exit 1
-            fi
+          IMAGE=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.image')
+          if ! docker pull "$IMAGE"; then
+            echo "Failed to pull $IMAGE"
+            exit 1
+          fi
 
-            if ! docker manifest inspect "$DIGEST"; then
-              echo "Failed to inspect $DIGEST"
-              exit 1
-            fi
-          done
+          if ! docker manifest inspect "$IMAGE"; then
+            echo "Failed to inspect $IMAGE"
+            exit 1
+          fi
 
   tests-with-given-tag:
     name: Test for "docker/build-image" action with given tag
@@ -249,19 +214,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Assert - Check docker digests
+      - name: Assert - Check docker image
         run: |
-          DIGESTS=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.digests[]')
-          for DIGEST in $DIGESTS; do
-            if ! docker pull "$DIGEST"; then
-              echo "Failed to pull $DIGEST"
-              exit 1
-            fi
+          IMAGE=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.image')
+          if ! docker pull "$IMAGE"; then
+            echo "Failed to pull $IMAGE"
+            exit 1
+          fi
 
-            if ! docker manifest inspect "$DIGEST"; then
-              echo "Failed to inspect $DIGEST"
-              exit 1
-            fi
-          done
+          if ! docker manifest inspect "$IMAGE"; then
+            echo "Failed to inspect $IMAGE"
+            exit 1
+          fi
 
 # jscpd:ignore-end

@@ -90,42 +90,36 @@ jobs:
             }
 
             const applicationMultiArchImage = builtImages["test-multi-arch"];
+
             assert.equal(applicationMultiArchImage.name, "test-multi-arch");
             assert.equal(applicationMultiArchImage.registry, "ghcr.io");
             assert.equal(applicationMultiArchImage.repository,"hoverkraft-tech/ci-github-container/test-multi-arch");
+            assert.match(applicationMultiArchImage.digest, /^sha256:[0-9a-f]{64}$/);
+
             assert(applicationMultiArchImage.tags.length);
             assert(applicationMultiArchImage.images.length);
             applicationMultiArchImage.images.forEach(
               image => assert.match(
                 image,
-                /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/test-multi-arch:[\.a-z0-9-]+$/
+                /^ghcr\.io\/hoverkraft-tech\/ci-github-container\/test-multi-arch:[\.a-z0-9-]+@sha256:[0-9a-f]{64}$/
               )
             );
 
             const applicationMonoArchImage = builtImages["test-mono-arch"];
-            assert.equal(
-              applicationMonoArchImage.name,
-              "test-mono-arch"
-            );
-            assert.equal(
-              applicationMonoArchImage.registry,
-              "ghcr.io"
-            );
+
+            assert.equal(applicationMonoArchImage.name, "test-mono-arch");
+            assert.equal(applicationMonoArchImage.registry, "ghcr.io");
             assert.equal(
               applicationMonoArchImage.repository,
               "hoverkraft-tech/ci-github-container/test-mono-arch"
             );
-            assert.equal(
-              applicationMonoArchImage.tags.length,
-              1
-            );
-            assert.equal(
-              applicationMonoArchImage.images.length,
-              1
-            );
+            assert.match(applicationMonoArchImage.digest, /^sha256:[0-9a-f]{64}$/);
+
+            assert.equal(applicationMonoArchImage.tags.length, 1);
+            assert.equal(applicationMonoArchImage.images.length, 1);
             assert.equal(
               applicationMonoArchImage.images[0],
-              "ghcr.io/hoverkraft-tech/ci-github-container/test-mono-arch:0.1.0"
+              `ghcr.io/hoverkraft-tech/ci-github-container/test-mono-arch:0.1.0@${applicationMonoArchImage.digest}`
             );
 
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -367,8 +361,12 @@ jobs:
               expectedTag = `${{ github.ref_name }}`;
             }
 
+            const digest = `${{ fromJson(needs.act-build-args-secrets-and-registry-caching.outputs.built-images).test-build-args-secrets.digest }}`;
+            assert(digest.length, `"built-images" output does not contain digest for "test-build-args-secrets" image`);
+            assert.match(digest, /^sha256:[0-9a-f]{64}$/, `"built-images" output does not contain valid digest for "test-build-args-secrets" image`);
+
             const expectedImage = `ghcr.io/hoverkraft-tech/ci-github-container/test-build-args-secrets`;
-            const expectedImageTag = `${expectedImage}:${expectedTag}`;
+            const expectedImageTag = `${expectedImage}:${expectedTag}@${digest}`;
 
             const image = `${{ fromJson(needs.act-build-args-secrets-and-registry-caching.outputs.built-images).test-build-args-secrets.images[0] }}`;
 

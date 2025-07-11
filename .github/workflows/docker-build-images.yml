@@ -19,12 +19,10 @@ on: # yamllint disable-line rule:truthy
               "repository": "my-org/my-repo/application",
               "tags": ["pr-63-5222075","pr-63"],
               "images": [
-                "ghcr.io/my-org/my-repo/application:pr-63-5222075",
-                "ghcr.io/my-org/my-repo/application:pr-63"
+                "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+                "ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
               ],
-              "digests": [
-                "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
-              ],
+              "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
               "annotations": {
                 "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
                 "org.opencontainers.image.description": "Application image"
@@ -441,7 +439,7 @@ jobs:
     needs: [prepare-variables, build-images]
     runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
-      built-images: ${{ steps.built-images.outputs.built-images }}
+      built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
         uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
@@ -463,15 +461,15 @@ jobs:
             // Group by image name
             const images = {};
             builtImages.forEach(builtImage => {
-              const { name, digests, ...image } = builtImage;
+              const { name, image, ...rest } = builtImage;
               if (!images[name]) {
                 images[name] = {
                   name,
-                  digests,
-                  ...image,
+                  images: [image],
+                  ...rest,
                 };
               } else {
-                images[name].digests = [...new Set([...images[name].digests, ...digests])];
+                images[name].images = [...new Set([...images[name].images, image])];
               }
             });
 
@@ -504,7 +502,7 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
-            const builtImagesInput = `${{ steps.built-images.outputs.built-images }}`;
+            const builtImagesInput = `${{ steps.create-images-manifests.outputs.built-images }}`;
             let builtImages = null;
             try {
               builtImages = JSON.parse(builtImagesInput);
