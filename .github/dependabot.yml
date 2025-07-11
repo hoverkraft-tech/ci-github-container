@@ -26,3 +26,16 @@ updates:
       github-actions-dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: helm
+    open-pull-requests-limit: 20
+    directories:
+      - "/tests/charts/*/*"
+    schedule:
+      interval: weekly
+      day: friday
+      time: "04:00"
+    groups:
+      helm-dependencies:
+        patterns:
+          - "*"
