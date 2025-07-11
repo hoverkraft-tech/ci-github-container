@@ -3,10 +3,10 @@ name: "Test Helm Chart"
 description: |
   Action to lint and test installing some Helm chart(s).
   Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-action).
-author: Hoverkraft
+author: hoverkraft
 branding:
   icon: check-circle
-  color: gray-dark
+  color: blue
 
 inputs:
   working-directory:
