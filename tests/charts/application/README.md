@@ -6,9 +6,9 @@ A Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository                           | Name  | Version |
-| ------------------------------------ | ----- | ------- |
-| <https://charts.bitnami.com/bitnami> | MySQL | 12.2.1  |
+| Repository                         | Name  | Version |
+| ---------------------------------- | ----- | ------- |
+| https://charts.bitnami.com/bitnami | mysql | 13.0.3  |
 
 ## Values
 
@@ -26,7 +26,7 @@ A Helm chart for Kubernetes
 | autoscaling.minReplicas                    | int    | `1`                                                                         |             |
 | autoscaling.targetCPUUtilizationPercentage | int    | `80`                                                                        |             |
 | fullnameOverride                           | string | `""`                                                                        |             |
-| image.digest                               | string | `"sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"` |             |
+| image.digest                               | string | `"sha256:0000000000000000000000000000000000000000000000000000000000000000"` |             |
 | image.pullPolicy                           | string | `"Always"`                                                                  |             |
 | image.registry                             | string | `"ghcr.io"`                                                                 |             |
 | image.repository                           | string | `"hoverkraft-tech/ci-github-container/application-test"`                    |             |
