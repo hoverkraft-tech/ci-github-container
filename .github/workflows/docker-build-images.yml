@@ -113,6 +113,13 @@ on: # yamllint disable-line rule:truthy
         default: "gha"
         type: string
         required: false
+      sign:
+        description: |
+          Sign built images.
+          See <../../actions/docker/sign-images/README.md>.
+        type: boolean
+        default: true
+        required: false
     secrets:
       oci-registry-password:
         description: |
@@ -514,6 +521,7 @@ jobs:
             const imagesToSign = Object.values(builtImages).map(image => image.images).flat();
             core.setOutput('images-to-sign', JSON.stringify(imagesToSign));
       - uses: ./self-workflow/actions/docker/sign-images
+        if: inputs.sign
         with:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
