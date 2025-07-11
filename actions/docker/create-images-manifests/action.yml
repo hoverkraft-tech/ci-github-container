@@ -85,7 +85,7 @@ runs:
         version: v0.25.0
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
-          image=moby/buildkit:v0.23.1
+          image=moby/buildkit:v0.23.2
 
     - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
       with:
