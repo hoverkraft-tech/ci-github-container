@@ -8,10 +8,10 @@ description: |
   - `repository`: `ghcr.io/my-org/my-repo/charts/my-application`
   - `name`: `my-repo`
   - `version`: `0.1.0`
-author: Hoverkraft
+author: hoverkraft
 branding:
   icon: link
-  color: gray-dark
+  color: blue
 
 inputs:
   uri:

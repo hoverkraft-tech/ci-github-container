@@ -1,10 +1,10 @@
 ---
 name: "Get image metadata"
 description: "Action to retrieve required metadata to build Docker image"
-author: Hoverkraft
+author: hoverkraft
 branding:
-  icon: package
-  color: gray-dark
+  icon: info
+  color: blue
 
 outputs:
   image:

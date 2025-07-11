@@ -4,7 +4,7 @@ description: |
   Action to generate documentation for a Helm chart.
   It will generate the documentation in the `docs/` directory of the chart.
   Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-docs-github-action).
-author: Hoverkraft
+author: hoverkraft
 branding:
   icon: book-open
   color: blue

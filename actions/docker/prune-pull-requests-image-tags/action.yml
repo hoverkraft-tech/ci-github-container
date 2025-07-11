@@ -1,10 +1,10 @@
 ---
 name: "Prune pull requests image tags from GitHub Packages"
 description: "Action to prune existing package versions related to closed pull requests"
-author: Hoverkraft
+author: hoverkraft
 branding:
   icon: delete
-  color: gray-dark
+  color: blue
 
 outputs:
   deleted-image-tags:
