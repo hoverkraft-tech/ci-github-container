@@ -42,7 +42,7 @@ runs:
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@9a3d71ca9f68bc1061db8ea1442084ac31a0f8bf # 0.23.0
 
-    - uses: losisin/helm-docs-github-action@8dc2304e986afbbb0b7db0a9980b6bf68c1307cf # v1.5.2
+    - uses: losisin/helm-docs-github-action@178c1a8927bcd668d487395beda342ba270895b3 # v1.6.1
       with:
         chart-search-root: ${{ inputs.working-directory }}
 
