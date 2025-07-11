@@ -187,15 +187,15 @@ If a platform entry omits the <code>runs-on</code> field, the following default 
 
 ### Built image data
 
-| **Parameter**                | **Description**                    | **Example**                                                                                                                |
-| ---------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **<code>name</code>**        | Image name                         | `application`                                                                                                              |
-| **<code>registry</code>**    | Registry where the image is stored | `ghcr.io`                                                                                                                  |
-| **<code>repository</code>**  | Repository name                    | `my-org/my-repo/application`                                                                                               |
-| **<code>tags</code>**        | List of tags                       | `["pr-63-5222075","pr-63"]`                                                                                                |
-| **<code>images</code>**      | List of images                     | `["ghcr.io/my-org/my-repo/application:pr-63-5222075","ghcr.io/my-org/my-repo/application:pr-63"]`                          |
-| **<code>digests</code>**     | List of digests                    | `["ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"]`           |
-| **<code>annotations</code>** | List of annotations                | `{"org.opencontainers.image.created": "2021-09-30T14:00:00Z","org.opencontainers.image.description": "Application image"}` |
+| **Parameter**                | **Description**                    | **Example**                                                                                                                                                                                                                                       |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **<code>name</code>**        | Image name                         | `application`                                                                                                                                                                                                                                     |
+| **<code>registry</code>**    | Registry where the image is stored | `ghcr.io`                                                                                                                                                                                                                                         |
+| **<code>repository</code>**  | Repository name                    | `my-org/my-repo/application`                                                                                                                                                                                                                      |
+| **<code>tags</code>**        | List of tags                       | `["pr-63-5222075","pr-63"]`                                                                                                                                                                                                                       |
+| **<code>images</code>**      | List of images                     | `["ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d","ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"]` |
+| **<code>digest</code>**      |                                    | `sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d`                                                                                                                                                                         |
+| **<code>annotations</code>** | List of annotations                | `{"org.opencontainers.image.created": "2021-09-30T14:00:00Z","org.opencontainers.image.description": "Application image"}`                                                                                                                        |
 
 <!-- end outputs -->
 <!-- start [.github/ghadocs/examples/] -->

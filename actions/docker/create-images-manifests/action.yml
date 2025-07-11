@@ -1,10 +1,14 @@
 ---
-name: "Create images manifests"
-description: "Action to create built images manifests"
-author: Hoverkraft
+name: "Docker - Create images manifests"
+description: |
+  Action to create built images manifests.
+  It uses the Docker Buildx plugin to create manifests for the built images.
+  It requires the Docker Buildx plugin to be installed and configured.
+  It supports creating manifests for multiple images and platforms at once.
+author: hoverkraft
 branding:
   icon: package
-  color: gray-dark
+  color: blue
 
 inputs:
   oci-registry:
@@ -23,27 +27,54 @@ inputs:
     default: ${{ github.token }}
     required: true
   built-images:
-    description: 'Built images data. Example: {
-      "application": {
-      "name": "application",
-      "registry": "ghcr.io",
-      "repository": "my-org/my-repo/application",
-      "tags": ["pr-63-5222075","pr-63"],
-      "images": [
-      "ghcr.io/my-org/my-repo/application:pr-63-5222075",
-      "ghcr.io/my-org/my-repo/application:pr-63"
-      ],
-      "digests": [
-      "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
-      "ghcr.io/my-org/my-repo/application@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"
-      ],
-      "annotations": {
-      "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
-      "org.opencontainers.image.description": "Application image"
+    description: |
+      Built images data.
+      Example:
+      ```json
+      {
+        "application": {
+          "name": "application",
+          "registry": "ghcr.io",
+          "repository": "my-org/my-repo/application",
+          "tags": ["pr-63-5222075","pr-63"],
+          "images": [
+            "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+            "ghcr.io/my-org/my-repo/application@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402",
+          ],
+          "annotations": {
+            "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+            "org.opencontainers.image.description": "Application image"
+          }
+        }
       }
-      }
-      }'
+      ```
     required: true
+
+outputs:
+  built-images:
+    description: |
+      Built images data.
+      Example:
+      ```json
+      {
+        "application": {
+          "name": "application",
+          "registry": "ghcr.io",
+          "repository": "my-org/my-repo/application",
+          "tags": ["pr-63-5222075","pr-63"],
+          "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+          "images": [
+            "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+            "ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
+          ],
+          "annotations": {
+            "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+            "org.opencontainers.image.description": "Application image"
+          }
+        }
+      }
+      ```
+    value: ${{ steps.get-built-images-digest.outputs.built-images }}
 
 runs:
   using: "composite"
@@ -62,7 +93,8 @@ runs:
         username: ${{ inputs.oci-registry-username }}
         password: ${{ inputs.oci-registry-password }}
 
-    - name: Create SHA manifest and push
+    - id: create-images-manifests
+      name: Create images manifests and push
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
@@ -78,25 +110,32 @@ runs:
           const commands = Object.keys(builtImages).map(imageName => {
             const builtImage = builtImages[imageName];
 
-            const tags = builtImage.images.map(image => {
+            const imagesWithTags = builtImage.tags.map(tag => {
+              return `${builtImage.registry}/${builtImage.repository}:${tag}`;
+            });
+
+            const tagsOption = imagesWithTags.map(image => {
               return `--tag ${image}`;
             }).join(" ");
 
-            const digests = builtImage.digests.join(" ");
+            const sources = builtImage.images.join(" ");
 
             const annotationLevels = ["index"];
-            const annotations = Object.keys(builtImage.annotations)
+            const annotationsOption = Object.keys(builtImage.annotations)
               .map(annotation => annotationLevels
                 .map(annotationLevel => `--annotation "${annotationLevel}:${annotation}=${builtImage.annotations[annotation]}"`)
               )
               .flat().join(" ");
 
-            const createManifestCommand = `docker buildx imagetools create ${annotations} ${tags} ${digests}`;
+            const createManifestCommand = `docker buildx imagetools create ${annotationsOption} ${tagsOption} ${sources}`;
 
             return new Promise(async (resolve, reject)  => {
               try {
                 await exec.exec(createManifestCommand);
                 core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+
+                // Update builtImage with the images with tags
+                builtImage.images = imagesWithTags;
 
                 resolve();
               } catch(error){
@@ -108,3 +147,63 @@ runs:
           await Promise.all(commands);
 
           core.debug("Manifest created and pushed");
+
+          core.setOutput("built-images", JSON.stringify(builtImages));
+
+    - name: Get built images digest
+      id: get-built-images-digest
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const builtImagesOutputs = ${{ toJson(steps.create-images-manifests.outputs.built-images) }};
+          let builtImages = null;
+          try {
+            builtImages = JSON.parse(builtImagesOutputs);
+          } catch (error) {
+            throw new Error(`"built-images" output is not a valid JSON: ${error}`);
+          }
+
+          const getImageDigest = async function(image) {
+            // Check if the image already has a digest
+            if (image.match(/@/)) {
+              core.debug(`Image "${image}" already has a digest, skipping inspection.`);
+              return image;
+            }
+
+            const inspectImageCommand = `docker buildx imagetools inspect ${image}`;
+            core.debug(`Inspecting image "${image}" with command: "${inspectImageCommand}"`);
+
+            const { stdout } = await exec.getExecOutput(inspectImageCommand);
+
+            core.debug(`Inspect image "${image}" ("${inspectImageCommand}") executed: ${stdout}`);
+
+            if (!stdout) {
+              throw new Error(`Failed to retrieve manifest for image "${image}": "${inspectImageCommand}" returned empty output`);
+            }
+
+            // Retrieve digest from the manifest
+            const digestRegex = /Digest:\s+([a-z0-9]+:[a-z0-9]{64})/;
+            const digestMatch = stdout.match(digestRegex);
+            if (!digestMatch || digestMatch.length < 2) {
+              throw new Error(`Failed to retrieve digest for image "${image}": "${inspectImageCommand}" returned unexpected output: ${stdout}`);
+            }
+
+            const digest = digestMatch[1];
+            if (!digest) {
+              throw new Error(`Failed to retrieve digest for image "${image}": "${inspectImageCommand}" returned empty digest`);
+            }
+
+            core.debug(`Digest for image "${image}" is "${digest}"`);
+            return digest;
+          }
+
+          await Promise.all(Object.keys(builtImages).map(async (imageName) => {
+            const builtImage = builtImages[imageName];
+            const digest = await getImageDigest(builtImage.images[0]);
+
+            // Update built image with the digest
+            builtImage.digest = digest;
+            builtImage.images = builtImage.images.map(image => `${image}@${digest}`);
+          }));
+
+          core.setOutput("built-images", JSON.stringify(builtImages));

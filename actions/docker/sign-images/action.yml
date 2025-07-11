@@ -16,15 +16,16 @@ inputs:
     description: |
       Images to sign.
       Can be a single image or a list of images separated by commas or newlines or spaces.
-      The images should be in the format `ghcr.io/my-org/my-repo/application:pr-63-5222075`.
+      The images should be in the format `registry/name:tag@digest`.
       It can also be a list of images in JSON format.
       Example:
       ```
         [
-          "ghcr.io/my-org/my-repo/application:pr-63-5222075",
-          "ghcr.io/my-org/my-repo/application:pr-63"
+          "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+          "ghcr.io/my-org/my-repo/application:pr-63@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"
         ]
       ```
+      If the image does not have a digest, it will retrieve the digest using `docker buildx imagetools inspect`.
     required: true
   github-token:
     description: |
@@ -43,59 +44,35 @@ runs:
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const images = `${{ inputs.images }}`;
-          let imagesList = null;
+          const imagesInput = ${{ toJson(inputs.images) }};
+          let images = null;
           try {
             // Try to parse the input as JSON
-            imagesList = JSON.parse(images);
+            images = JSON.parse(imagesInput);
           } catch (error) {
             // If it fails, split the input by commas, newlines or spaces
-            imagesList = images.split(/[\s,]+/).filter(image => image.trim() !== "");
+            images = imagesInput.split(/[\s,]+/).filter(image => image.trim() !== "");
           }
 
-          if (!Array.isArray(imagesList) || imagesList.length === 0) {
-            throw new Error(`"images" input is not a valid JSON array or a non-empty string: ${images}`);
+          if (!Array.isArray(images) || images.length === 0) {
+            return core.setFailed(`"images" input is not a valid JSON array or a non-empty string: ${images}`);
           }
 
-          const getImageDigest = async function(image) {
-            // Check if the image already has a digest
-            if (image.match(/@/)) {
-              core.debug(`Image "${image}" already has a digest, skipping inspection.`);
-              return image;
+          // Ensure images are in the correct format
+          const imageRegex = /^[a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*(?::[0-9]+)?\/(?:[a-z0-9._\/-]+):[a-zA-Z0-9._-]+@sha256:[a-f0-9]{64}$/;
+
+          for(const image of images) {
+            if (typeof image !== 'string'){
+              return core.setFailed(`Invalid image format: ${image}. Expected a string.`);
             }
 
-            const inspectImageCommand = `docker buildx imagetools inspect ${image}`;
-            core.debug(`Inspecting image "${image}" with command: "${inspectImageCommand}"`);
-
-            const { stdout } = await exec.getExecOutput(inspectImageCommand);
-
-            core.debug(`Inspect image "${image}" ("${inspectImageCommand}") executed: ${stdout}`);
-
-            if (!stdout) {
-              throw new Error(`Failed to retrieve manifest for image "${image}": "${inspectImageCommand}" returned empty output`);
+            if (!imageRegex.test(image)) {
+              return core.setFailed(`Invalid image format: ${image}. Expected format: registry/name:tag@digest`);
             }
-
-            // Retrieve digest from the manifest
-            const digestRegex = /Digest:\s+([a-z0-9]+:[a-z0-9]{64})/;
-            const digestMatch = stdout.match(digestRegex);
-            if (!digestMatch || digestMatch.length < 2) {
-              throw new Error(`Failed to retrieve digest for image "${image}": "${inspectImageCommand}" returned unexpected output: ${stdout}`);
-            }
-
-            const digest = digestMatch[1];
-            if (!digest) {
-              throw new Error(`Failed to retrieve digest for image "${image}": "${inspectImageCommand}" returned empty digest`);
-            }
-
-            core.debug(`Digest for image "${image}" is "${digest}"`);
-            return `${image}@${digest}`;
           }
-
-          // Wait for all images to be inspected and digests retrieved
-          const imagesWithDigests = await Promise.all(imagesList.map(image => getImageDigest(image)));
 
           // Create manifest for each image
-          const signImageCommand = `cosign sign --recursive --yes ${imagesWithDigests.map(image => `"${image}"`).join(" ")}`;
+          const signImageCommand = `cosign sign --recursive --yes ${images.join(" ")}`;
 
           core.debug(`Signing images with command: "${signImageCommand}"`);
           await exec.exec(signImageCommand);

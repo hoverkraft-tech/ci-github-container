@@ -18,7 +18,7 @@ jobs:
   linter:
     uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
     with:
-      # FIXME: Remove this on next super-linter release
+      # FIXME: Remove useless linters on next super-linter release
       linter-env: |
         VALIDATE_JAVASCRIPT_PRETTIER=false
         VALIDATE_KUBERNETES_KUBECONFORM=false

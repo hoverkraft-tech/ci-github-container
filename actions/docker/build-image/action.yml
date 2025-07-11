@@ -1,10 +1,14 @@
 ---
-name: "Build image"
-description: "Action to build an image with Docker for a specific platform"
-author: Hoverkraft
+name: "Docker - Build image"
+description: |
+  Action to build and push a "raw" image with Docker for a specific platform.
+  This action uses the Docker Buildx plugin to build the image.
+  It supports caching.
+  It returns the image digest uri, tags, and annotations, but does not handle it itself.
+author: hoverkraft
 branding:
   icon: package
-  color: gray-dark
+  color: blue
 
 outputs:
   built-image:
@@ -14,16 +18,11 @@ outputs:
         "name": "application",
         "registry": "ghcr.io",
         "repository": "my-org/my-repo/application",
+        "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+        "image": "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
         "tags": [
           "pr-63-5222075",
           "pr-63"
-        ],
-        "images": [
-          "ghcr.io/my-org/my-repo/application:pr-63-5222075",
-          "ghcr.io/my-org/my-repo/application:pr-63"
-        ],
-        "digests": [
-          "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
         ],
         "annotations": {
           "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
@@ -257,8 +256,7 @@ runs:
           }
 
           if (builtMetadata["containerimage.digest"] === undefined) {
-            core.setFailed('Given "metadata"."containerimage.digest" output is undefined.');
-            return;
+            return core.setFailed('Given "metadata"."containerimage.digest" output is undefined.');
           }
 
           const name = `${{ inputs.image }}`;
@@ -273,14 +271,25 @@ runs:
           .map(tag => tag.replace(/[^\/]+\/[^:]+:(.+)/,'$1').trim())
           .filter(tag => tag !== "");
 
-          const images = tags.map(tag => `${image}:${tag}`);
           const digests = builtMetadata["containerimage.digest"]
             .split(",")
             .map(digest => {
               const cleanedDigest = digest.trim();
-              return cleanedDigest !== "" ? `${image}@${cleanedDigest}` : null;
+              return cleanedDigest !== "" ? cleanedDigest : null;
             })
             .filter(digest => digest !== null);
+
+          const uniqueDigests = [...new Set(digests)];
+          if (uniqueDigests.length === 0) {
+            return core.setFailed('No valid digests found in "containerimage.digest" output.');
+          }
+
+          if( uniqueDigests.length > 1 ) {
+            return core.setFailed(`Multiple digests found: ${uniqueDigests.join(", ")}.`);
+          }
+
+          const digest = uniqueDigests[0];
+          const imageWithDigest = `${image}@${digest}`;
 
           const annotations = `${{ steps.metadata.outputs.annotations }}`
             .split("\n")
@@ -303,8 +312,8 @@ runs:
             annotations,
             registry,
             repository,
-            images,
-            digests,
+            image: imageWithDigest,
+            digest
           };
 
           core.setOutput("built-image", JSON.stringify(builtImage));
