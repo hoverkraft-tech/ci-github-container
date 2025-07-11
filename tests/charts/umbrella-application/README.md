@@ -6,19 +6,19 @@ An umbrella Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository | Name | Version |
-|------------|------|---------|
-| file://./charts/app | app | 0.0.0 |
-| https://charts.bitnami.com/bitnami | database(mysql) | 12.2.1 |
+| Repository                           | Name            | Version |
+| ------------------------------------ | --------------- | ------- |
+| file://./charts/app                  | app             | 0.0.0   |
+| <https://charts.bitnami.com/bitnami> | database(MySQL) | 12.2.1  |
 
 ## Values
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| app.enabled | bool | `true` |  |
-| database.auth.database | string | `"test-umbrella-application"` |  |
-| database.auth.username | string | `"test-umbrella-application"` |  |
-| database.enabled | bool | `true` |  |
-| database.fullnameOverride | string | `"database"` |  |
-| global.fullnameOverride | string | `""` |  |
-| global.nameOverride | string | `""` |  |
+| Key                       | Type   | Default                       | Description |
+| ------------------------- | ------ | ----------------------------- | ----------- |
+| app.enabled               | bool   | `true`                        |             |
+| database.auth.database    | string | `"test-umbrella-application"` |             |
+| database.auth.username    | string | `"test-umbrella-application"` |             |
+| database.enabled          | bool   | `true`                        |             |
+| database.fullnameOverride | string | `"database"`                  |             |
+| global.fullnameOverride   | string | `""`                          |             |
+| global.nameOverride       | string | `""`                          |             |
