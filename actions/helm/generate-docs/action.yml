@@ -38,13 +38,28 @@ runs:
     - shell: bash
       id: prepare-variables
       run: |
+        if [ ! -d "${{ inputs.working-directory }}" ]; then
+          echo "The working directory '${{ inputs.working-directory }}' does not exist."
+          exit 1
+        fi
+        working_directory=$(realpath "${{ inputs.working-directory }}")
+
+        echo "working-directory=${{ inputs.working-directory }}" >> "$GITHUB_OUTPUT"
         echo "working-directory-name=$(basename "${{ inputs.working-directory }}")" >> "$GITHUB_OUTPUT"
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
 
     - uses: losisin/helm-docs-github-action@178c1a8927bcd668d487395beda342ba270895b3 # v1.6.1
       with:
-        chart-search-root: ${{ inputs.working-directory }}
+        chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
+
+    - name: Prettify code
+      uses: creyD/prettier_action@8c18391fdc98ed0d884c6345f03975edac71b8f0 # v4.6
+      with:
+        prettier_options: --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
+        only_changed: true
+        no_commit: true
+        working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
       if: inputs.github-app-id
