@@ -17,9 +17,8 @@ inputs:
   values-file:
     description: |
       Path to the values file to use for generating the documentation.
-      If not provided, it will use the default values file.
+      See <https://github.com/losisin/helm-values-schema-json-action>.
     required: false
-    default: "values.yaml"
   github-token:
     description: |
       GitHub Token to create and merge pull request.
@@ -41,27 +40,42 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      id: prepare-variables
-      run: |
-        if [ ! -d "${{ inputs.working-directory }}" ]; then
-          echo "The working directory '${{ inputs.working-directory }}' does not exist."
-          exit 1
-        fi
-        working_directory=$(realpath "${{ inputs.working-directory }}")
+    - id: prepare-variables
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const { existsSync, realpathSync } = require('node:fs');
+          const { basename, isAbsolute, join } = require('node:path');
 
-        echo "working-directory=${{ inputs.working-directory }}" >> "$GITHUB_OUTPUT"
-        echo "working-directory-name=$(basename "${{ inputs.working-directory }}")" >> "$GITHUB_OUTPUT"
+          let workingDirectory = ${{ toJson(inputs.working-directory) }};
+          if (!workingDirectory || !workingDirectory.length) {
+            return core.setFailed("Input 'working-directory' is required.");
+          }
 
-        values_file="${{ inputs.values-file }}"
-        if [ ! -z "$values_file" ]; then
-          if [ ! -f "${working_directory}/${values_file}" ]; then
-            echo "The values file '${values_file}' does not exist in the working directory '${working_directory}'."
-            exit 1
-          fi
-          values_file=$(realpath "${working_directory}/${values_file}")
-          echo "values-file=${values_file}" >> "$GITHUB_OUTPUT"
-        fi
+          if (!existsSync(workingDirectory)) {
+            return core.setFailed(`Working directory '${workingDirectory}' does not exist.`);
+          }
+
+          workingDirectory = realpathSync(workingDirectory);
+          core.setOutput("working-directory", workingDirectory);
+          core.setOutput("working-directory-name", basename(workingDirectory));
+
+          let valuesFile = ${{ toJson(inputs.values-file) }};
+          if (valuesFile && valuesFile.length) {
+            if(isAbsolute(valuesFile)) {
+              if (!existsSync(valuesFile)) {
+                return core.setFailed(`The values file '${valuesFile}' does not exist.`);
+              }
+            } else {
+              valuesFile = join(workingDirectory, valuesFile);
+              if(!existsSync(valuesFile)) {
+                return core.setFailed(`The values file '${valuesFile}' does not exist in the working directory '${workingDirectory}'.`);
+              }
+            }
+
+            valuesFile = realpathSync(valuesFile);
+            core.setOutput("values-file", valuesFile);
+          }
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
 
@@ -73,6 +87,7 @@ runs:
       uses: losisin/helm-values-schema-json-action@28b1b33dcd9bd10bb8157627566f3971313a8872 # v2.0.4
       with:
         input: ${{ steps.prepare-variables.outputs.values-file }}
+        working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Prettify code
       uses: creyD/prettier_action@8c18391fdc98ed0d884c6345f03975edac71b8f0 # v4.6
