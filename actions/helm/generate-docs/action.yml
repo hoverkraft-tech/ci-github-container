@@ -80,6 +80,7 @@ runs:
         prettier_options: --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md ${{ steps.prepare-variables.outputs.values-file }}
         no_commit: true
         working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
+        clean_node_folder: true
 
     - uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
       if: inputs.github-app-id
