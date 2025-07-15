@@ -54,6 +54,12 @@ inputs:
   tag:
     description: "The release tag to set to chart"
     required: true
+  update-tag-paths:
+    description: |
+      List of yaml paths to update with the tag.
+      Comma separated list of paths.
+    required: false
+    default: ".version,.appVersion"
 
 outputs:
   image:
@@ -84,6 +90,8 @@ runs:
             throw new Error(`"tag" input is missing`);
           }
 
+          const updateTagPaths = `${{ inputs.update-tag-paths }}`.trim().split(',').map(p => p.trim()).filter(p => p);
+
           // Chart.yml files
           const globber = await glob.create(`${basePath}/**/Chart.yaml`, {followSymbolicLinks: false})
           for await (const chartFile of globber.globGenerator()) {
@@ -98,12 +106,15 @@ runs:
               yqUpdates[filePath].push(`.name = "${{ github.event.repository.name }}"`);
 
               // Update dependencies version where repository starts with file://
-              yqUpdates[filePath].push(`(.dependencies[] | select(.repository == "file://*")).version = "${tag}"`);
+              if(updateTagPaths.includes('.version')) {
+                yqUpdates[filePath].push(`(.dependencies[] | select(.repository == "file://*")).version = "${tag}"`);
+              }
             }
 
-            // Update version fields
-            yqUpdates[filePath].push(`.version = "${tag}"`);
-            yqUpdates[filePath].push(`.appVersion = "${tag}"`);
+            // Update tag fields
+            for (const path of updateTagPaths) {
+              yqUpdates[filePath].push(`${path} = "${tag}"`);
+            }
           }
 
           // values.yml files
