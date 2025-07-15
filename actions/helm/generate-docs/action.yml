@@ -14,6 +14,12 @@ inputs:
     description: "Working directory"
     required: false
     default: "${{ github.workspace }}"
+  values-file:
+    description: |
+      Path to the values file to use for generating the documentation.
+      If not provided, it will use the default values file.
+    required: false
+    default: "values.yaml"
   github-token:
     description: |
       GitHub Token to create and merge pull request.
@@ -47,16 +53,31 @@ runs:
         echo "working-directory=${{ inputs.working-directory }}" >> "$GITHUB_OUTPUT"
         echo "working-directory-name=$(basename "${{ inputs.working-directory }}")" >> "$GITHUB_OUTPUT"
 
+        values_file="${{ inputs.values-file }}"
+        if [ ! -z "$values_file" ]; then
+          if [ ! -f "${working_directory}/${values_file}" ]; then
+            echo "The values file '${values_file}' does not exist in the working directory '${working_directory}'."
+            exit 1
+          fi
+          values_file=$(realpath "${working_directory}/${values_file}")
+          echo "values-file=${values_file}" >> "$GITHUB_OUTPUT"
+        fi
+
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
 
     - uses: losisin/helm-docs-github-action@178c1a8927bcd668d487395beda342ba270895b3 # v1.6.1
       with:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
+    - if: ${{ steps.prepare-variables.outputs.values-file }}
+      uses: losisin/helm-values-schema-json-action@28b1b33dcd9bd10bb8157627566f3971313a8872 # v2.0.4
+      with:
+        input: ${{ steps.prepare-variables.outputs.values-file }}
+
     - name: Prettify code
       uses: creyD/prettier_action@8c18391fdc98ed0d884c6345f03975edac71b8f0 # v4.6
       with:
-        prettier_options: --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
+        prettier_options: --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md ${{ steps.prepare-variables.outputs.values-file }}
         no_commit: true
         working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
