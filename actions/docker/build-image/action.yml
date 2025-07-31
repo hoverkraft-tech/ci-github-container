@@ -210,6 +210,30 @@ runs:
         cache-type: ${{ inputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
+    # FIXME: Remove this when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
+    - id: transform-cache-gha
+      if: inputs.cache-type == 'gha'
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const cacheFrom = `${{ steps.cache.outputs.cache-from }}`;
+          const cacheTo = `${{ steps.cache.outputs.cache-to }}`;
+
+          core.info(`Original cache-from: ${cacheFrom}`);
+          core.info(`Original cache-to: ${cacheTo}`);
+
+          // Transform cache-from: replace ref= with scope=
+          const transformedCacheFrom = cacheFrom.replace(/ref=/g, 'scope=');
+
+          // Transform cache-to: replace ref= with scope=
+          const transformedCacheTo = cacheTo.replace(/ref=/g, 'scope=');
+
+          core.info(`Transformed cache-from: ${transformedCacheFrom}`);
+          core.info(`Transformed cache-to: ${transformedCacheTo}`);
+
+          core.setOutput('cache-from', transformedCacheFrom);
+          core.setOutput('cache-to', transformedCacheTo);
+
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
       uses: docker/setup-docker-action@b60f85385d03ac8acfca6d9996982511d8620a19 # v4.3.0
 
@@ -242,8 +266,10 @@ runs:
         secrets: ${{ inputs.secrets }}
         secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
-        cache-from: ${{ steps.cache.outputs.cache-from }}
-        cache-to: ${{ steps.cache.outputs.cache-to }}
+        # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from ||' when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
+        cache-from: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from || steps.cache.outputs.cache-from }}
+        # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to ||' when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
+        cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache.outputs.cache-to }}
         outputs: "type=image,push=true,push-by-digest=true,name-canonical=true,name=${{ steps.metadata.outputs.image }}"
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
