@@ -33,6 +33,6 @@ dependencies:
 
   - name: mysql
     alias: database
-    version: 13.0.4
+    version: 14.0.3
     repository: https://charts.bitnami.com/bitnami
     condition: database.enabled
