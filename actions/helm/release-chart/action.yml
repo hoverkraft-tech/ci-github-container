@@ -170,7 +170,7 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@1187c954ec44c3a0e62c13ca7dc9dadc1ca80ae7 # v4.46.1
+    - uses: mikefarah/yq@f03c9dc599c37bfcaf533427211d05e51e6fee64 # v4.47.1
       with:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
@@ -322,7 +322,7 @@ runs:
         done
 
     - id: chart-releaser
-      uses: appany/helm-oci-chart-releaser@dd0551c15abe174eb57824ecde62e976091094da # v0.4.2
+      uses: appany/helm-oci-chart-releaser@d94988c92bed2e09c6113981f15f8bb495d10943 # v0.5.0
       with:
         name: ${{ github.event.repository.name }}
         repository: ${{ github.repository }}/charts/${{ inputs.chart }}
