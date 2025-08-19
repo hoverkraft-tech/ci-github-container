@@ -132,7 +132,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
       with:
         value: ${{ inputs.platform }}
 
@@ -223,7 +223,7 @@ runs:
         driver-opts: |
           image=moby/buildkit:v0.23.2
 
-    - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+    - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
       with:
         registry: ${{ inputs.oci-registry }}
         username: ${{ inputs.oci-registry-username }}

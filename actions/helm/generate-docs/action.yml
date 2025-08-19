@@ -77,14 +77,14 @@ runs:
             core.setOutput("values-file", valuesFile);
           }
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
 
     - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
       with:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.prepare-variables.outputs.values-file }}
-      uses: losisin/helm-values-schema-json-action@28b1b33dcd9bd10bb8157627566f3971313a8872 # v2.0.4
+      uses: losisin/helm-values-schema-json-action@3aa3be6505be968c98c70a749f4834fb66d74e50 # v2.1.0
       with:
         input: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
@@ -97,14 +97,14 @@ runs:
         working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
         clean_node_folder: true
 
-    - uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+    - uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
       if: inputs.github-app-id
       id: generate-token
       with:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}
