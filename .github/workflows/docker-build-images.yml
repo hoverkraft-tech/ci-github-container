@@ -250,8 +250,9 @@ jobs:
 
             const isRepositoryPrivate = `${{ github.event.repository.private }}` === 'true';
             if (!isRepositoryPrivate) {
-              standardHostedRunnerByPlatform.push(
-                { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available
+              standardHostedRunnerByPlatform.unshift(
+                { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available,
+                { runner: "windows-11-arm", platformPattern: /^windows\/arm/ }
               );
             }
 
