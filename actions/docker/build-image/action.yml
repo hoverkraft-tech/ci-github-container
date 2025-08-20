@@ -218,7 +218,7 @@ runs:
     - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.25.0
+        version: v0.27.0
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
           image=moby/buildkit:v0.23.2
