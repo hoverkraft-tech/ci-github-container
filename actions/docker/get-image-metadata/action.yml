@@ -59,7 +59,7 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@6857ef6d10f704e0998aa4955282f27d1b9be778 # 0.23.1
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
 
     - id: define-metadata-inputs
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
@@ -100,7 +100,7 @@ runs:
           core.setFailed(`No tags found for the current event: ${context.eventName}`);
 
     - id: docker-metadata
-      uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+      uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
       with:
         images: ${{ steps.image-name.outputs.image-name-with-registry }}
         tags: ${{ steps.define-metadata-inputs.outputs.tags }}
