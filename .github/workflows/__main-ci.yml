@@ -57,7 +57,7 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - uses: ./actions/helm/generate-docs
         with:
@@ -68,7 +68,7 @@ jobs:
   release:
     needs: ci
     if: github.event_name != 'schedule'
-    uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@7ce3b41507f05379e3658efe955327873c2654b4 # 0.7.1
+    uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@6d9e5d48da1a80c085e8ed867d680a5e99b28217 # 0.8.0
     with:
       update-all: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
       github-app-id: ${{ vars.CI_BOT_APP_ID }}

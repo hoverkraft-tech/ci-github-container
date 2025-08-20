@@ -122,7 +122,7 @@ jobs:
               `ghcr.io/hoverkraft-tech/ci-github-container/test-mono-arch:0.1.0@${applicationMonoArchImage.digest}`
             );
 
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -190,7 +190,7 @@ jobs:
               assert.equal(annotations[key], value, `Expected annotation not found: ${key}`);
             });
 
-      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
 
       - name: Assert - signed multi-arch docker image
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
@@ -339,7 +339,7 @@ jobs:
             for (const image of expectedCreatedImages) {
               assert(builtImages[image], `"built-images" output does not contain "${image}" image`);
             }
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
