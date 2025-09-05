@@ -86,7 +86,7 @@ jobs:
     needs: [setup, arrange, act]
     steps:
       - name: Assert - Check ouputs
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const assert = require("assert");
@@ -113,7 +113,7 @@ jobs:
             }
 
       - name: Assert - Ensure expected packages versions have been deleted
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           github-token: ${{ github.token }}
           script: |
@@ -180,7 +180,7 @@ jobs:
         uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
 
       - name: Delete test packages
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           github-token: ${{ github.token }}
           script: |
