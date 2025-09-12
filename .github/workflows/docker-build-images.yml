@@ -152,7 +152,7 @@ jobs:
     runs-on: ${{ fromJson(inputs.runs-on) }}
     steps:
       - id: validate-inputs
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const ociRegistryPassword = `${{ secrets.oci-registry-password }}`;
@@ -232,7 +232,7 @@ jobs:
             core.setOutput('images', JSON.stringify(images));
 
       - id: define-images-by-platform
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const imagesInput = `${{ steps.validate-inputs.outputs.images }}`;
@@ -312,7 +312,7 @@ jobs:
             core.setOutput('images', JSON.stringify(imagesByPlatform));
 
       - id: define-artifact-name
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             function uniqid(prefix = "") {
@@ -370,7 +370,7 @@ jobs:
           private-key: ${{ secrets.build-secret-github-app-key }}
 
       - id: prepare-secret-envs
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const githubAppTokenEnvName = 'GITHUB_APP_TOKEN';
@@ -455,7 +455,7 @@ jobs:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
       - id: built-images
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const builtImagesInput = `${{ steps.get-matrix-outputs.outputs.result }}`;
@@ -507,7 +507,7 @@ jobs:
           built-images: ${{ steps.built-images.outputs.built-images }}
 
       - id: get-images-to-sign
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const builtImagesInput = `${{ steps.create-images-manifests.outputs.built-images }}`;

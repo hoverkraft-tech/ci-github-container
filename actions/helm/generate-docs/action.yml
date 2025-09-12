@@ -41,7 +41,7 @@ runs:
   using: "composite"
   steps:
     - id: prepare-variables
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         script: |
           const { existsSync, realpathSync } = require('node:fs');
@@ -84,7 +84,7 @@ runs:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.prepare-variables.outputs.values-file }}
-      uses: losisin/helm-values-schema-json-action@3aa3be6505be968c98c70a749f4834fb66d74e50 # v2.1.0
+      uses: losisin/helm-values-schema-json-action@d5847286fa04322702c4f8d45031974798c83ac7 # v2.3.0
       with:
         input: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
