@@ -74,7 +74,7 @@ runs:
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
 
     - id: chart-values-updates
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         script: |
           const path = require('node:path');
@@ -170,18 +170,18 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@f03c9dc599c37bfcaf533427211d05e51e6fee64 # v4.47.1
+    - uses: mikefarah/yq@6251e95af8df3505def48c71f3119836701495d6 # v4.47.2
       with:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
 
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+    - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
 
     - shell: bash
       run: npm install yaml
 
     - name: Rewrite the Chart.lock to match with updated ombrella dependencies if any
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         script: |
           const fs = require('node:fs');
