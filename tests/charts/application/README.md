@@ -6,9 +6,9 @@ A Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository                           | Name  | Version |
-| ------------------------------------ | ----- | ------- |
-| <https://charts.bitnami.com/bitnami> | MySQL | 14.0.3  |
+| Repository                         | Name  | Version |
+| ---------------------------------- | ----- | ------- |
+| https://charts.bitnami.com/bitnami | mysql | 14.0.3  |
 
 ## Values
 
@@ -45,6 +45,9 @@ A Helm chart for Kubernetes
 | mysql.auth.username                        | string | `"test"`                                                                    |             |
 | mysql.enabled                              | bool   | `false`                                                                     |             |
 | mysql.fullnameOverride                     | string | `"mysql"`                                                                   |             |
+| mysql.image.repository                     | string | `"bitnamilegacy/mysql"`                                                     |             |
+| mysql.metrics.image.repository             | string | `"bitnamilegacy/mysqld-exporter"`                                           |             |
+| mysql.volumePermissions.image.repository   | string | `"bitnamilegacy/os-shell"`                                                  |             |
 | nameOverride                               | string | `""`                                                                        |             |
 | nodeSelector                               | object | `{}`                                                                        |             |
 | podAnnotations                             | object | `{}`                                                                        |             |
