@@ -40,6 +40,9 @@ An umbrella Helm chart for Kubernetes (app component)
 | mysql.auth.username                           | string | `"test"`                                                                    |             |
 | mysql.enabled                                 | bool   | `false`                                                                     |             |
 | mysql.fullnameOverride                        | string | `"mysql"`                                                                   |             |
+| mysql.image.repository                        | string | `"bitnamilegacy/mysql"`                                                     |             |
+| mysql.metrics.image.repository                | string | `"bitnamilegacy/mysqld-exporter"`                                           |             |
+| mysql.volumePermissions.image.repository      | string | `"bitnamilegacy/os-shell"`                                                  |             |
 | nameOverride                                  | string | `""`                                                                        |             |
 | namespace                                     | string | `"app-system"`                                                              |             |
 | networkPolicy.egress                          | list   | `[]`                                                                        |             |
