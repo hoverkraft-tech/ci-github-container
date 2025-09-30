@@ -8,7 +8,12 @@ branding:
 
 outputs:
   deleted-image-tags:
-    description: 'The list of deleted tags for given image. Example: ["1.0.0", "1.0.1"]'
+    description: |
+      The list of deleted tags for given image.
+      Example:
+      ```json
+      ["1.0.0", "1.0.1"]
+      ```
     value: ${{ steps.delete-image-tags.outputs.deleted-image-tags }}
 
 inputs:
@@ -21,7 +26,7 @@ inputs:
   github-token:
     description: |
       GitHub token with the packages:read and packages:delete scopes.
-      See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>.
+      See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries.
     default: ${{ github.token }}
 
 runs:

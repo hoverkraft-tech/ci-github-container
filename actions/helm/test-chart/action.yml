@@ -18,13 +18,15 @@ inputs:
       Set values for Helm chart.
       Multiple values can be set using multiline string.
       Example:
-        key1=value1
-        key2=value2
+      ```
+      key1=value1
+      key2=value2
+      ```
     required: false
   helm-repositories:
     description: |
       List of Helm repositories to add before testing charts.
-      See <https://helm.sh/docs/helm/helm_repo_add/>.
+      See https://helm.sh/docs/helm/helm_repo_add/.
     required: false
   oci-registry:
     description: "OCI registry where to pull and push images"
@@ -33,14 +35,14 @@ inputs:
   oci-registry-username:
     description: |
       Username used to log against the OCI registry.
-      See <https://github.com/docker/login-action#usage>.
+      See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: false
   oci-registry-password:
     description: |
       Password or personal access token used to log against the OCI registry.
-      Can be passed in using "secrets.GITHUB_TOKEN".
-      See <https://github.com/docker/login-action#usage>.
+      Can be passed in using `secrets.GITHUB_TOKEN`.
+      See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
     required: false
   check-diff-only:
@@ -51,13 +53,13 @@ inputs:
   enable-lint:
     description: |
       Enable linting of the Helm chart.
-      See <https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md>.
+      See https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md.
     required: false
     default: "true"
   enable-install:
     description: |
       Enable installing the Helm chart.
-      See <https://github.com/helm/chart-testing/blob/main/doc/ct_install.md>.
+      See https://github.com/helm/chart-testing/blob/main/doc/ct_install.md.
     required: false
     default: "true"
 

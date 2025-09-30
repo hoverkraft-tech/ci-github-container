@@ -4,7 +4,7 @@ description: |
   Action to build and push a "raw" image with Docker for a specific platform.
   This action uses the Docker Buildx plugin to build the image.
   It supports caching.
-  It returns the image digest uri, tags, and annotations, but does not handle it itself.
+  It returns the image digest URI, tags, and annotations, but does not handle it itself.
 author: hoverkraft
 branding:
   icon: package
@@ -14,7 +14,9 @@ outputs:
   built-image:
     description: |
       Built image data.
-      Example: {
+      Example:
+      ```json
+      {
         "name": "application",
         "registry": "ghcr.io",
         "repository": "my-org/my-repo/application",
@@ -29,6 +31,7 @@ outputs:
           "org.opencontainers.image.description": "Application image"
         }
       }
+      ```
     value: ${{ steps.get-built-image.outputs.built-image }}
 
 inputs:
@@ -39,27 +42,27 @@ inputs:
   oci-registry-username:
     description: |
       Username used to log against the OCI registry.
-      See <https://github.com/docker/login-action#usage>.
+      See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
   oci-registry-password:
     description: |
       Password or personal access token used to log against the OCI registry.
-      Can be passed in using "secrets.GITHUB_TOKEN".
-      See <https://github.com/docker/login-action#usage>.
+      Can be passed in using `secrets.GITHUB_TOKEN`.
+      See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
     required: true
   repository:
     description: |
       Repository name.
-      Example: 'my-org/my-repo'.
+      Example: `my-org/my-repo`.
       See [Docker get-image-metadata action](../get-image-metadata/README.md).
     default: ${{ github.repository }}
     required: false
   image:
     description: |
       Additional image name.
-      Example: 'application'.
+      Example: `application`.
       See [Docker get-image-metadata action](../get-image-metadata/README.md).
     required: false
   tag:
@@ -68,44 +71,44 @@ inputs:
   platform:
     description: |
       Platform to build for.
-      See <https://github.com/docker/build-push-action#inputs>.
+      See https://github.com/docker/build-push-action#inputs.
     required: true
   context:
     description: |
       Build's context is the set of files located in the specified PATH or URL.
-      See <https://github.com/docker/build-push-action#inputs>.
+      See https://github.com/docker/build-push-action#inputs.
     default: "."
     required: false
   dockerfile:
     description: |
       Location of Dockerfile (defaults to Dockerfile).
-      See <https://github.com/docker/build-push-action#inputs>.
+      See https://github.com/docker/build-push-action#inputs.
     default: "Dockerfile"
     required: false
   build-args:
     description: |
       List of build-time variables.
-      See <https://github.com/docker/build-push-action#inputs>.
+      See https://github.com/docker/build-push-action#inputs.
     required: false
   target:
     description: |
       Sets the target stage to build.
-      See <https://github.com/docker/build-push-action#inputs>.
+      See https://github.com/docker/build-push-action#inputs.
     required: false
   secrets:
     description: |
       List of secrets to expose to the build.
-      See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+      See https://docs.docker.com/build/ci/github-actions/secrets/.
     required: false
   secret-envs:
     description: |
-      List of secret environment variables to expose to the build (e.g., key=envname, MY_SECRET=MY_ENV_VAR).
-      See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+      List of secret environment variables to expose to the build (e.g., `key=envname, MY_SECRET=MY_ENV_VAR`).
+      See https://docs.docker.com/build/ci/github-actions/secrets/.
     required: false
   cache-type:
     description: |
       Cache type.
-      See <https://docs.docker.com/build/cache/backends>.
+      See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
 

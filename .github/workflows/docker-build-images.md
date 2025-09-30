@@ -1,154 +1,212 @@
-<!-- start branding -->
-<!-- end branding -->
-<!-- start title -->
+<!-- header:start -->
 
 # GitHub Reusable Workflow: Docker build images
 
-<!-- end title -->
-<!-- start badges -->
-<!-- end badges -->
-<!-- start description -->
+<div align="center">
+  <img src="../logo.svg" width="60px" align="center" alt="Docker build images" />
+</div>
+
+---
+
+<!-- header:end -->
+
+<!-- badges:start -->
+
+[![Release](https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container)](https://github.com/hoverkraft-tech/ci-github-container/releases)
+[![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
+[![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+
+<!-- badges:end -->
+
+<!-- overview:start -->
+
+## Overview
 
 Workflow to build multiple Docker images.
-Build images using [Docker build-image action](../../actions/docker/build-image/README.md)
-This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build
+Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md).
+This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build.
 
-Needs the following permissions:
+### Permissions
 
-- `contents`: `read`
-- `issues`: `read`
-- `packages`: `write`
-- `pull-requests`: `read`
-- `id-token`: `write`
+- **`contents`**: `read`
+- **`issues`**: `read`
+- **`packages`**: `write`
+- **`pull-requests`**: `read`
+- **`id-token`**: `write`
 
-<!-- end description -->
-<!-- start contents -->
-<!-- end contents -->
-<!-- start usage -->
+<!-- overview:end -->
 
-```yaml
+<!-- usage:start -->
+
+## Usage
+
+````yaml
 name: Docker build images
-
 on:
-  merge_group:
-  pull_request:
-    branches: [main]
-
+  push:
+    branches:
+      - main
 permissions:
   contents: read
   issues: read
   packages: write
   pull-requests: read
   id-token: write
-
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0.27.1
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@f9e149b6cdfa8443994994f10085691a57b8cf0e # 0.27.1
     secrets:
-      # Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
+      # Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
-      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+      #
+      # This input is required.
+      oci-registry-password: ""
 
       # List of secrets to expose to the build.
-      # See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+      # See https://docs.docker.com/build/ci/github-actions/secrets/.
       build-secrets: ""
 
       # GitHub App private key to generate GitHub token to be passed as build secret env.
-      # See <https://github.com/actions/create-github-app-token>.
+      # See https://github.com/actions/create-github-app-token.
       build-secret-github-app-key: ""
-
-    # Optional customizations.
     with:
-      # Json array of runner(s) to use.
-      # See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job
-      # Default: '["ubuntu-latest"]'
+      # Runner to use. JSON array of runners.
+      # See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job.
+      #
+      # Default: `["ubuntu-latest"]`
       runs-on: '["ubuntu-latest"]'
 
-      # OCI registry where to pull and push images.
-      oci-registry: ""
+      # OCI registry where to pull and push images
+      # Default: `ghcr.io`
+      oci-registry: ghcr.io
 
-      # Username used to log against the OCI registry. See https://github.com/docker/login-action#usage
-      # Default: "${{ github.repository_owner }}"
-      oci-registry-username: ""
+      # Username used to log against the OCI registry.
+      # See https://github.com/docker/login-action#usage.
+      #
+      # Default: `${{ github.repository_owner }}`
+      oci-registry-username: ${{ github.repository_owner }}
 
-      #  Images to build parameters. Json array of objects.
-      #  Example: [
-      #    {
-      #      "name": "application",
-      #      "context": ".",
-      #      "dockerfile": "./docker/application/Dockerfile",
-      #      "target": "prod",
-      #      "build-args": {
-      #        "APP_PATH": "./application/",
-      #        "PROD_MODE": "true"
-      #      },
-      #      "secret-envs": {
-      #        "GH_TOKEN": "GITHUB_TOKEN"
-      #      },
-      #      "platforms": [
-      #        "linux/amd64",
-      #        {
-      #          "name": "darwin/amd64",
-      #          "runs-on": "macos-latest"
-      #        }
-      #      ]
-      #    }
-      #  ]
+      # Images to build parameters.
+      # JSON array of objects.
+      # Example:
+      # ```json
+      # [
+      # {
+      # "name": "application",
+      # "context": ".",
+      # "dockerfile": "./docker/application/Dockerfile",
+      # "target": "prod",
+      # "build-args": {
+      # "APP_PATH": "./application/",
+      # "PROD_MODE": "true"
+      # },
+      # "secret-envs": {
+      # "GH_TOKEN": "GITHUB_TOKEN"
+      # },
+      # "platforms": [
+      # "linux/amd64",
+      # {
+      # "name": "darwin/amd64",
+      # "runs-on": "macos-latest"
+      # }
+      # ]
+      # }
+      # ]
+      # ```
+      #
+      # This input is required.
       images: ""
 
       # Enable Git LFS.
-      # See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.
-      # Default: true
+      # See https://github.com/actions/checkout?tab=readme-ov-file#usage.
+      #
+      # Default: `true`
       lfs: true
 
       # Environment variable name(s) to pass GitHub token generated by GitHub App.
       # Can be a multiline string list.
       # This is useful to pass a generated token to the build, as it is not possible to share generated secrets between jobs.
       # Needs input `build-secret-github-app-id` and secret `build-secret-github-app-key`.
-      # Default: "GITHUB_APP_TOKEN"
-      build-secret-github-app-token-env: |
-        GITHUB_APP_TOKEN
+      #
+      # Default: `GITHUB_APP_TOKEN`
+      build-secret-github-app-token-env: GITHUB_APP_TOKEN
 
       # GitHub App ID to generate GitHub token to be passed as build secret env.
-      # See <https://github.com/actions/create-github-app-token>.
+      # See https://github.com/actions/create-github-app-token.
       build-secret-github-app-id: ""
 
       # The owner of the GitHub App installation.
-      # See <https://github.com/actions/create-github-app-token>.
-      # Default: "${{ github.repository_owner }}"
-      build-secret-github-app-owner: ""
-```
+      # See https://github.com/actions/create-github-app-token.
+      #
+      # Default: `${{ github.repository_owner }}`
+      build-secret-github-app-owner: ${{ github.repository_owner }}
 
-<!-- end usage -->
-<!-- start secrets -->
+      # Cache type.
+      # See https://docs.docker.com/build/cache/backends.
+      #
+      # Default: `gha`
+      cache-type: gha
 
-## Secrets
+      # Sign built images.
+      # See [sign-images](../../actions/docker/sign-images/README.md).
+      #
+      # Default: `true`
+      sign: true
+````
 
-| **Secret**                                   | **Description**                                                                                                                                                  | **Required** |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| **<code>oci-registry-password</code>**       | Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry. See <https://github.com/docker/login-action#usage>. | **true**     |
-| **<code>build-secrets</code>**               | List of secrets to expose to the build. See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                          | **false**    |
-| **<code>build-secret-github-app-key</code>** | GitHub App private key to generate GitHub token to be passed as build secret env. See <https://github.com/actions/create-github-app-token>.                      | **false**    |
+<!-- usage:end -->
 
-<!-- end secrets -->
 <!-- markdownlint-disable MD013 -->
-<!-- start inputs -->
+
+<!-- inputs:start -->
 
 ## Inputs
 
-| **Input**                                          | **Description**                                                                                                                                                                                                                                                                                                                                                                     | **Default**                                 | **Required** | **Type**    |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------ | ----------- |
-| **<code>runs-on</code>**                           | JSON array of runner(s) to use. See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>                                                                                                                                                                                                                                                                   | <code>["ubuntu-latest"]</code>              | **false**    | **string**  |
-| **<code>oci-registry</code>**                      | OCI registry where to pull and push images                                                                                                                                                                                                                                                                                                                                          | <code>ghcr.io</code>                        | **false**    | **string**  |
-| **<code>oci-registry-username</code>**             | Username used to log against the OCI registry. See <https://github.com/docker/login-action#usage>                                                                                                                                                                                                                                                                                   | <code>${{ github.repository_owner }}</code> | **false**    | **string**  |
-| **<code>images</code>**                            | Images to build parameters. JSON array of objects. Example: [{ "name": "application", "context": ".", "Dockerfile": "./docker/application/Dockerfile", "target": "prod", "build-args": { "APP_PATH": "./application/", "PROD_MODE": "true" }, "secret-envs": { "GH_TOKEN": "GITHUB_TOKEN" }, "platforms": ["linux/amd64", { "name": "darwin/amd64", "runs-on": "macos-latest" }] }] |                                             | **true**     | **string**  |
-| **<code>lfs</code>**                               | Enable Git LFS. See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.                                                                                                                                                                                                                                                                                                 | <code>true</code>                           | **false**    | **boolean** |
-| **<code>build-secret-github-app-token-env</code>** | Environment variable name(s) to pass GitHub token generated by GitHub App. Can be a multiline string list. This is useful to pass a generated token to the build, as it is not possible to share generated secrets between jobs. Needs input `build-secret-github-app-id` and secret `build-secret-github-app-key`.                                                                 | <code>GITHUB_APP_TOKEN</code>               | **false**    | **string**  |
-| **<code>build-secret-github-app-id</code>**        | GitHub App ID to generate GitHub token to be passed as build secret env. See <https://github.com/actions/create-github-app-token>.                                                                                                                                                                                                                                                  |                                             | **false**    | **string**  |
-| **<code>build-secret-github-app-owner</code>**     | The owner of the GitHub App installation. See <https://github.com/actions/create-github-app-token>.                                                                                                                                                                                                                                                                                 | <code>${{ github.repository_owner }}</code> | **false**    | **string**  |
+### Workflow Call Inputs
 
-<!-- end inputs -->
-<!-- markdownlint-enable MD013 -->
+| **Input**                               | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | **Required** | **Type**    | **Default**                      |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------- | -------------------------------- |
+| **`runs-on`**                           | Runner to use. JSON array of runners.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **false**    | **string**  | `["ubuntu-latest"]`              |
+|                                         | See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>.                                                                                                                                                                                                                                                                                                                                                                                                                          |              |             |                                  |
+| **`oci-registry`**                      | OCI registry where to pull and push images                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **false**    | **string**  | `ghcr.io`                        |
+| **`oci-registry-username`**             | Username used to log against the OCI registry.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | **false**    | **string**  | `${{ github.repository_owner }}` |
+|                                         | See <https://github.com/docker/login-action#usage>.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |              |             |                                  |
+| **`images`**                            | Images to build parameters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **true**     | **string**  | -                                |
+|                                         | JSON array of objects.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |              |             |                                  |
+|                                         | Example:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |              |             |                                  |
+|                                         | <!-- textlint-disable --><pre lang="json">[&#13; {&#13; "name": "application",&#13; "context": ".",&#13; "dockerfile": "./docker/application/Dockerfile",&#13; "target": "prod",&#13; "build-args": {&#13; "APP_PATH": "./application/",&#13; "PROD_MODE": "true"&#13; },&#13; "secret-envs": {&#13; "GH_TOKEN": "GITHUB_TOKEN"&#13; },&#13; "platforms": [&#13; "linux/amd64",&#13; {&#13; "name": "darwin/amd64",&#13; "runs-on": "macos-latest"&#13; }&#13; ]&#13; }&#13;]</pre><!-- textlint-enable --> |              |             |                                  |
+| **`lfs`**                               | Enable Git LFS.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | **false**    | **boolean** | `true`                           |
+|                                         | See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.                                                                                                                                                                                                                                                                                                                                                                                                                                         |              |             |                                  |
+| **`build-secret-github-app-token-env`** | Environment variable name(s) to pass GitHub token generated by GitHub App.                                                                                                                                                                                                                                                                                                                                                                                                                                  | **false**    | **string**  | `GITHUB_APP_TOKEN`               |
+|                                         | Can be a multiline string list.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |              |             |                                  |
+|                                         | This is useful to pass a generated token to the build, as it is not possible to share generated secrets between jobs.                                                                                                                                                                                                                                                                                                                                                                                       |              |             |                                  |
+|                                         | Needs input `build-secret-github-app-id` and secret `build-secret-github-app-key`.                                                                                                                                                                                                                                                                                                                                                                                                                          |              |             |                                  |
+| **`build-secret-github-app-id`**        | GitHub App ID to generate GitHub token to be passed as build secret env.                                                                                                                                                                                                                                                                                                                                                                                                                                    | **false**    | **string**  | -                                |
+|                                         | See <https://github.com/actions/create-github-app-token>.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |              |             |                                  |
+| **`build-secret-github-app-owner`**     | The owner of the GitHub App installation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | **false**    | **string**  | `${{ github.repository_owner }}` |
+|                                         | See <https://github.com/actions/create-github-app-token>.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |              |             |                                  |
+| **`cache-type`**                        | Cache type.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **false**    | **string**  | `gha`                            |
+|                                         | See <https://docs.docker.com/build/cache/backends>.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |              |             |                                  |
+| **`sign`**                              | Sign built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | **false**    | **boolean** | `true`                           |
+|                                         | See [sign-images](../../actions/docker/sign-images/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                              |              |             |                                  |
+
+<!-- inputs:end -->
+
+<!-- secrets:start -->
+
+## Secrets
+
+| **Secret**                        | **Description**                                                                                              | **Required** |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------ |
+| **`oci-registry-password`**       | Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry. | **true**     |
+|                                   | See <https://github.com/docker/login-action#usage>.                                                          |              |
+| **`build-secrets`**               | List of secrets to expose to the build.                                                                      | **false**    |
+|                                   | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                              |              |
+| **`build-secret-github-app-key`** | GitHub App private key to generate GitHub token to be passed as build secret env.                            | **false**    |
+|                                   | See <https://github.com/actions/create-github-app-token>.                                                    |              |
+
+<!-- secrets:end -->
 
 ### Images entry parameters
 
@@ -177,26 +235,60 @@ If a platform entry omits the <code>runs-on</code> field, the following default 
 - When the main <code>docker-build-images</code> job uses a standard hosted runner, that runner is automatically matched to each platform.
 - If the main <code>docker-build-images</code> job uses a custom or self-hosted runner, all platforms use the same runner.
 
-<!-- start outputs -->
+<!-- outputs:start -->
 
 ## Outputs
 
-| **Output**                    | **Description**                                                                  |
-| ----------------------------- | -------------------------------------------------------------------------------- |
-| **<code>built-images</code>** | Built images data. Example: <code>{ "application": { build-image-data } }</code> |
+| **Output**         | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`built-images`** | Built images data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|                    | Example:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+|                    | <!-- textlint-disable --><pre lang="json">{&#13; "application": {&#13; "name": "application",&#13; "registry": "ghcr.io",&#13; "repository": "my-org/my-repo/application",&#13; "tags": ["pr-63-5222075","pr-63"],&#13; "images": [&#13; "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"&#13; ],&#13; "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "annotations": {&#13; "org.opencontainers.image.created": "2021-09-30T14:00:00Z",&#13; "org.opencontainers.image.description": "Application image"&#13; }&#13; }&#13;}</pre><!-- textlint-enable --> |
 
-### Built image data
+<!-- outputs:end -->
 
-| **Parameter**                | **Description**                    | **Example**                                                                                                                                                                                                                                       |
-| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **<code>name</code>**        | Image name                         | `application`                                                                                                                                                                                                                                     |
-| **<code>registry</code>**    | Registry where the image is stored | `ghcr.io`                                                                                                                                                                                                                                         |
-| **<code>repository</code>**  | Repository name                    | `my-org/my-repo/application`                                                                                                                                                                                                                      |
-| **<code>tags</code>**        | List of tags                       | `["pr-63-5222075","pr-63"]`                                                                                                                                                                                                                       |
-| **<code>images</code>**      | List of images                     | `["ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d","ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"]` |
-| **<code>digest</code>**      |                                    | `sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d`                                                                                                                                                                         |
-| **<code>annotations</code>** | List of annotations                | `{"org.opencontainers.image.created": "2021-09-30T14:00:00Z","org.opencontainers.image.description": "Application image"}`                                                                                                                        |
+<!-- markdownlint-enable MD013 -->
 
-<!-- end outputs -->
-<!-- start [.github/ghadocs/examples/] -->
-<!-- end [.github/ghadocs/examples/] -->
+<!-- examples:start -->
+<!-- examples:end -->
+
+<!--
+// jscpd:ignore-start
+-->
+
+<!-- contributing:start -->
+
+## Contributing
+
+Contributions are welcome! Please see the [contributing guidelines](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md) for more details.
+
+<!-- contributing:end -->
+
+<!-- security:start -->
+<!-- security:end -->
+
+<!-- license:start -->
+
+## License
+
+This project is licensed under the MIT License.
+
+SPDX-License-Identifier: MIT
+
+Copyright © 2025 hoverkraft-tech
+
+For more details, see the [license](http://choosealicense.com/licenses/mit/).
+
+<!-- license:end -->
+
+<!-- generated:start -->
+
+---
+
+This documentation was automatically generated by [CI Dokumentor](https://github.com/hoverkraft-tech/ci-dokumentor).
+
+<!-- generated:end -->
+
+<!--
+// jscpd:ignore-end
+-->

@@ -1,6 +1,7 @@
 ---
 name: "Get image name"
-description: "Action to forge the name of a given image including registry, repository and given input image name"
+description: |
+  Action to forge the name of a given image including registry, repository and given input image name.
 author: hoverkraft
 branding:
   icon: tag
@@ -8,10 +9,10 @@ branding:
 
 outputs:
   image-name:
-    description: 'Forged image name. Example: "my-org/my-repo/application"'
+    description: "Forged image name. Example: `my-org/my-repo/application`"
     value: ${{ steps.image-name-generator.outputs.image-name }}
   image-name-with-registry:
-    description: 'Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application"'
+    description: "Forged image name containing registry. Example: `ghcr.io/my-org/my-repo/application`"
     value: ${{ steps.image-name-generator.outputs.image-name-with-registry }}
 
 inputs:

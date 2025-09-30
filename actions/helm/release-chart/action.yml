@@ -2,7 +2,7 @@
 name: "Release Helm Chart"
 description: |
   Action to release a Helm chart to OCI registry.
-  Supports umbrella charts: if a chart has local dependencies having version 0.0.0,
+  Supports umbrella charts: if a chart has local dependencies having version `0.0.0`,
   the action will update those dependencies version with the given tag, then update the Chart.lock accordingly.
 author: hoverkraft
 branding:
@@ -13,20 +13,20 @@ inputs:
   oci-registry:
     description: |
       OCI registry where to push chart.
-      See <https://github.com/appany/helm-oci-chart-releaser#usage>.
+      See https://github.com/appany/helm-oci-chart-releaser#usage.
     required: true
     default: "ghcr.io"
   oci-registry-username:
     required: true
     description: |
       OCI registry username.
-      See <https://github.com/appany/helm-oci-chart-releaser#usage>.
+      See https://github.com/appany/helm-oci-chart-releaser#usage.
     default: ${{ github.repository_owner }}
   oci-registry-password:
     required: true
     description: |
       OCI registry password.
-      See <https://github.com/appany/helm-oci-chart-releaser#usage>.
+      See https://github.com/appany/helm-oci-chart-releaser#usage.
     default: ${{ github.token }}
   chart:
     description: "Chart name to release"
@@ -37,26 +37,31 @@ inputs:
   values:
     description: |
       Define charts values to be filled.
+      See https://mikefarah.gitbook.io/yq/.
       Format: `[{ file, path, value }]`.
-      Example: [
+
+      Example:
+
+      ```json
+      [
         {
           "file": "charts/application/charts/api/values.yaml",
           "path": ".image.registry", "value": "ghcr.io"
         }
-      ].
-      See <https://mikefarah.gitbook.io/yq/>
+      ]
+      ```
     required: false
   helm-repositories:
     description: |
       List of Helm repositories to add before release charts.
-      See <https://helm.sh/docs/helm/helm_repo_add/>.
+      See https://helm.sh/docs/helm/helm_repo_add/.
     required: false
   tag:
     description: "The release tag to set to chart"
     required: true
   update-tag-paths:
     description: |
-      List of yaml paths to update with the tag.
+      List of YAML paths to update with the tag.
       Comma separated list of paths.
     required: false
     default: ".version,.appVersion"
@@ -65,8 +70,8 @@ outputs:
   image:
     value: ${{ steps.chart-releaser.outputs.image }}
     description: |
-      Chart image (Default '{registry}/{repository}/{image}:{tag}').
-      See <https://github.com/appany/helm-oci-chart-releaser>.
+      Chart image (Format: `{registry}/{repository}/{image}:{tag}`).
+      See https://github.com/appany/helm-oci-chart-releaser.
 
 runs:
   using: "composite"

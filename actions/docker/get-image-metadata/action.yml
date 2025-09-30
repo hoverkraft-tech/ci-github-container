@@ -1,6 +1,9 @@
 ---
 name: "Get image metadata"
-description: "Action to retrieve required metadata to build Docker image"
+description: |
+  Action to retrieve required metadata to build Docker image.
+  Generate Docker image metadata including tags, labels, and annotations for container builds.
+  It uses the [docker/metadata-action](https://github.com/docker/metadata-action) to generate the metadata based on the current GitHub context.
 author: hoverkraft
 branding:
   icon: info
@@ -8,7 +11,9 @@ branding:
 
 outputs:
   image:
-    description: 'Forged image name containing registry. Example: "ghcr.io/my-org/my-repo/application"'
+    description: |
+      Forged image name containing registry.
+      Example: `ghcr.io/my-org/my-repo/application`
     value: ${{ steps.generate-outputs.outputs.image }}
   labels:
     description: "The image labels."
@@ -17,7 +22,7 @@ outputs:
     description: "The image annotations."
     value: ${{ steps.generate-outputs.outputs.annotations }}
   tags:
-    description: 'The image tags. Example: "pr-63-5222075\npr-63"'
+    description: 'The image tags. Example: `pr-63-5222075\npr-63`'
     value: ${{ steps.generate-outputs.outputs.tags }}
 
 inputs:
@@ -26,11 +31,11 @@ inputs:
     default: "ghcr.io"
     required: true
   repository:
-    description: "Repository name. Example: 'my-org/my-repo'. See [Docker get-image-name action](../get-image-name/README.md)"
+    description: "Repository name. Example: `my-org/my-repo`. See [Docker get-image-name action](../get-image-name/README.md)"
     default: ${{ github.repository }}
     required: false
   image:
-    description: "Additional image name. Example: 'application'. See [Docker get-image-name action](../get-image-name/README.md)"
+    description: "Additional image name. Example: `application`. See [Docker get-image-name action](../get-image-name/README.md)"
     required: false
   tag:
     description: "Force image tag to publish"

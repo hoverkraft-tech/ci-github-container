@@ -1,8 +1,6 @@
-# Docker build images
-# ==========================
-# Workflow to build multiple docker images.
-# Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md)
-# This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build
+# Workflow to build multiple Docker images.
+# Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md).
+# This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build.
 ---
 name: Docker build images
 
@@ -12,7 +10,9 @@ on: # yamllint disable-line rule:truthy
       built-images:
         description: |
           Built images data.
-          Example: {
+          Example:
+          ```json
+          {
             "application": {
               "name": "application",
               "registry": "ghcr.io",
@@ -29,12 +29,13 @@ on: # yamllint disable-line rule:truthy
               }
             }
           }
+          ```
         value: ${{ jobs.publish-manifests.outputs.built-images }}
     inputs:
       runs-on:
         description: |
-          Runner to use. Json array of runners.
-          See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>.
+          Runner to use. JSON array of runners.
+          See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job.
         type: string
         default: '["ubuntu-latest"]'
         required: false
@@ -46,14 +47,17 @@ on: # yamllint disable-line rule:truthy
       oci-registry-username:
         description: |
           Username used to log against the OCI registry.
-          See <https://github.com/docker/login-action#usage>.
+          See https://github.com/docker/login-action#usage.
         type: string
         default: ${{ github.repository_owner }}
         required: false
       images:
         description: |
-          Images to build parameters. Json array of objects.
-          Example: [
+          Images to build parameters.
+          JSON array of objects.
+          Example:
+          ```json
+          [
             {
               "name": "application",
               "context": ".",
@@ -75,12 +79,13 @@ on: # yamllint disable-line rule:truthy
               ]
             }
           ]
+          ```
         type: string
         required: true
       lfs:
         description: |
           Enable Git LFS.
-          See <https://github.com/actions/checkout?tab=readme-ov-file#usage>.
+          See https://github.com/actions/checkout?tab=readme-ov-file#usage.
         type: boolean
         default: true
         required: false
@@ -96,45 +101,45 @@ on: # yamllint disable-line rule:truthy
       build-secret-github-app-id:
         description: |
           GitHub App ID to generate GitHub token to be passed as build secret env.
-          See <https://github.com/actions/create-github-app-token>.
+          See https://github.com/actions/create-github-app-token.
         required: false
         type: string
       build-secret-github-app-owner:
         description: |
           The owner of the GitHub App installation.
-          See <https://github.com/actions/create-github-app-token>.
+          See https://github.com/actions/create-github-app-token.
         required: false
         type: string
         default: ${{ github.repository_owner }}
       cache-type:
         description: |
           Cache type.
-          See <https://docs.docker.com/build/cache/backends>.
+          See https://docs.docker.com/build/cache/backends.
         default: "gha"
         type: string
         required: false
       sign:
         description: |
           Sign built images.
-          See <../../actions/docker/sign-images/README.md>.
+          See [sign-images](../../actions/docker/sign-images/README.md).
         type: boolean
         default: true
         required: false
     secrets:
       oci-registry-password:
         description: |
-          Password or GitHub token (packages:read and packages:write scopes) used to log against the OCI registry.
-          See <https://github.com/docker/login-action#usage>.
+          Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry.
+          See https://github.com/docker/login-action#usage.
         required: true
       build-secrets:
         description: |
           List of secrets to expose to the build.
-          See <https://docs.docker.com/build/ci/github-actions/secrets/>.
+          See https://docs.docker.com/build/ci/github-actions/secrets/.
         required: false
       build-secret-github-app-key:
         description: |
           GitHub App private key to generate GitHub token to be passed as build secret env.
-          See <https://github.com/actions/create-github-app-token>.
+          See https://github.com/actions/create-github-app-token.
         required: false
 
 permissions:
@@ -339,7 +344,7 @@ jobs:
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       id-token: write
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -361,7 +366,7 @@ jobs:
           echo "self-workflow" >> .gitignore
           echo "self-workflow" >> .dockerignore
 
-      - uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+      - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
         if: inputs.build-secret-github-app-id
         id: generate-token
         with:
@@ -422,7 +427,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
@@ -450,7 +455,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 

@@ -107,4 +107,13 @@ mysql:
     username: test
     password: test
     rootPassword: root
+  # NOTE: see https://news.broadcom.com/app-dev/broadcom-introduces-bitnami-secure-images-for-production-ready-containerized-applications
+  image:
+    repository: bitnamilegacy/mysql
+  metrics:
+    image:
+      repository: bitnamilegacy/mysqld-exporter
+  volumePermissions:
+    image:
+      repository: bitnamilegacy/os-shell
 # jscpd:ignore-end

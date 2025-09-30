@@ -1,60 +1,119 @@
-<!-- start title -->
+<!-- header:start -->
 
-# <img src=".github/ghadocs/branding.svg" width="60px" align="center" alt="branding<icon:link color:gray-dark>" /> GitHub Action: Parse chart URI
+# ![Icon](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItbGluayIgY29sb3I9ImJsdWUiPjxwYXRoIGQ9Ik0xMCAxM2E1IDUgMCAwIDAgNy41NC41NGwzLTNhNSA1IDAgMCAwLTcuMDctNy4wN2wtMS43MiAxLjcxIj48L3BhdGg+PHBhdGggZD0iTTE0IDExYTUgNSAwIDAgMC03LjU0LS41NGwtMyAzYTUgNSAwIDAgMCA3LjA3IDcuMDdsMS43MS0xLjcxIj48L3BhdGg+PC9zdmc+) GitHub Action: Parse chart URI
 
-<!-- end title -->
-<!--
-// jscpd:ignore-start
--->
-<!-- markdownlint-disable MD013 -->
-<!-- start badges -->
+<div align="center">
+  <img src="../../../.github/logo.svg" width="60px" align="center" alt="Parse chart URI" />
+</div>
 
-<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
+---
 
-<!-- end badges -->
-<!-- markdownlint-enable MD013 -->
-<!--
-// jscpd:ignore-end
--->
-<!-- end description -->
-<!-- start contents -->
-<!-- end contents -->
+<!-- header:end -->
+
+<!-- badges:start -->
+
+[![Marketplace](https://img.shields.io/badge/Marketplace-parse--chart--uri-blue?logo=github-actions)](https://github.com/marketplace/actions/parse-chart-uri)
+[![Release](https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container)](https://github.com/hoverkraft-tech/ci-github-container/releases)
+[![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
+[![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+
+<!-- badges:end -->
+
+<!-- overview:start -->
+
+## Overview
+
+Extracts the chart URI parts from a given chart URI.
+The chart URI should be in the format `repository/name:version`.
+For example: `ghcr.io/my-org/my-repo/charts/my-application/my-repo:0.1.0`.
+The output will be:
+
+- `repository`: `ghcr.io/my-org/my-repo/charts/my-application`
+- `name`: `my-repo`
+- `version`: `0.1.0`
+
+<!-- overview:end -->
+
+<!-- usage:start -->
 
 ## Usage
 
-<!-- start usage -->
-
 ```yaml
-- uses: hoverkraft-tech/ci-github-container@0.26.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/parse-chart-uri@f9e149b6cdfa8443994994f10085691a57b8cf0e # 0.27.1
   with:
-    # Description: Chart URI to parse
-    #
+    # Chart URI to parse.
+    # This input is required.
     uri: ""
 ```
 
-<!-- end usage -->
+<!-- usage:end -->
 
-## Permissions
-
-This action does not requires any permissions.
+<!-- inputs:start -->
 
 ## Inputs
 
-<!-- start inputs -->
+| **Input** | **Description**     | **Required** | **Default** |
+| --------- | ------------------- | ------------ | ----------- |
+| **`uri`** | Chart URI to parse. | **true**     | -           |
 
-| **Input**        | **Description**    | **Default** | **Required** |
-| ---------------- | ------------------ | ----------- | ------------ |
-| <code>URI</code> | Chart URI to parse |             | **true**     |
+<!-- inputs:end -->
 
-<!-- end inputs -->
-<!-- start outputs -->
+<!-- secrets:start -->
+<!-- secrets:end -->
 
-| **Output**              | **Description**                  |
-| ----------------------- | -------------------------------- |
-| <code>repository</code> | Repository part of the chart URI |
-| <code>name</code>       | Name part of the chart URI       |
-| <code>version</code>    | Version part of the chart URI    |
+<!-- outputs:start -->
 
-<!-- end outputs -->
-<!-- start [.github/ghadocs/examples/] -->
-<!-- end [.github/ghadocs/examples/] -->
+## Outputs
+
+| **Output**       | **Description**                   |
+| ---------------- | --------------------------------- |
+| **`repository`** | Repository part of the chart URI. |
+| **`name`**       | Name part of the chart URI.       |
+| **`version`**    | Version part of the chart URI.    |
+
+<!-- outputs:end -->
+
+<!-- examples:start -->
+<!-- examples:end -->
+
+<!--
+// jscpd:ignore-start
+-->
+
+<!-- contributing:start -->
+
+## Contributing
+
+Contributions are welcome! Please see the [contributing guidelines](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md) for more details.
+
+<!-- contributing:end -->
+
+<!-- security:start -->
+<!-- security:end -->
+
+<!-- license:start -->
+
+## License
+
+This project is licensed under the MIT License.
+
+SPDX-License-Identifier: MIT
+
+Copyright © 2025 hoverkraft
+
+For more details, see the [license](http://choosealicense.com/licenses/mit/).
+
+<!-- license:end -->
+
+<!-- generated:start -->
+
+---
+
+This documentation was automatically generated by [CI Dokumentor](https://github.com/hoverkraft-tech/ci-dokumentor).
+
+<!-- generated:end -->
+
+<!--
+// jscpd:ignore-end
+-->
