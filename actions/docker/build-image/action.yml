@@ -135,7 +135,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
       with:
         value: ${{ inputs.platform }}
 
@@ -202,7 +202,7 @@ runs:
         fi
 
     - id: cache
-      uses: int128/docker-build-cache-config-action@338206c80bf9eeb2b9694b7b4fc8c247c317e2a8 # v1.38.0
+      uses: int128/docker-build-cache-config-action@b3744816a5ba1ad9885b634d530b35ca90ece622 # v1.39.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -226,7 +226,7 @@ runs:
         driver-opts: |
           image=moby/buildkit:v0.23.2
 
-    - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+    - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
       with:
         registry: ${{ inputs.oci-registry }}
         username: ${{ inputs.oci-registry-username }}
