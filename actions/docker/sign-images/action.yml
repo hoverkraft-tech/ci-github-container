@@ -19,25 +19,27 @@ inputs:
       The images should be in the format `registry/name:tag@digest`.
       It can also be a list of images in JSON format.
       Example:
+
+      ```json
+      [
+        "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+        "ghcr.io/my-org/my-repo/application:pr-63@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"
+      ]
       ```
-        [
-          "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
-          "ghcr.io/my-org/my-repo/application:pr-63@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"
-        ]
-      ```
+
       If the image does not have a digest, it will retrieve the digest using `docker buildx imagetools inspect`.
     required: true
   github-token:
     description: |
       GitHub Token to sign the image.
       Permissions:
-        - id-token: write
+      - `id-token`: `write`
     default: ${{ github.token }}
 
 runs:
   using: "composite"
   steps:
-    - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+    - uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
 
     - name: Sign the images with GitHub OIDC Token
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0

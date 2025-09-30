@@ -17,24 +17,24 @@ inputs:
   values-file:
     description: |
       Path to the values file to use for generating the documentation.
-      See <https://github.com/losisin/helm-values-schema-json-action>.
+      See https://github.com/losisin/helm-values-schema-json-action.
     required: false
   github-token:
     description: |
       GitHub Token to create and merge pull request.
       Permissions:
-        - contents: write
-        - pull-requests: write
+      - contents: write
+      - pull-requests: write
     default: ${{ github.token }}
   github-app-id:
     description: |
       GitHub App ID to generate GitHub token in place of github-token.
-      See <https://github.com/actions/create-github-app-token>.
+      See https://github.com/actions/create-github-app-token.
     required: false
   github-app-key:
     description: |
       GitHub App private key to generate GitHub token in place of github-token.
-      See <https://github.com/actions/create-github-app-token>.
+      See https://github.com/actions/create-github-app-token.
     required: false
 
 runs:
@@ -77,7 +77,7 @@ runs:
             core.setOutput("values-file", valuesFile);
           }
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
 
     - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
       with:
@@ -97,14 +97,14 @@ runs:
         working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
         clean_node_folder: true
 
-    - uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+    - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
       if: inputs.github-app-id
       id: generate-token
       with:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@b4883995e100e291a1fed68678d47a560328ed08 # 0.24.0
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}

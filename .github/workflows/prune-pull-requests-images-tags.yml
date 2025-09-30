@@ -1,5 +1,3 @@
-# Prune pull requests images tags
-# ==========================
 # Workflow to performs a clean of closed pull requests images tags.
 # See [prune-pull-requests-image-tags](../../actions/docker/prune-pull-requests-image-tags/README.md) for more information.
 ---
@@ -11,17 +9,24 @@ on: # yamllint disable-line rule:truthy
     inputs:
       runs-on:
         description: |
-          Json array of runner(s) to use.
-          See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>.
+          JSON array of runner(s) to use.
+          See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job.
         type: string
         default: '["ubuntu-latest"]'
         required: false
       images:
-        description: 'Images to clean. Example: ["application-1","application-2"]'
+        description: |
+          Images to clean.
+          Example:
+          ```json
+            ["application-1","application-2"]
+          ```
         type: string
         required: true
       prune-cache-images:
-        description: 'Prune cache image tags (like "application-1/cache"). Useful when building image with "registry" cache backend.'
+        description: |
+          Prune cache image tags (like `application-1/cache`).
+          Useful when building image with "registry" cache backend.
         type: boolean
         default: false
         required: false

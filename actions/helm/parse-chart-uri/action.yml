@@ -5,6 +5,7 @@ description: |
   The chart URI should be in the format `repository/name:version`.
   For example: `ghcr.io/my-org/my-repo/charts/my-application/my-repo:0.1.0`.
   The output will be:
+
   - `repository`: `ghcr.io/my-org/my-repo/charts/my-application`
   - `name`: `my-repo`
   - `version`: `0.1.0`
@@ -15,18 +16,18 @@ branding:
 
 inputs:
   uri:
-    description: "Chart URI to parse"
+    description: "Chart URI to parse."
     required: true
 
 outputs:
   repository:
-    description: "Repository part of the chart URI"
+    description: "Repository part of the chart URI."
     value: ${{ steps.parse-chart-uri.outputs.repository }}
   name:
-    description: "Name part of the chart URI"
+    description: "Name part of the chart URI."
     value: ${{ steps.parse-chart-uri.outputs.name }}
   version:
-    description: "Version part of the chart URI"
+    description: "Version part of the chart URI."
     value: ${{ steps.parse-chart-uri.outputs.version }}
 
 runs:

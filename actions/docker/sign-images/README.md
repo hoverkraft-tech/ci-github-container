@@ -1,31 +1,37 @@
-<!-- start title -->
+<!-- header:start -->
 
-# <img src=".github/ghadocs/branding.svg" width="60px" align="center" alt="branding<icon:award color:blue>" /> GitHub Action: Docker - Sign images
+# ![Icon](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItYXdhcmQiIGNvbG9yPSJibHVlIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjgiIHI9IjciPjwvY2lyY2xlPjxwb2x5bGluZSBwb2ludHM9IjguMjEgMTMuODkgNyAyMyAxMiAyMCAxNyAyMyAxNS43OSAxMy44OCI+PC9wb2x5bGluZT48L3N2Zz4=) GitHub Action: Docker - Sign images
 
-<!-- end title -->
-<!--
-// jscpd:ignore-start
--->
-<!-- markdownlint-disable MD013 -->
-<!-- start badges -->
+<div align="center">
+  <img src="../../../.github/logo.svg" width="60px" align="center" alt="Docker - Sign images" />
+</div>
 
-<a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20tag" /></a><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Freleases%2Flatest"><img src="https://img.shields.io/github/release-date/hoverkraft-tech/ci-github-container?display_name=tag&sort=semver&logo=github&style=flat-square" alt="Release%20by%20date" /></a><img src="https://img.shields.io/github/last-commit/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Commit" /><a href="https%3A%2F%2Fgithub.com%2Fhoverkraft-tech%2Fci-github-container%2Fissues"><img src="https://img.shields.io/github/issues/hoverkraft-tech/ci-github-container?logo=github&style=flat-square" alt="Open%20Issues" /></a><img src="https://img.shields.io/github/downloads/hoverkraft-tech/ci-github-container/total?logo=github&style=flat-square" alt="Downloads" />
+---
 
-<!-- end badges -->
-<!-- markdownlint-enable MD013 -->
-<!--
-// jscpd:ignore-end
--->
-<!-- start description -->
+<!-- header:end -->
+
+<!-- badges:start -->
+
+[![Marketplace](https://img.shields.io/badge/Marketplace-docker------sign--images-blue?logo=github-actions)](https://github.com/marketplace/actions/docker---sign-images)
+[![Release](https://img.shields.io/github/v/release/hoverkraft-tech/ci-github-container)](https://github.com/hoverkraft-tech/ci-github-container/releases)
+[![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
+[![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+
+<!-- badges:end -->
+
+<!-- overview:start -->
+
+## Overview
 
 Action to sign OCI images.
 It is based on [cosign](https://github.com/sigstore/cosign).
 It signs the images with the GitHub Actions OIDC token.
 If the provided image does not have a digest, it will retrieve the digest using `docker buildx imagetools inspect`.
 
-<!-- end description -->
-<!-- start contents -->
-<!-- end contents -->
+<!-- overview:end -->
+
+## Permissions
 
 If default GitHub token is used, the following permissions are required:
 
@@ -34,45 +40,107 @@ permissions:
   id-token: write
 ```
 
-<!-- start usage -->
+<!-- usage:start -->
+
+## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container@0.26.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/sign-images@f9e149b6cdfa8443994994f10085691a57b8cf0e # 0.27.1
   with:
-    # Description: Images to sign. Can be a single image or a list of images separated
-    # by commas or newlines or spaces. The images should be in the format
-    # `ghcr.io/my-org/my-repo/application:pr-63-5222075`. It can also be a list of
-    # images in JSON format. Example:
+    # Images to sign.
+    # Can be a single image or a list of images separated by commas or newlines or spaces.
+    # The images should be in the format `registry/name:tag@digest`.
+    # It can also be a list of images in JSON format.
+    # Example:
     #
-    # ```
-    #   [
-    #     "ghcr.io/my-org/my-repo/application:pr-63-5222075",
-    #     "ghcr.io/my-org/my-repo/application:pr-63"
-    #   ]
+    # ```json
+    # [
+    # "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+    # "ghcr.io/my-org/my-repo/application:pr-63@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"
+    # ]
     # ```
     #
+    # If the image does not have a digest, it will retrieve the digest using `docker buildx imagetools inspect`.
+    #
+    # This input is required.
     images: ""
 
-    # Description: GitHub Token to sign the image. Permissions:
+    # GitHub Token to sign the image.
+    # Permissions:
+    # - `id-token`: `write`
     #
-    # - id-token: write
-    #
-    # Default: ${{ github.token }}
-    github-token: ""
+    # Default: `${{ github.token }}`
+    github-token: ${{ github.token }}
 ````
 
-<!-- end usage -->
-<!-- markdownlint-disable MD013 -->
-<!-- start inputs -->
+<!-- usage:end -->
 
-| **Input**                 | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                   | **Default**                      | **Required** |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------ |
-| <code>images</code>       | Images to sign.<br />Can be a single image or a list of images separated by commas or newlines or spaces.<br />The images should be in the format <code>ghcr.io/my-org/my-repo/application:pr-63-5222075</code>.<br />It can also be a list of images in JSON format.<br />Example:<br /><code></code><code><br /> [<br /> "ghcr.io/my-org/my-repo/application:pr-63-5222075",<br /> "ghcr.io/my-org/my-repo/application:pr-63"<br /> ]<br /></code><code></code> |                                  | **true**     |
-| <code>github-token</code> | GitHub Token to sign the image.<br />Permissions:<br /> - id-token: write                                                                                                                                                                                                                                                                                                                                                                                         | <code>${{ github.token }}</code> | **false**    |
+<!-- inputs:start -->
 
-<!-- end inputs -->
-<!-- start outputs -->
-<!-- end outputs -->
-<!-- markdownlint-enable MD013 -->
-<!-- start [.github/ghadocs/examples/] -->
-<!-- end [.github/ghadocs/examples/] -->
+## Inputs
+
+| **Input**          | **Description**                                                                                                                                                                                                                                                                                                                          | **Required** | **Default**           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------- |
+| **`images`**       | Images to sign.                                                                                                                                                                                                                                                                                                                          | **true**     | -                     |
+|                    | Can be a single image or a list of images separated by commas or newlines or spaces.                                                                                                                                                                                                                                                     |              |                       |
+|                    | The images should be in the format `registry/name:tag@digest`.                                                                                                                                                                                                                                                                           |              |                       |
+|                    | It can also be a list of images in JSON format.                                                                                                                                                                                                                                                                                          |              |                       |
+|                    | Example:                                                                                                                                                                                                                                                                                                                                 |              |                       |
+|                    |                                                                                                                                                                                                                                                                                                                                          |              |                       |
+|                    | <!-- textlint-disable --><pre lang="json">[&#13; "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "ghcr.io/my-org/my-repo/application:pr-63@sha256:0f5aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f402"&#13;]</pre><!-- textlint-enable --> |              |                       |
+|                    | If the image does not have a digest, it will retrieve the digest using `docker buildx imagetools inspect`.                                                                                                                                                                                                                               |              |                       |
+| **`github-token`** | GitHub Token to sign the image.                                                                                                                                                                                                                                                                                                          | **false**    | `${{ github.token }}` |
+|                    | Permissions:                                                                                                                                                                                                                                                                                                                             |              |                       |
+|                    | - `id-token`: `write`                                                                                                                                                                                                                                                                                                                    |              |                       |
+
+<!-- inputs:end -->
+
+<!-- secrets:start -->
+<!-- secrets:end -->
+
+<!-- outputs:start -->
+<!-- outputs:end -->
+
+<!-- examples:start -->
+<!-- examples:end -->
+
+<!--
+// jscpd:ignore-start
+-->
+
+<!-- contributing:start -->
+
+## Contributing
+
+Contributions are welcome! Please see the [contributing guidelines](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md) for more details.
+
+<!-- contributing:end -->
+
+<!-- security:start -->
+<!-- security:end -->
+
+<!-- license:start -->
+
+## License
+
+This project is licensed under the MIT License.
+
+SPDX-License-Identifier: MIT
+
+Copyright © 2025 hoverkraft
+
+For more details, see the [license](http://choosealicense.com/licenses/mit/).
+
+<!-- license:end -->
+
+<!-- generated:start -->
+
+---
+
+This documentation was automatically generated by [CI Dokumentor](https://github.com/hoverkraft-tech/ci-dokumentor).
+
+<!-- generated:end -->
+
+<!--
+// jscpd:ignore-end
+-->
