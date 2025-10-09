@@ -10,13 +10,17 @@
 
 </div>
 
-Opinionated GitHub Actions and workflows for continuous integration in container (OCI) context
-
 ---
+
+## Overview
+
+Opinionated GitHub Actions and reusable workflows to build, test, sign, and distribute container images and Helm charts. The goal is to offer a consistent supply-chain friendly pipeline for OCI assets managed within GitHub Actions.
 
 ## Actions
 
 ### Docker
+
+_Actions that operate on OCI images across their build, metadata, and lifecycle management phases._
 
 #### - [Build image](actions/docker/build-image/README.md)
 
@@ -32,6 +36,8 @@ Opinionated GitHub Actions and workflows for continuous integration in container
 
 ### Helm
 
+_Actions dedicated to packaging, validating, and publishing Helm charts for Kubernetes deployments._
+
 #### - [Generate chart documentation](actions/helm/generate-docs/README.md)
 
 #### - [Parse chart URI](actions/helm/parse-chart-uri/README.md)
@@ -42,13 +48,77 @@ Opinionated GitHub Actions and workflows for continuous integration in container
 
 ## Reusable Workflows
 
+_Orchestrated workflows you can plug directly into repositories to automate container-focused CI routines._
+
 ### - [Docker build images](.github/workflows/docker-build-images.md)
 
 ### - [Prune pull requests images tags](.github/workflows/prune-pull-requests-images-tags.md)
 
 ## Contributing
 
-👍 If you wish to contribute to this project, please read the [CONTRIBUTING.md](CONTRIBUTING.md) file, PRs are Welcome !
+Contributions are welcome! Please review the [contributing guidelines](CONTRIBUTING.md) before opening a PR.
+
+### Action Structure Pattern
+
+All actions follow a consistent layout:
+
+```text
+actions/{category}/{action-name}/
+├── action.yml          # Action definition with inputs/outputs
+├── README.md           # Usage documentation and examples
+└── index.js / scripts  # Optional Node.js helpers (when required)
+```
+
+### Development Standards
+
+#### Action Definition Standards
+
+1. **Consistent branding**: Use `author: hoverkraft` with `color: blue` and a meaningful `icon`.
+2. **Pinned dependencies**: Reference third-party actions via exact SHAs to guarantee reproducibility.
+3. **Input validation**: Validate critical inputs early within composite steps or supporting scripts.
+
+#### Container Delivery Patterns
+
+- Prefer multi-architecture builds via `docker buildx build` with explicit `--platform` lists.
+- Surface provenance metadata through outputs (`image-name`, `digest`, etc.) to unblock downstream jobs.
+- Keep secrets and registry credentials in GitHub environments or organization secrets—never hardcode them.
+
+### Development Workflow
+
+#### Linting & Testing
+
+```bash
+make lint                 # Run the dockerized Super Linter
+make lint-fix             # Attempt auto-fixes for lint findings
+
+# Container & Helm validation helpers
+make test-build-application  # Build and push the sample test application image
+make test-ct-install         # Validate Helm charts via chart-testing
+```
+
+#### File Conventions
+
+- **Dockerfile**: Provides the Super Linter environment with UID/GID passthrough for local dev parity.
+- **Tests**: Located in `tests/` with fixtures for container builds and chart-testing scenarios.
+- **Workflows**: Reusable definitions live in `.github/workflows/`; internal/private workflows are prefixed with `__`.
+
+#### Action Development Conventions
+
+1. **Idempotent steps**: Ensure actions can run multiple times without leaving residual state in the workspace.
+2. **Logging**: Use structured logs with clear prefixes (`[build-image]`, `[helm-test-chart]`, …) to simplify debugging.
+3. **Security**: Avoid shell interpolation with untrusted inputs; prefer parameterized commands or `set -euo pipefail` wrappers.
+
+#### JavaScript Development Patterns
+
+- Encapsulate reusable logic in modules under the action directory (for example, `actions/docker/prune-pull-requests-image-tags/index.js`).
+- Prefer async/await with explicit error handling when interacting with the GitHub API or filesystem.
+- Centralize environment variable parsing and validation to keep composite YAML lean.
+
+#### Helm Testing Patterns
+
+- Use the chart fixtures under `tests/charts/` to exercise Helm-focused actions.
+- Maintain `Chart.lock` files alongside `Chart.yaml` to document dependency revisions.
+- Commit `ci/empty-values.yaml` templates for creating scenario-specific overrides.
 
 ## Author
 
@@ -59,5 +129,8 @@ Opinionated GitHub Actions and workflows for continuous integration in container
 
 ## License
 
-📝 Copyright © 2023 [Hoverkraft <contact@hoverkraft.cloud>](https://hoverkraft.cloud).<br />
-This project is [MIT](LICENSE) licensed.
+This project is licensed under the MIT License.
+
+SPDX-License-Identifier: MIT
+
+© 2025 hoverkraft-tech. See [LICENSE](LICENSE) for details.
