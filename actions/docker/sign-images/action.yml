@@ -61,20 +61,34 @@ runs:
           }
 
           // Ensure images are in the correct format
-          const imageRegex = /^[a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*(?::[0-9]+)?\/(?:[a-z0-9._\/-]+):[a-zA-Z0-9._-]+@sha256:[a-f0-9]{64}$/;
+          const registryPart = String.raw`(?<registry>[a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*(?::[0-9]+)?)`;
+          const repositoryPart = String.raw`(?<repository>[a-z0-9._\/-]+)`;
+          const tagPart = String.raw`(?<tag>[a-zA-Z0-9._-]+)`;
+          const digestPart = String.raw`(?<digest>sha256:[a-f0-9]{64})`;
+          const imageRegex = new RegExp(`^${registryPart}/${repositoryPart}:${tagPart}@${digestPart}$`);
 
+          const tags = new Set();
+          const imagesToSign = new Set();
           for(const image of images) {
             if (typeof image !== 'string'){
               return core.setFailed(`Invalid image format: ${image}. Expected a string.`);
             }
 
-            if (!imageRegex.test(image)) {
+            const match = image.match(imageRegex);
+            if (!match || !match.groups) {
               return core.setFailed(`Invalid image format: ${image}. Expected format: registry/name:tag@digest`);
             }
+
+            const { registry, repository, tag, digest } = match.groups;
+            tags.add(tag);
+
+            imagesToSign.add(`${registry}/${repository}@${digest}`);
           }
 
-          // Create manifest for each image
-          const signImageCommand = `cosign sign --recursive --yes ${images.join(" ")}`;
+          // Sign the images
+          const annotationsArgs = tags.size > 0 ? `-a tag=${Array.from(tags).at(-1)}` : "";
+          const imagesArgs = Array.from(imagesToSign).join(" ");
+          const signImageCommand = `cosign sign ${annotationsArgs} --yes ${imagesArgs}`;
 
           core.debug(`Signing images with command: "${signImageCommand}"`);
           await exec.exec(signImageCommand);

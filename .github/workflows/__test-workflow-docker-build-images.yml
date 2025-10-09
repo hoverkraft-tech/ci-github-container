@@ -105,6 +105,11 @@ jobs:
               )
             );
 
+            assert.equal(applicationMultiArchImage.platforms.length, 3);
+            assert(applicationMultiArchImage.platforms.includes("linux/amd64"));
+            assert(applicationMultiArchImage.platforms.includes("linux/arm64"));
+            assert(applicationMultiArchImage.platforms.includes("linux/arm/v7"));
+
             const applicationMonoArchImage = builtImages["test-mono-arch"];
 
             assert.equal(applicationMonoArchImage.name, "test-mono-arch");
@@ -121,6 +126,8 @@ jobs:
               applicationMonoArchImage.images[0],
               `ghcr.io/hoverkraft-tech/ci-github-container/test-mono-arch:0.1.0@${applicationMonoArchImage.digest}`
             );
+            assert.equal(applicationMonoArchImage.platforms.length, 1);
+            assert(applicationMonoArchImage.platforms.includes("linux/amd64"));
 
       - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
@@ -278,8 +285,8 @@ jobs:
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
       build-secrets: |
-        SECRET_REPOSITORY_OWNER=${{ github.repository_owner }}
-        SECRET_REPOSITORY=${{ github.repository }}
+        SECRET_TEST=test-secret
+        SECRET_ANOTHER_TEST=another-test-secret
       build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
     with:
       cache-type: registry
@@ -293,12 +300,12 @@ jobs:
             "platforms": ["linux/amd64","linux/arm64"],
             "build-args": {
               "BUILD_RUN_ID": "${{ github.run_id }}",
-              "BUILD_REPOSITORY_OWNER": "${{ github.repository_owner }}",
-              "BUILD_REPOSITORY": "${{ github.repository }}"
+              "BUILD_ARG_TEST": "test-arg",
+              "BUILD_ARG_ANOTHER_TEST": "another-test-arg"
             },
             "secret-envs": {
-              "SECRET_ENV_REPOSITORY_OWNER": "GITHUB_REPOSITORY_OWNER",
-              "SECRET_ENV_REPOSITORY": "GITHUB_REPOSITORY"
+              "SECRET_ENV_TEST": "GITHUB_ACTION",
+              "SECRET_ENV_ANOTHER_TEST": "GITHUB_JOB"
             }
           }
         ]

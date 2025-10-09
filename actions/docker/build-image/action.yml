@@ -10,30 +10,6 @@ branding:
   icon: package
   color: blue
 
-outputs:
-  built-image:
-    description: |
-      Built image data.
-      Example:
-      ```json
-      {
-        "name": "application",
-        "registry": "ghcr.io",
-        "repository": "my-org/my-repo/application",
-        "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
-        "image": "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
-        "tags": [
-          "pr-63-5222075",
-          "pr-63"
-        ],
-        "annotations": {
-          "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
-          "org.opencontainers.image.description": "Application image"
-        }
-      }
-      ```
-    value: ${{ steps.get-built-image.outputs.built-image }}
-
 inputs:
   oci-registry:
     description: "OCI registry where to pull and push images"
@@ -70,7 +46,7 @@ inputs:
     required: false
   platform:
     description: |
-      Platform to build for.
+      Platform to build for. Example: `linux/amd64`.
       See https://github.com/docker/build-push-action#inputs.
     required: true
   context:
@@ -112,6 +88,31 @@ inputs:
     default: "gha"
     required: false
 
+outputs:
+  built-image:
+    description: |
+      Built image data.
+      Example:
+      ```json
+      {
+        "name": "application",
+        "registry": "ghcr.io",
+        "repository": "my-org/my-repo/application",
+        "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+        "image": "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+        "tags": [
+          "pr-63-5222075",
+          "pr-63"
+        ],
+        "annotations": {
+          "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+          "org.opencontainers.image.description": "Application image"
+        },
+        "platform": "linux/amd64"
+      }
+      ```
+    value: ${{ steps.get-built-image.outputs.built-image }}
+
 runs:
   using: "composite"
   steps:
@@ -142,6 +143,14 @@ runs:
     - id: get-docker-config
       shell: bash
       run: |
+        DOCKERFILE_PATH="${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}"
+        if [ ! -f "$DOCKERFILE_PATH" ]; then
+          echo "::error::Dockerfile not found at path: $DOCKERFILE_PATH"
+          exit 1
+        fi
+        DOCKERFILE_PATH=$(realpath "$DOCKERFILE_PATH")
+        echo "dockerfile-path=$DOCKERFILE_PATH" >> "$GITHUB_OUTPUT"
+
         TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
 
         # Add tag suffix flavor
@@ -201,7 +210,24 @@ runs:
           fi
         fi
 
-    - id: cache
+    - if: steps.get-docker-config.outputs.docker-exists != 'true'
+      uses: docker/setup-docker-action@3fb92d6d9c634363128c8cce4bc3b2826526370a # v4.4.0
+
+    - if: steps.get-docker-config.outputs.platform-exists != 'true'
+      uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+      with:
+        platforms: ${{ inputs.platform }}
+
+    - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      with:
+        # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
+        version: v0.29.1
+        # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
+        driver-opts: |
+          image=moby/buildkit:v0.25.1
+
+    # Caching setup
+    - id: cache-arguments
       uses: int128/docker-build-cache-config-action@fb186e80c08f14a2e56ed9105d4594562bff013f # v1.40.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
@@ -216,8 +242,8 @@ runs:
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         script: |
-          const cacheFrom = `${{ steps.cache.outputs.cache-from }}`;
-          const cacheTo = `${{ steps.cache.outputs.cache-to }}`;
+          const cacheFrom = `${{ steps.cache-arguments.outputs.cache-from }}`;
+          const cacheTo = `${{ steps.cache-arguments.outputs.cache-to }}`;
 
           core.info(`Original cache-from: ${cacheFrom}`);
           core.info(`Original cache-to: ${cacheTo}`);
@@ -234,22 +260,19 @@ runs:
           core.setOutput('cache-from', transformedCacheFrom);
           core.setOutput('cache-to', transformedCacheTo);
 
-    - if: steps.get-docker-config.outputs.docker-exists != 'true'
-      uses: docker/setup-docker-action@3fb92d6d9c634363128c8cce4bc3b2826526370a # v4.4.0
-
-    - if: steps.get-docker-config.outputs.platform-exists != 'true'
-      uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      id: cache
       with:
-        platforms: ${{ inputs.platform }}
+        path: cache-mount
+        key: cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}
 
-    # jscpd:ignore-start
-    - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+    - name: Restore Docker cache mounts
+      uses: reproducible-containers/buildkit-cache-dance@5b81f4d29dc8397a7d341dba3aeecc7ec54d6361 # v3.3.0
       with:
-        # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.27.0
-        # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
-        driver-opts: |
-          image=moby/buildkit:v0.23.2
+        builder: ${{ steps.setup-buildx.outputs.name }}
+        cache-dir: cache-mount
+        dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
+        skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
     - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
       with:
@@ -264,19 +287,22 @@ runs:
         context: ${{ inputs.context }}
         build-args: ${{ inputs.build-args }}
         target: ${{ inputs.target }}
-        file: ${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}
+        file: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         secrets: ${{ inputs.secrets }}
         secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
         # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from ||'
         # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
-        cache-from: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from || steps.cache.outputs.cache-from }}
+        cache-from: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from || steps.cache-arguments.outputs.cache-from }}
         # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to ||'
         # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
-        cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache.outputs.cache-to }}
-        outputs: "type=image,push=true,push-by-digest=true,name-canonical=true,name=${{ steps.metadata.outputs.image }}"
+        cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache-arguments.outputs.cache-to }}
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
+        tags: ${{ steps.metadata.outputs.image }}
+        provenance: false # Disable provenance to avoid unknown/unknown arch
+        sbom: false # Disable sbom to avoid unknown/unknown arch
 
     - id: get-built-image
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -286,10 +312,6 @@ runs:
           if (typeof builtMetadata !== 'object') {
             core.setFailed('Given "metadata" output is not a JSON object.');
             return;
-          }
-
-          if (builtMetadata["containerimage.digest"] === undefined) {
-            return core.setFailed('Given "metadata"."containerimage.digest" output is undefined.');
           }
 
           const name = `${{ inputs.image }}`;
@@ -303,6 +325,37 @@ runs:
           .split("\n")
           .map(tag => tag.replace(/[^\/]+\/[^:]+:(.+)/,'$1').trim())
           .filter(tag => tag !== "");
+
+          let platform;
+
+          const buildxProvenance = builtMetadata?.["buildx.build.provenance"];
+          if (buildxProvenance !== undefined) {
+            platform = buildxProvenance.invocation?.environment?.platform;
+            if (platform === undefined) {
+              return core.setFailed('Given "metadata"."buildx.build.provenance"."invocation"."environment"."platform" output is undefined.');
+            }
+            if (typeof platform !== "string") {
+              return core.setFailed('Given "metadata"."buildx.build.provenance"."invocation"."environment"."platform" is not a string.');
+            }
+            platform = platform.trim();
+            if (platform === "") {
+              return core.setFailed('Given "metadata"."buildx.build.provenance"."invocation"."environment"."platform" is empty.');
+            }
+          } else {
+            const descriptor = builtMetadata?.["containerimage.descriptor"];
+            if (descriptor?.["platform"] === undefined) {
+              return core.setFailed('Given "metadata"."containerimage.descriptor"."platform" output is undefined.');
+            }
+            const platformData = descriptor["platform"];
+            if (typeof platformData !== 'object' || platformData.os === undefined || platformData.architecture === undefined) {
+              return core.setFailed('Given "metadata"."containerimage.descriptor"."platform" does not contain required "os" and "architecture" fields.');
+            }
+            platform = `${platformData.os}/${platformData.architecture}${platformData.variant ? `/${platformData.variant}` : ''}`;
+          }
+
+          if (builtMetadata?.["containerimage.digest"] === undefined) {
+            return core.setFailed('Given "metadata"."containerimage.digest" output is undefined.');
+          }
 
           const digests = builtMetadata["containerimage.digest"]
             .split(",")
@@ -346,7 +399,8 @@ runs:
             registry,
             repository,
             image: imageWithDigest,
-            digest
+            digest,
+            platform
           };
 
           core.setOutput("built-image", JSON.stringify(builtImage));

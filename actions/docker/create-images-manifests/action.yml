@@ -45,7 +45,8 @@ inputs:
           "annotations": {
             "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
             "org.opencontainers.image.description": "Application image"
-          }
+          },
+          "platforms": ["linux/amd64", "linux/arm64"]
         }
       }
       ```
@@ -71,7 +72,8 @@ outputs:
           "annotations": {
             "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
             "org.opencontainers.image.description": "Application image"
-          }
+          },
+          "platforms": ["linux/amd64", "linux/arm64"]
         }
       }
       ```
@@ -83,10 +85,10 @@ runs:
     - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.27.0
+        version: v0.29.1
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
-          image=moby/buildkit:v0.23.2
+          image=moby/buildkit:v0.25.1
 
     - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
       with:
@@ -115,6 +117,8 @@ runs:
               return `${builtImage.registry}/${builtImage.repository}:${tag}`;
             });
 
+            const platformsOption = builtImage.platforms.map(platform => `--platform ${platform}`).join(" ");
+
             const tagsOption = imagesWithTags.map(image => {
               return `--tag ${image}`;
             }).join(" ");
@@ -128,7 +132,7 @@ runs:
               )
               .flat().join(" ");
 
-            const createManifestCommand = `docker buildx imagetools create ${annotationsOption} ${tagsOption} ${sources}`;
+            const createManifestCommand = `docker buildx imagetools create ${platformsOption} ${annotationsOption} ${tagsOption} ${sources}`;
 
             return new Promise(async (resolve, reject)  => {
               try {

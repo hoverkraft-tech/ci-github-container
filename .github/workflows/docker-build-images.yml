@@ -6,31 +6,6 @@ name: Docker build images
 
 on: # yamllint disable-line rule:truthy
   workflow_call:
-    outputs:
-      built-images:
-        description: |
-          Built images data.
-          Example:
-          ```json
-          {
-            "application": {
-              "name": "application",
-              "registry": "ghcr.io",
-              "repository": "my-org/my-repo/application",
-              "tags": ["pr-63-5222075","pr-63"],
-              "images": [
-                "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
-                "ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
-              ],
-              "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
-              "annotations": {
-                "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
-                "org.opencontainers.image.description": "Application image"
-              }
-            }
-          }
-          ```
-        value: ${{ jobs.publish-manifests.outputs.built-images }}
     inputs:
       runs-on:
         description: |
@@ -141,6 +116,32 @@ on: # yamllint disable-line rule:truthy
           GitHub App private key to generate GitHub token to be passed as build secret env.
           See https://github.com/actions/create-github-app-token.
         required: false
+    outputs:
+      built-images:
+        description: |
+          Built images data.
+          Example:
+          ```json
+          {
+            "application": {
+              "name": "application",
+              "registry": "ghcr.io",
+              "repository": "my-org/my-repo/application",
+              "tags": ["pr-63-5222075","pr-63"],
+              "images": [
+                "ghcr.io/my-org/my-repo/application:pr-63-5222075@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+                "ghcr.io/my-org/my-repo/application:pr-63@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
+              ],
+              "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",
+              "annotations": {
+                "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
+                "org.opencontainers.image.description": "Application image"
+              },
+              "platforms": ["linux/amd64", "linux/arm64"]
+            }
+          }
+          ```
+        value: ${{ jobs.publish-manifests.outputs.built-images }}
 
 permissions:
   contents: read
@@ -474,15 +475,17 @@ jobs:
             // Group by image name
             const images = {};
             builtImages.forEach(builtImage => {
-              const { name, image, ...rest } = builtImage;
+              const { name, image, platform, ...rest } = builtImage;
               if (!images[name]) {
                 images[name] = {
                   name,
                   images: [image],
+                  platforms: [platform],
                   ...rest,
                 };
               } else {
                 images[name].images = [...new Set([...images[name].images, image])];
+                images[name].platforms = [...new Set([...images[name].platforms, platform])];
               }
             });
 
@@ -512,6 +515,7 @@ jobs:
           built-images: ${{ steps.built-images.outputs.built-images }}
 
       - id: get-images-to-sign
+        if: inputs.sign
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
@@ -527,7 +531,7 @@ jobs:
             const imagesToSign = Object.values(builtImages).map(image => image.images).flat();
             core.setOutput('images-to-sign', JSON.stringify(imagesToSign));
       - uses: ./self-workflow/actions/docker/sign-images
-        if: inputs.sign
+        if: steps.get-images-to-sign.outputs.images-to-sign
         with:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -19,20 +19,20 @@ FROM alpine:3 AS test
 # Create user and group
 RUN addgroup -S test && adduser -S test -G test
 
-ENV EXPECTED_REPOSITORY_OWNER=hoverkraft-tech
-ENV EXPECTED_REPOSITORY=hoverkraft-tech/ci-github-container
 
 ARG BUILD_RUN_ID
 RUN test -n "$BUILD_RUN_ID" || (echo "Error: BUILD_RUN_ID is not set" && exit 1);
 
 # Test that the build args are set
-ARG BUILD_REPOSITORY_OWNER
-RUN test -n "$BUILD_REPOSITORY_OWNER" || (echo "Error: BUILD_REPOSITORY_OWNER is not set" && exit 1);
-RUN test "$BUILD_REPOSITORY_OWNER" = "$EXPECTED_REPOSITORY_OWNER" || (echo "Error: BUILD_REPOSITORY_OWNER is not \"$EXPECTED_REPOSITORY_OWNER\"" && exit 1);
+ARG BUILD_ARG_TEST
+ENV EXPECTED_BUILD_ARG_TEST=test-arg
+RUN test -n "$BUILD_ARG_TEST" || (echo "Error: BUILD_ARG_TEST is not set" && exit 1);
+RUN test "$BUILD_ARG_TEST" = "$EXPECTED_BUILD_ARG_TEST" || (echo "Error: BUILD_ARG_TEST is not \"$EXPECTED_BUILD_ARG_TEST\"" && exit 1);
 
-ARG BUILD_REPOSITORY
-RUN test -n "$BUILD_REPOSITORY" || (echo "Error: BUILD_REPOSITORY is not set" && exit 1);
-RUN test "$BUILD_REPOSITORY" = "$EXPECTED_REPOSITORY" || (echo "Error: BUILD_REPOSITORY is not \"$EXPECTED_REPOSITORY\"" && exit 1);
+ENV EXPECTED_BUILD_ARG_ANOTHER_TEST=another-test-arg
+ARG BUILD_ARG_ANOTHER_TEST
+RUN test -n "$BUILD_ARG_ANOTHER_TEST" || (echo "Error: BUILD_ARG_ANOTHER_TEST is not set" && exit 1);
+RUN test "$BUILD_ARG_ANOTHER_TEST" = "$EXPECTED_BUILD_ARG_ANOTHER_TEST" || (echo "Error: BUILD_ARG_ANOTHER_TEST is not \"$EXPECTED_BUILD_ARG_ANOTHER_TEST\"" && exit 1);
 
 RUN cat >test.sh <<EOF
 
@@ -50,20 +50,26 @@ assertSecretEquals() {
 
   assertSecretExists "\$secretName"
 
-  test "\$(cat /run/secrets/"\$secretName")" = "\$expectedValue" || {
-    echo "Error: \$secretName is not \"\$expectedValue\""
+  secretValue="\$(cat /run/secrets/"\$secretName")"
+
+  test "\$secretValue" = "\$expectedValue" || {
+    echo "Error: \$secretName \"\$secretValue\" is not \"\$expectedValue\""
     exit 1
   }
 }
 EOF
 
 # Test that secrets are passed
-RUN --mount=type=secret,id=SECRET_REPOSITORY_OWNER . test.sh && assertSecretEquals SECRET_REPOSITORY_OWNER "$EXPECTED_REPOSITORY_OWNER";
-RUN --mount=type=secret,id=SECRET_REPOSITORY . test.sh && assertSecretEquals SECRET_REPOSITORY "$EXPECTED_REPOSITORY";
+ENV EXPECTED_VALUE=test-secret
+RUN --mount=type=secret,id=SECRET_TEST . test.sh && assertSecretEquals SECRET_TEST "$EXPECTED_VALUE";
+ENV EXPECTED_VALUE=another-test-secret
+RUN --mount=type=secret,id=SECRET_ANOTHER_TEST . test.sh && assertSecretEquals SECRET_ANOTHER_TEST "$EXPECTED_VALUE";
 
 # Test that secret envs are passed
-RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY_OWNER . test.sh && assertSecretEquals SECRET_ENV_REPOSITORY_OWNER "$EXPECTED_REPOSITORY_OWNER";
-RUN --mount=type=secret,id=SECRET_ENV_REPOSITORY . test.sh && assertSecretEquals SECRET_ENV_REPOSITORY "$EXPECTED_REPOSITORY";
+ENV EXPECTED_VALUE=build
+RUN --mount=type=secret,id=SECRET_ENV_TEST . test.sh && assertSecretEquals SECRET_ENV_TEST "$EXPECTED_VALUE";
+ENV EXPECTED_VALUE=build-images
+RUN --mount=type=secret,id=SECRET_ENV_ANOTHER_TEST . test.sh && assertSecretEquals SECRET_ENV_ANOTHER_TEST "$EXPECTED_VALUE";
 
 # Test that the github app token secrets are passed
 RUN --mount=type=secret,id=SECRET_ENV_GITHUB_APP_TOKEN_1 . test.sh && assertSecretExists SECRET_ENV_GITHUB_APP_TOKEN_1;
