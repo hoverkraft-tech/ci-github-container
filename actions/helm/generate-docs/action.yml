@@ -84,7 +84,7 @@ runs:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.prepare-variables.outputs.values-file }}
-      uses: losisin/helm-values-schema-json-action@d5847286fa04322702c4f8d45031974798c83ac7 # v2.3.0
+      uses: losisin/helm-values-schema-json-action@660c441a4a507436a294fc55227e1df54aca5407 # v2.3.1
       with:
         input: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
