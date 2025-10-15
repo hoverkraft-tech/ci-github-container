@@ -17,11 +17,6 @@ permissions:
 jobs:
   linter:
     uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
-    with:
-      # FIXME: Remove useless linters on next super-linter release
-      linter-env: |
-        VALIDATE_JAVASCRIPT_PRETTIER=false
-        VALIDATE_KUBERNETES_KUBECONFORM=false
 
   test-action-docker-build-image:
     needs: linter
