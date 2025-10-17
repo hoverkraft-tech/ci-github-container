@@ -6,9 +6,9 @@ A Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository                         | Name  | Version |
-| ---------------------------------- | ----- | ------- |
-| https://charts.bitnami.com/bitnami | mysql | 14.0.3  |
+| Repository                           | Name  | Version |
+| ------------------------------------ | ----- | ------- |
+| <https://charts.bitnami.com/bitnami> | MySQL | 14.0.3  |
 
 ## Values
 

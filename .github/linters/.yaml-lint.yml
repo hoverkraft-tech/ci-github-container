@@ -2,7 +2,7 @@
 extends: default
 
 ignore:
-  - /github/workspace/tests/charts/
+  - "**/tests/charts/**"
 
 rules:
   line-length:

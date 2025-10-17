@@ -235,6 +235,10 @@ If a platform entry omits the <code>runs-on</code> field, the following default 
 - When the main <code>docker-build-images</code> job uses a standard hosted runner, that runner is automatically matched to each platform.
 - If the main <code>docker-build-images</code> job uses a custom or self-hosted runner, all platforms use the same runner.
 
+<!--
+// jscpd:ignore-start
+-->
+
 <!-- outputs:start -->
 
 ## Outputs
@@ -251,10 +255,6 @@ If a platform entry omits the <code>runs-on</code> field, the following default 
 
 <!-- examples:start -->
 <!-- examples:end -->
-
-<!--
-// jscpd:ignore-start
--->
 
 <!-- contributing:start -->
 
