@@ -76,12 +76,35 @@ actions/{category}/{action-name}/
 1. **Consistent branding**: Use `author: hoverkraft` with `color: blue` and a meaningful `icon`.
 2. **Pinned dependencies**: Reference third-party actions via exact SHAs to guarantee reproducibility.
 3. **Input validation**: Validate critical inputs early within composite steps or supporting scripts.
+4. **Idempotent steps**: Ensure actions can run multiple times without leaving residual state in the workspace.
+5. **Multi-platform support**: Test actions in both `ubuntu-latest` and `windows-latest` runners when applicable.
+6. **Cross-platform compatibility**: Uses `actions/github-script` steps for cross-platform compatibility. Avoid `run` steps.
+7. **Logging**: Use structured logs with clear prefixes (`[build-image]`, `[helm-test-chart]`, …) to simplify debugging.
+8. **Security**: Avoid shell interpolation with untrusted inputs; prefer parameterized commands or `set -euo pipefail` wrappers.
+
+#### File Conventions
+
+- **Dockerfile**: Provides the Super Linter environment with UID/GID passthrough for local dev parity.
+- **Tests**: Located in `tests/` with fixtures for container builds and chart-testing scenarios.
+- **Workflows**: Reusable definitions live in `.github/workflows/`; internal/private workflows are prefixed with `__`.
+
+#### JavaScript Development Patterns
+
+- Encapsulate reusable logic in modules under the action directory (for example, `actions/my-action/index.js`).
+- Prefer async/await with explicit error handling when interacting with the GitHub API or filesystem.
+- Centralize environment variable parsing and validation to keep composite YAML lean.
 
 #### Container Delivery Patterns
 
 - Prefer multi-architecture builds via `docker buildx build` with explicit `--platform` lists.
 - Surface provenance metadata through outputs (`image-name`, `digest`, etc.) to unblock downstream jobs.
 - Keep secrets and registry credentials in GitHub environments or organization secrets—never hardcode them.
+
+#### Helm Testing Patterns
+
+- Use the chart fixtures under `tests/charts/` to exercise Helm-focused actions.
+- Maintain `Chart.lock` files alongside `Chart.yaml` to document dependency revisions.
+- Commit `ci/empty-values.yaml` templates for creating scenario-specific overrides.
 
 ### Development Workflow
 
@@ -95,30 +118,6 @@ make lint-fix             # Attempt auto-fixes for lint findings
 make test-build-application  # Build and push the sample test application image
 make test-ct-install         # Validate Helm charts via chart-testing
 ```
-
-#### File Conventions
-
-- **Dockerfile**: Provides the Super Linter environment with UID/GID passthrough for local dev parity.
-- **Tests**: Located in `tests/` with fixtures for container builds and chart-testing scenarios.
-- **Workflows**: Reusable definitions live in `.github/workflows/`; internal/private workflows are prefixed with `__`.
-
-#### Action Development Conventions
-
-1. **Idempotent steps**: Ensure actions can run multiple times without leaving residual state in the workspace.
-2. **Logging**: Use structured logs with clear prefixes (`[build-image]`, `[helm-test-chart]`, …) to simplify debugging.
-3. **Security**: Avoid shell interpolation with untrusted inputs; prefer parameterized commands or `set -euo pipefail` wrappers.
-
-#### JavaScript Development Patterns
-
-- Encapsulate reusable logic in modules under the action directory (for example, `actions/docker/prune-pull-requests-image-tags/index.js`).
-- Prefer async/await with explicit error handling when interacting with the GitHub API or filesystem.
-- Centralize environment variable parsing and validation to keep composite YAML lean.
-
-#### Helm Testing Patterns
-
-- Use the chart fixtures under `tests/charts/` to exercise Helm-focused actions.
-- Maintain `Chart.lock` files alongside `Chart.yaml` to document dependency revisions.
-- Commit `ci/empty-values.yaml` templates for creating scenario-specific overrides.
 
 ## Author
 
