@@ -135,7 +135,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@1c379f7f6e0fc850fe5a7111f74d54e159b4dcd2 # 0.26.0
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@b7dd413209df265bef8d7eb0efb117eaabc684c4 # 0.27.0
       with:
         value: ${{ inputs.platform }}
 
@@ -235,7 +235,7 @@ runs:
           core.setOutput('cache-to', transformedCacheTo);
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
-      uses: docker/setup-docker-action@b60f85385d03ac8acfca6d9996982511d8620a19 # v4.3.0
+      uses: docker/setup-docker-action@3fb92d6d9c634363128c8cce4bc3b2826526370a # v4.4.0
 
     - if: steps.get-docker-config.outputs.platform-exists != 'true'
       uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
