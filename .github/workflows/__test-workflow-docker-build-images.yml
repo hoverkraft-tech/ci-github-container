@@ -18,7 +18,7 @@ jobs:
     name: Arrange
     runs-on: ubuntu-latest
     outputs:
-      image-name-prefix: ${{ steps.define-image-name-prefix.outputs.prefix }}
+      matrix: ${{ steps.define-matrix.outputs.result }}
     steps:
       - run: |
           if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
@@ -26,58 +26,70 @@ jobs:
             exit 1
           fi
 
-      - id: define-image-name-prefix
-        run: |
-          # Create unique image name prefix for parallel runs
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            PREFIX="test-pr-${{ github.event.pull_request.number }}-${{ github.run_number }}"
-          else
-            PREFIX="test-${{ github.ref_name }}-${{ github.run_number }}"
-          fi
-          # Replace / with - for branch names
-          PREFIX=$(echo "$PREFIX" | sed 's/\//-/g')
-          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
-          echo "Using image name prefix: $PREFIX"
+      - id: define-matrix
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          result-encoding: json
+          script: |
+            let imageNamePrefix;
+
+            if (context.eventName === "pull_request") {
+              const pullRequestNumber = context.payload.pull_request?.number;
+              if (!pullRequestNumber) {
+                throw new Error("Pull request number is not available in the event payload");
+              }
+              imageNamePrefix = `pr-${pullRequestNumber}`;
+            } else {
+              imageNamePrefix = process.env.GITHUB_REF_NAME;
+              if (!imageNamePrefix) {
+                throw new Error("GITHUB_REF_NAME environment variable is not set");
+              }
+            }
+
+            imageNamePrefix = `test-${imageNamePrefix}-${context.runNumber}`.replace(/\//g, "-");
+
+            const tag = '0.1.0';
+
+            const matrix = {
+              include: [
+                {
+                  name: "mono-arch - signed",
+                  "image-name": `${imageNamePrefix}-mono-arch-signed`,
+                  platforms: '["linux/amd64"]',
+                  sign: true,
+                  tag
+                },
+                {
+                  name: "multi-arch - signed",
+                  "image-name": `${imageNamePrefix}-multi-arch-signed`,
+                  platforms: '["linux/amd64","linux/arm64"]',
+                  sign: true,
+                  tag
+                },
+                {
+                  name: "mono-arch - unsigned",
+                  "image-name": `${imageNamePrefix}-mono-arch-unsigned`,
+                  platforms: '["linux/amd64"]',
+                  sign: false,
+                  tag
+                },
+                {
+                  name: "multi-arch - unsigned",
+                  "image-name": `${imageNamePrefix}-multi-arch-unsigned`,
+                  platforms: '["linux/amd64","linux/arm64"]',
+                  sign: false,
+                  tag
+                }
+              ]
+            };
+            return matrix;
 
   act-build-images:
-    name: Act - Build images (${{ matrix.arch-type }}, ${{ matrix.sign && 'signed' || 'unsigned' }})
+    name: Act - Build images (${{ matrix.name }})
     needs: arrange
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch-type: mono-arch
-            image-name-suffix: mono-arch-signed
-            platforms: '["linux/amd64"]'
-            platform-count: 1
-            sign: true
-            expected-tagged-versions: 2
-            expected-untagged-versions: 2
-            expected-total-versions: 4
-          - arch-type: multi-arch
-            image-name-suffix: multi-arch-signed
-            platforms: '["linux/amd64","linux/arm64"]'
-            platform-count: 2
-            sign: true
-            expected-tagged-versions: 2
-            expected-untagged-versions: 3
-            expected-total-versions: 5
-          - arch-type: mono-arch
-            image-name-suffix: mono-arch-unsigned
-            platforms: '["linux/amd64"]'
-            platform-count: 1
-            sign: false
-            expected-tagged-versions: 1
-            expected-untagged-versions: 1
-            expected-total-versions: 2
-          - arch-type: multi-arch
-            image-name-suffix: multi-arch-unsigned
-            platforms: '["linux/amd64","linux/arm64"]'
-            platform-count: 2
-            sign: false
-            expected-tagged-versions: 1
-            expected-untagged-versions: 2
-            expected-total-versions: 3
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -87,56 +99,23 @@ jobs:
       images: |
         [
           {
-            "name": "${{ needs.arrange.outputs.image-name-prefix }}-${{ matrix.image-name-suffix }}",
+            "name": "${{ matrix.image-name }}",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
             "target": "base",
             "platforms": ${{ matrix.platforms }},
-            "tag": "0.1.0"
+            "tag": "${{ matrix.tag }}"
           }
         ]
 
-  assert-images:
-    name: Assert - Images (${{ matrix.arch-type }}, ${{ matrix.sign && 'signed' || 'unsigned' }})
+  assert-images-versions:
+    name: Assert - Published images (${{ matrix.name }})
     needs: [arrange, act-build-images]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch-type: mono-arch
-            image-name-suffix: mono-arch-signed
-            platform-count: 1
-            platforms: '["linux/amd64"]'
-            sign: true
-            expected-tagged-versions: 2
-            expected-untagged-versions: 2
-            expected-total-versions: 4
-          - arch-type: multi-arch
-            image-name-suffix: multi-arch-signed
-            platform-count: 2
-            platforms: '["linux/amd64","linux/arm64"]'
-            sign: true
-            expected-tagged-versions: 2
-            expected-untagged-versions: 3
-            expected-total-versions: 5
-          - arch-type: mono-arch
-            image-name-suffix: mono-arch-unsigned
-            platform-count: 1
-            platforms: '["linux/amd64"]'
-            sign: false
-            expected-tagged-versions: 1
-            expected-untagged-versions: 1
-            expected-total-versions: 2
-          - arch-type: multi-arch
-            image-name-suffix: multi-arch-unsigned
-            platform-count: 2
-            platforms: '["linux/amd64","linux/arm64"]'
-            sign: false
-            expected-tagged-versions: 1
-            expected-untagged-versions: 2
-            expected-total-versions: 3
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
     steps:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
@@ -147,62 +126,60 @@ jobs:
 
       - name: Verify image exists
         env:
-          IMAGE_NAME: ${{ needs.arrange.outputs.image-name-prefix }}-${{ matrix.image-name-suffix }}
-          IMAGE_TAG: 0.1.0
+          IMAGE_NAME: "${{ matrix.image-name }}:${{ matrix.tag }}"
         run: |
-          docker pull ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}":"${IMAGE_TAG}"
+          docker pull ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}"
 
       - name: Verify package has correct number of versions
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_NAME: ${{ needs.arrange.outputs.image-name-prefix }}-${{ matrix.image-name-suffix }}
-          EXPECTED_TOTAL_VERSIONS: ${{ matrix.expected-total-versions }}
-          EXPECTED_TAGGED_VERSIONS: ${{ matrix.expected-tagged-versions }}
-          EXPECTED_UNTAGGED_VERSIONS: ${{ matrix.expected-untagged-versions }}
-        run: |
-          # Get all versions
-          versions=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /orgs/${{ github.repository_owner }}/packages/container/ci-github-container%2F"${IMAGE_NAME}"/versions)
+          IMAGE_NAME: ${{ matrix.image-name }}
+          SIGN: ${{ matrix.sign }}
+          PLATFORMS: ${{ matrix.platforms }}
+        with:
+          script: |
+            const assert = require("assert");
+            const versions = await github.paginate(
+              github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
+              {
+                package_type: "container",
+                package_name: `ci-github-container/${process.env.IMAGE_NAME}`,
+                org: `${{ github.repository_owner }}`,
+                per_page: 100
+              }
+            );
 
-          total_count=$(echo "$versions" | jq '. | length')
-          tagged_count=$(echo "$versions" | jq '[.[] | select(.metadata.container.tags | length > 0)] | length')
-          untagged_count=$(echo "$versions" | jq '[.[] | select(.metadata.container.tags | length == 0)] | length')
+            const totalCount = versions.length;
+            const taggedVersions = versions.filter(version => version.metadata.container.tags.length > 0);
+            const untaggedVersions = versions.filter(version => version.metadata.container.tags.length === 0);
 
-          echo "Found $total_count total versions ($tagged_count tagged, $untagged_count untagged)"
-          echo "Expected $EXPECTED_TOTAL_VERSIONS total versions ($EXPECTED_TAGGED_VERSIONS tagged, $EXPECTED_UNTAGGED_VERSIONS untagged)"
+            // Expected tagged version is 1 for unsigned images (tag) and 2 for signed images (tag, cosing legacy tag sha256-...)
+            const expectedTaggedVersions = process.env.SIGN === 'true' ? 2 : 1;
 
-          if [ "$total_count" -ne "$EXPECTED_TOTAL_VERSIONS" ]; then
-            echo "ERROR: Expected $EXPECTED_TOTAL_VERSIONS total versions, but found $total_count"
-            exit 1
-          fi
+            // Expected untagged versions are 1 by platform for unsigned images and number of platforms + 1 (cosing legacy tag sha256-...) for signed images
+            const expectedUntaggedVersions = JSON.parse(process.env.PLATFORMS).length + (process.env.SIGN === 'true' ? 1 : 0);
 
-          if [ "$tagged_count" -ne "$EXPECTED_TAGGED_VERSIONS" ]; then
-            echo "ERROR: Expected $EXPECTED_TAGGED_VERSIONS tagged versions, but found $tagged_count"
-            exit 1
-          fi
-
-          if [ "$untagged_count" -ne "$EXPECTED_UNTAGGED_VERSIONS" ]; then
-            echo "ERROR: Expected $EXPECTED_UNTAGGED_VERSIONS untagged versions, but found $untagged_count"
-            exit 1
-          fi
-
-          echo "✓ Package version counts are correct"
+            assert.equal(
+              taggedVersions.length,
+              expectedTaggedVersions,
+              `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}`
+            );
+            assert.equal(
+              untaggedVersions.length,
+              expectedUntaggedVersions,
+              `Expected ${expectedUntaggedVersions} untagged versions, but found ${untaggedVersions.length}`
+            );
 
       - name: Verify image manifest and platforms
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          IMAGE_NAME: ${{ needs.arrange.outputs.image-name-prefix }}-${{ matrix.image-name-suffix }}
-          IMAGE_TAG: "0.1.0"
+          IMAGE_NAME: "${{ matrix.image-name }}:${{ matrix.tag }}"
           EXPECTED_PLATFORMS: ${{ matrix.platforms }}
-          EXPECTED_PLATFORM_COUNT: ${{ matrix.platform-count }}
         with:
           script: |
             const assert = require("assert");
             const imageName = process.env.IMAGE_NAME;
-            const imageTag = process.env.IMAGE_TAG;
-            const image = `ghcr.io/hoverkraft-tech/ci-github-container/${imageName}:${imageTag}`;
+            const image = `ghcr.io/hoverkraft-tech/ci-github-container/${imageName}`;
 
             const { exitCode, stdout, stderr } = await exec.getExecOutput('docker', ['manifest', 'inspect', '-v', image]);
 
@@ -211,11 +188,12 @@ jobs:
             }
 
             const manifest = JSON.parse(stdout);
-            const expectedPlatformCount = parseInt(process.env.EXPECTED_PLATFORM_COUNT);
+
+            const expectedPlatforms = JSON.parse(process.env.EXPECTED_PLATFORMS);
+            const expectedPlatformCount = expectedPlatforms.length;
 
             assert.equal(manifest.length, expectedPlatformCount, `Expected ${expectedPlatformCount} platforms, got: ${manifest.length}`);
 
-            const expectedPlatforms = JSON.parse(process.env.EXPECTED_PLATFORMS);
             expectedPlatforms.forEach(platformStr => {
               const [os, arch] = platformStr.split('/');
               const platformExists = manifest.some(
@@ -228,6 +206,14 @@ jobs:
               assert(platformExists, `Expected platform not found: ${platformStr}`);
             });
 
+  assert-images-signature:
+    name: Assert - Images signature (${{ matrix.name }})
+    needs: [arrange, act-build-images]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
+    steps:
       - name: Install cosign
         if: matrix.sign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
@@ -235,36 +221,52 @@ jobs:
       - name: Verify image signature
         if: matrix.sign
         env:
-          IMAGE_NAME: ${{ needs.arrange.outputs.image-name-prefix }}-${{ matrix.image-name-suffix }}
-          IMAGE_TAG: 0.1.0
+          SHOULD_HAVE_SIGNATURE: ${{ matrix.sign }}
+          IMAGE_NAME: "${{ matrix.image-name }}:${{ matrix.tag }}"
         run: |
-          cosign verify \
+          if [ "${SHOULD_HAVE_SIGNATURE}" = "true" ]; then
+            echo "Verifying signature for image: ${IMAGE_NAME}"
+            cosign verify \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-identity-regexp https://github.com/hoverkraft-tech/ci-github-container \
+              ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}"
+
+            exit $?
+          fi
+
+          echo "Image ${IMAGE_NAME} should not have a signature"
+          if cosign verify \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity-regexp https://github.com/hoverkraft-tech/ci-github-container \
-            ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}":"${IMAGE_TAG}"
+            ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}"; then
+            echo "::error::Image ${IMAGE_NAME} should not be signed but signature verification succeeded"
+            exit 1
+          fi
 
-      - name: Install cosign for unsigned verification
-        if: ${{ !matrix.sign }}
-        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+          echo "Signature verification failed as expected for unsigned image ${IMAGE_NAME}"
 
-      - name: Verify image is NOT signed (should fail)
-        if: ${{ !matrix.sign }}
+  cleanup:
+    name: Cleanup ephemeral test packages
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - arrange
+      - assert-images-versions
+      - assert-images-signature
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
+    steps:
+      - name: Delete ephemeral test packages
         env:
-          IMAGE_NAME: ${{ needs.arrange.outputs.image-name-prefix }}-${{ matrix.image-name-suffix }}
-          IMAGE_TAG: 0.1.0
-        continue-on-error: true
-        id: verify-unsigned
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_NAME: ${{ matrix.image-name }}
         run: |
-          cosign verify \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --certificate-identity-regexp https://github.com/hoverkraft-tech/ci-github-container \
-            ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}":"${IMAGE_TAG}"
-
-      - name: Assert verification failed (image should not be signed)
-        if: ${{ !matrix.sign && steps.verify-unsigned.outcome == 'success' }}
-        run: |
-          echo "ERROR: Image should not be signed but signature verification succeeded"
-          exit 1
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /orgs/${{ github.repository_owner }}/packages/container/ci-github-container%2F"${IMAGE_NAME}" || echo "No ${IMAGE_NAME} package to delete"
 
   act-build-args-secrets-and-registry-caching:
     name: Act - Build with args, secrets and registry caching
@@ -387,29 +389,5 @@ jobs:
             for (const cacheImage of cacheImages) {
               await exec.exec('docker', ['manifest', 'inspect', cacheImage]);
             }
-
-  cleanup:
-    name: Cleanup ephemeral test packages
-    if: always()
-    needs:
-      - arrange
-      - assert-images
-      - assert-build-args-secrets-and-registry-caching
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete ephemeral test packages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_PREFIX: ${{ needs.arrange.outputs.image-name-prefix }}
-        run: |
-          # Delete ephemeral test packages created during testing
-          for SUFFIX in mono-arch-signed multi-arch-signed mono-arch-unsigned multi-arch-unsigned; do
-            IMAGE_NAME="${IMAGE_PREFIX}-${SUFFIX}"
-            gh api \
-              --method DELETE \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              /orgs/${{ github.repository_owner }}/packages/container/ci-github-container%2F"${IMAGE_NAME}" || echo "No ${IMAGE_NAME} package to delete"
-          done
 
 # jscpd:ignore-end
