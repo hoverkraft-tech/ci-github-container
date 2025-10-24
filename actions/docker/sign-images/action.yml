@@ -91,6 +91,8 @@ runs:
           const annotationsArgs = tags.size > 0 ? `-a tag=${Array.from(tags).at(-1)}` : "";
           const imagesArgs = Array.from(imagesToSign).join(" ");
           // Use OCI 1.1 referrers mode to avoid creating legacy sha256-... tags
+          // Note: If the registry doesn't support OCI 1.1 referrers (like ghcr.io currently),
+          // cosign will fall back to legacy attachments and create a sha256-... tag
           const signImageCommand = `cosign sign ${annotationsArgs} --registry-referrers-mode=oci-1-1 --yes ${imagesArgs}`;
 
           core.debug(`Signing images with command: "${signImageCommand}"`);
