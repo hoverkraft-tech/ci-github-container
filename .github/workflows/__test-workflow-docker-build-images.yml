@@ -153,14 +153,19 @@ jobs:
             const taggedVersions = versions.filter(version => version.metadata.container.tags.length > 0);
             const untaggedVersions = versions.filter(version => version.metadata.container.tags.length === 0);
 
-            // Expected tagged version is always 1 (the main tag)
-            const expectedTaggedVersions = 1;
+            const platforms = JSON.parse(process.env.PLATFORMS);
+            const isSinglePlatform = platforms.length === 1;
+            const isSigned = process.env.SIGN === 'true';
+
+            // Expected tagged versions:
+            // - Always 1 for the main tag
+            // - Plus 1 for cosign legacy tag (sha256-...) when signed
+            //   Note: ghcr.io doesn't support OCI 1.1 referrers yet, so cosign falls back to legacy attachments
+            const expectedTaggedVersions = isSigned ? 2 : 1;
 
             // Expected untagged versions:
             // - For single platform: 0 (no multiarch manifest created)
             // - For multi platform: number of platforms (one per platform)
-            const platforms = JSON.parse(process.env.PLATFORMS);
-            const isSinglePlatform = platforms.length === 1;
             const expectedUntaggedVersions = isSinglePlatform ? 0 : platforms.length;
 
             assert.equal(
