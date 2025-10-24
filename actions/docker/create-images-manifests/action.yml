@@ -123,6 +123,11 @@ runs:
               
               return new Promise(async (resolve, reject)  => {
                 try {
+                  // Validate that we have at least one image
+                  if (!builtImage.images || builtImage.images.length === 0) {
+                    throw new Error(`No images found for "${builtImage.name}"`);
+                  }
+
                   // For single platform, just tag the existing image
                   const sourceImage = builtImage.images[0];
                   for (const targetImage of imagesWithTags) {
@@ -135,7 +140,7 @@ runs:
                   builtImage.images = imagesWithTags;
 
                   resolve();
-                } catch(error){
+                } catch (error) {
                   reject(error);
                 }
               });
@@ -167,7 +172,7 @@ runs:
                 builtImage.images = imagesWithTags;
 
                 resolve();
-              } catch(error){
+              } catch (error) {
                 reject(error);
               }
             });
