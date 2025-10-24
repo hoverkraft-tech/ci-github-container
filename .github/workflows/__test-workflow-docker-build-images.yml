@@ -164,9 +164,10 @@ jobs:
             const expectedTaggedVersions = isSigned ? 2 : 1;
 
             // Expected untagged versions:
-            // - For single platform: 0 (no multiarch manifest created)
-            // - For multi platform: number of platforms (one per platform)
-            const expectedUntaggedVersions = isSinglePlatform ? 0 : platforms.length;
+            // - For single platform: 1 (the digest-only push from build step)
+            // - For multi platform: number of platforms (one per platform digest-only push)
+            // Note: The build step uses push-by-digest which creates untagged versions
+            const expectedUntaggedVersions = platforms.length;
 
             assert.equal(
               taggedVersions.length,
