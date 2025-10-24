@@ -37,9 +37,7 @@ jobs:
     with:
       images: |
         [
-          "application-test",
-          "test-multi-arch",
-          "test-mono-arch"
+          "application-test"
         ]
 
   clean-with-cache:
