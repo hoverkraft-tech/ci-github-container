@@ -153,29 +153,25 @@ jobs:
             const taggedVersions = versions.filter(version => version.metadata.container.tags.length > 0);
             const untaggedVersions = versions.filter(version => version.metadata.container.tags.length === 0);
 
-            // With optimizations:
-            // - No legacy cosign sha256-... tag is created anymore (using OCI 1.1 referrers)
-            // - Single platform images don't create a multiarch manifest
-            const platforms = JSON.parse(process.env.PLATFORMS);
-            const isSinglePlatform = platforms.length === 1;
-
             // Expected tagged version is always 1 (the main tag)
             const expectedTaggedVersions = 1;
 
             // Expected untagged versions:
             // - For single platform: 0 (no multiarch manifest created)
             // - For multi platform: number of platforms (one per platform)
+            const platforms = JSON.parse(process.env.PLATFORMS);
+            const isSinglePlatform = platforms.length === 1;
             const expectedUntaggedVersions = isSinglePlatform ? 0 : platforms.length;
 
             assert.equal(
               taggedVersions.length,
               expectedTaggedVersions,
-              `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}`
+              `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}: ${JSON.stringify(taggedVersions, null, 2)}`
             );
             assert.equal(
               untaggedVersions.length,
               expectedUntaggedVersions,
-              `Expected ${expectedUntaggedVersions} untagged versions, but found ${untaggedVersions.length}`
+              `Expected ${expectedUntaggedVersions} untagged versions, but found ${untaggedVersions.length}: ${JSON.stringify(untaggedVersions, null, 2)}`
             );
 
       - name: Verify image manifest and platforms

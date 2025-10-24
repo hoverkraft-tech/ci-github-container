@@ -43,6 +43,8 @@ runs:
 
     - name: Sign the images with GitHub OIDC Token
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        COSIGN_EXPERIMENTAL: "1"
       with:
         github-token: ${{ inputs.github-token }}
         script: |
