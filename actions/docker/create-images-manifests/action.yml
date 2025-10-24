@@ -117,6 +117,30 @@ runs:
               return `${builtImage.registry}/${builtImage.repository}:${tag}`;
             });
 
+            // Skip multiarch manifest creation for single platform images
+            if (builtImage.platforms.length <= 1) {
+              core.info(`Skipping multiarch manifest creation for "${builtImage.name}" (single platform: ${builtImage.platforms[0] || 'none'})`);
+              
+              return new Promise(async (resolve, reject)  => {
+                try {
+                  // For single platform, just tag the existing image
+                  const sourceImage = builtImage.images[0];
+                  for (const targetImage of imagesWithTags) {
+                    const tagCommand = `docker buildx imagetools create --tag ${targetImage} ${sourceImage}`;
+                    await exec.exec(tagCommand);
+                    core.debug(`Tag single-platform image "${builtImage.name}" ("${tagCommand}") executed`);
+                  }
+
+                  // Update builtImage with the images with tags
+                  builtImage.images = imagesWithTags;
+
+                  resolve();
+                } catch(error){
+                  reject(error);
+                }
+              });
+            }
+
             const platformsOption = builtImage.platforms.map(platform => `--platform ${platform}`).join(" ");
 
             const tagsOption = imagesWithTags.map(image => {

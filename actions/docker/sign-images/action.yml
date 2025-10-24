@@ -88,7 +88,8 @@ runs:
           // Sign the images
           const annotationsArgs = tags.size > 0 ? `-a tag=${Array.from(tags).at(-1)}` : "";
           const imagesArgs = Array.from(imagesToSign).join(" ");
-          const signImageCommand = `cosign sign ${annotationsArgs} --yes ${imagesArgs}`;
+          // Use OCI 1.1 referrers mode to avoid creating legacy sha256-... tags
+          const signImageCommand = `cosign sign ${annotationsArgs} --registry-referrers-mode=oci-1-1 --yes ${imagesArgs}`;
 
           core.debug(`Signing images with command: "${signImageCommand}"`);
           await exec.exec(signImageCommand);
