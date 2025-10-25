@@ -125,7 +125,7 @@ runs:
 
           // Helper function to tag single-platform image
           async function tagSinglePlatformImage(builtImage, imagesWithTags) {
-            core.info(`Skipping multiarch manifest creation for "${builtImage.name}" (single platform: ${builtImage.platforms[0] || 'none'})`);
+            core.info(`Tagging single-platform image "${builtImage.name}" (skipping multiarch manifest creation)`);
 
             validateImage(builtImage);
 
@@ -133,7 +133,7 @@ runs:
             for (const targetImage of imagesWithTags) {
               const tagCommand = `docker buildx imagetools create --tag ${targetImage} ${sourceImage}`;
               await exec.exec(tagCommand);
-              core.debug(`Tag single-platform image "${builtImage.name}" ("${tagCommand}") executed`);
+              core.debug(`Tagged single-platform image "${builtImage.name}"`);
             }
 
             builtImage.images = imagesWithTags;
@@ -173,7 +173,19 @@ runs:
             return new Promise(async (resolve, reject) => {
               try {
                 if (builtImage.platforms.length <= 1) {
-                  await tagSinglePlatformImage(builtImage, imagesWithTags);
+                  // For single-platform builds pushed with tags (not by digest),
+                  // the image reference already includes the tag, so we just need to update the images array
+                  const sourceImage = builtImage.images[0];
+                  const isPushedByDigest = sourceImage.match(/@sha256:[a-f0-9]{64}$/) && !sourceImage.match(/:[^:@]+@sha256:/);
+
+                  if (isPushedByDigest) {
+                    // Image was pushed by digest only, need to tag it
+                    await tagSinglePlatformImage(builtImage, imagesWithTags);
+                  } else {
+                    // Image was already pushed with tags, just ensure images array is updated
+                    core.info(`Single-platform image "${builtImage.name}" was already pushed with tags`);
+                    builtImage.images = imagesWithTags;
+                  }
                 } else {
                   await createMultiarchManifest(builtImage, imagesWithTags);
                 }

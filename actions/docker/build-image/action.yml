@@ -87,6 +87,13 @@ inputs:
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
+  push-by-digest:
+    description: |
+      Whether to push by digest only (without tags).
+      Set to false for single-platform builds to avoid creating untagged versions.
+      Set to true for multi-platform builds (required for manifest creation).
+    default: "true"
+    required: false
 
 outputs:
   built-image:
@@ -297,7 +304,7 @@ runs:
         # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to ||'
         # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
         cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache-arguments.outputs.cache-to }}
-        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+        outputs: ${{ inputs.push-by-digest == 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
         tags: ${{ steps.metadata.outputs.image }}

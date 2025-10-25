@@ -310,6 +310,8 @@ jobs:
                   ...image,
                   platform: platformName,
                   "runs-on": platformRunsOn,
+                  // For single-platform builds, don't use push-by-digest to avoid untagged versions
+                  "push-by-digest": platforms.length > 1,
                 };
                 imagesByPlatform.push(imageByPlatform);
               }
@@ -425,6 +427,7 @@ jobs:
           secret-envs: ${{ steps.prepare-secret-envs.outputs.secret-envs }}
           secrets: ${{ secrets.build-secrets }}
           cache-type: ${{ inputs.cache-type }}
+          push-by-digest: ${{ matrix.image.push-by-digest }}
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
