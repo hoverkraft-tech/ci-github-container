@@ -241,7 +241,8 @@ runs:
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
         cache-type: ${{ inputs.cache-type }}
-        extra-cache-to: "image-manifest=true,oci-mediatypes=true"
+        # Only use image-manifest for push-by-digest builds to avoid creating untagged versions
+        extra-cache-to: ${{ inputs.push-by-digest == 'true' && 'image-manifest=true,oci-mediatypes=true' || 'oci-mediatypes=true' }}
 
     # FIXME: Remove this when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
     - id: transform-cache-gha
