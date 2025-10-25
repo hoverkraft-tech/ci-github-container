@@ -1,0 +1,88 @@
+---
+name: Test for "docker-build-images" workflow - Building
+run-name: Test for "docker-build-images" workflow - Building
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions:
+  contents: read
+  issues: read
+  packages: write
+  pull-requests: read
+  id-token: write
+
+# jscpd:ignore-start
+jobs:
+  act-build-images-args-secrets:
+    name: Arrange - Build with args, secrets
+    uses: ./.github/workflows/docker-build-images.yml
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+      build-secrets: |
+        SECRET_TEST=test-secret
+        SECRET_ANOTHER_TEST=another-test-secret
+      build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+    with:
+      images: |
+        [
+          {
+            "name": "test-build-args-secrets",
+            "context": ".",
+            "target": "test",
+            "dockerfile": "./tests/application/Dockerfile",
+            "platforms": ["linux/amd64"],
+            "build-args": {
+              "BUILD_RUN_ID": "${{ github.run_id }}",
+              "BUILD_ARG_TEST": "test-arg",
+              "BUILD_ARG_ANOTHER_TEST": "another-test-arg"
+            },
+            "secret-envs": {
+              "SECRET_ENV_TEST": "GITHUB_ACTION",
+              "SECRET_ENV_ANOTHER_TEST": "GITHUB_JOB"
+            }
+          }
+        ]
+      build-secret-github-app-id: ${{ vars.CI_BOT_APP_ID }}
+      build-secret-github-app-token-env: |
+        SECRET_ENV_GITHUB_APP_TOKEN_1
+        SECRET_ENV_GITHUB_APP_TOKEN_2
+
+  assert-build-args-secrets:
+    name: Assert - Build with args, secrets
+    needs: act-build-images-args-secrets
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Check built images ouput
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const assert = require("assert");
+
+            const builtImagesOutput = `${{ needs.act-build-images-args-secrets.outputs.built-images }}`;
+            assert(builtImagesOutput.length, `"built-images" output is empty`);
+
+            // Check if is valid Json
+            let builtImages = null;
+            try {
+              builtImages = JSON.parse(builtImagesOutput);
+            } catch (error) {
+              throw new Error(`"built-images" output is not a valid JSON: ${error}`);
+            }
+
+            const expectedCreatedImages = [
+              "test-build-args-secrets"
+            ];
+
+            assert(typeof builtImages === "object" && !Array.isArray(builtImages), `"built-images" output is not an object`);
+            assert.equal(Object.keys(builtImages).length, expectedCreatedImages.length, `"built-images" output does not contain ${expectedCreatedImages.length} images`);
+
+            for (const image of expectedCreatedImages) {
+              assert(builtImages[image], `"built-images" output does not contain "${image}" image`);
+            }
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+# jscpd:ignore-end

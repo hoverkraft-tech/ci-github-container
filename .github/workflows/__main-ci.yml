@@ -37,7 +37,10 @@ jobs:
     with:
       images: |
         [
-          "application-test"
+          "application-test",
+          "test-build-args-secrets",
+          "test-caching-mono-arch-gha",
+          "test-caching-multi-arch-gha"
         ]
 
   clean-with-cache:
@@ -47,7 +50,8 @@ jobs:
       prune-cache-images: true
       images: |
         [
-          "test-build-args-secrets"
+          "test-caching-mono-arch-registry",
+          "test-caching-multi-arch-registry",
         ]
 
   helm-docs:

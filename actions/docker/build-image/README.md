@@ -161,6 +161,8 @@ permissions:
 |                             | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                          |              |                                  |
 | **`cache-type`**            | Cache type.                                                                                              | **false**    | `gha`                            |
 |                             | See <https://docs.docker.com/build/cache/backends>.                                                      |              |                                  |
+| **`multi-platform`**        | Flag to indicate participation in a multi-platform publish (push by digest only).                        | **false**    | `false`                          |
+|                             | Set to `true` when the image will later be assembled into a multi-arch manifest.                         |              |                                  |
 
 <!-- inputs:end -->
 

@@ -47,8 +47,20 @@ jobs:
     needs: linter
     uses: ./.github/workflows/__test-action-helm-test-chart.yml
 
-  test-workflow-docker-build-images:
-    name: Test docker build images
+  test-workflow-docker-build-images-building:
+    name: Test docker build images - Building
     needs: linter
-    uses: ./.github/workflows/__test-workflow-docker-build-images.yml
+    uses: ./.github/workflows/__test-workflow-docker-build-images-building.yml
+    secrets: inherit
+
+  test-workflow-docker-build-images-caching:
+    name: Test docker build images - Caching
+    needs: linter
+    uses: ./.github/workflows/__test-workflow-docker-build-images-caching.yml
+    secrets: inherit
+
+  test-workflow-docker-build-images-platforms-and-signing:
+    name: Test docker build images - Platforms and Signing
+    needs: linter
+    uses: ./.github/workflows/__test-workflow-docker-build-images-platforms-and-signing.yml
     secrets: inherit

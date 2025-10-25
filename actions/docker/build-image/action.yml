@@ -87,12 +87,12 @@ inputs:
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
-  push-by-digest:
+  multi-platform:
     description: |
-      Whether to push by digest only (without tags).
-      Set to false for single-platform builds to avoid creating untagged versions.
-      Set to true for multi-platform builds (required for manifest creation).
-    default: "true"
+      Whether this build participates in a multi-platform image publication.
+      When true, the image is pushed by digest only so manifests can be assembled later.
+      When false, the image is pushed with its tags directly.
+    default: false
     required: false
 
 outputs:
@@ -115,7 +115,8 @@ outputs:
           "org.opencontainers.image.created": "2021-09-30T14:00:00Z",
           "org.opencontainers.image.description": "Application image"
         },
-        "platform": "linux/amd64"
+        "platform": "linux/amd64",
+        "multi-platform": false
       }
       ```
     value: ${{ steps.get-built-image.outputs.built-image }}
@@ -148,74 +149,90 @@ runs:
         value: ${{ inputs.platform }}
 
     - id: get-docker-config
-      shell: bash
-      run: |
-        DOCKERFILE_PATH="${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}"
-        if [ ! -f "$DOCKERFILE_PATH" ]; then
-          echo "::error::Dockerfile not found at path: $DOCKERFILE_PATH"
-          exit 1
-        fi
-        DOCKERFILE_PATH=$(realpath "$DOCKERFILE_PATH")
-        echo "dockerfile-path=$DOCKERFILE_PATH" >> "$GITHUB_OUTPUT"
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
 
-        TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
+          const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+          const rawContext = `${{ inputs.context }}`.trim();
+          const contextPath = rawContext.length > 0 ? rawContext : '.';
+          const rawDockerfile = `${{ inputs.dockerfile }}`.trim();
+          const dockerfileName = rawDockerfile.length > 0 ? rawDockerfile : 'Dockerfile';
 
-        # Add tag suffix flavor
-        CACHE_FLAVOR="suffix=$TAG_SUFFIX"
+          const dockerfilePath = path.resolve(workspace, contextPath, dockerfileName);
 
-        echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
+          if (!fs.existsSync(dockerfilePath) || !fs.statSync(dockerfilePath).isFile()) {
+            return core.setFailed(`Dockerfile not found at path: ${dockerfilePath}`);
+          }
 
-        # Define cache image
-        CACHE_TYPE="${{ inputs.cache-type }}"
-        if [ "$CACHE_TYPE" = "registry" ]; then
-          echo "cache-image=${{ steps.metadata.outputs.image }}/cache" >> "$GITHUB_OUTPUT"
-        else
-          echo "cache-image=${{ steps.metadata.outputs.image }}" >> "$GITHUB_OUTPUT"
-        fi
+          const resolvedDockerfilePath = fs.realpathSync(dockerfilePath);
+          core.setOutput('dockerfile-path', resolvedDockerfilePath);
 
-        # Check if docker exists
-        if command -v docker &> /dev/null; then
-          echo "docker-exists=true" >> "$GITHUB_OUTPUT"
-        fi
+          const slugifiedPlatform = `${{ steps.slugify-platform.outputs.result }}`;
+          const tagSuffix = `-${slugifiedPlatform}`;
+          core.setOutput('cache-flavor', `suffix=${tagSuffix}`);
 
-        PLATFORM="${{ inputs.platform }}"
-        if [ -z "$PLATFORM" ]; then
-          echo "platform-exists=true" >> "$GITHUB_OUTPUT"
-        else
-          PLATFORM_OS=$(echo "$PLATFORM" | cut -d'/' -f1)
-          RUNNER_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          const cacheType = `${{ inputs.cache-type }}`.trim();
+          const metadataImage = `${{ steps.metadata.outputs.image }}`;
+          const cacheImage = cacheType === 'registry' ? `${metadataImage}/cache` : metadataImage;
+          core.setOutput('cache-image', cacheImage);
 
-          echo "::debug::PLATFORM_OS=$PLATFORM_OS"
-          echo "::debug::RUNNER_OS=$RUNNER_OS"
+          try {
+            await exec.exec('command -v docker', { stdio: 'ignore' });
+            core.setOutput('docker-exists', 'true');
+          } catch (error) {
+            // docker not available on runner
+          }
 
-          if [ "$PLATFORM_OS" = "$RUNNER_OS" ]; then
-            PLATFORM_ARCH=$(echo "$PLATFORM" | cut -d'/' -f2-)
-            RUNNER_ARCH=$(uname -m)
+          const multiplatformInput = `${{ inputs.multi-platform }}`.trim().toLowerCase();
+          const isMultiplatform = !(multiplatformInput.length === 0 || multiplatformInput === 'false');
+          if (isMultiplatform) {
+            core.debug('Multi-platform build is enabled.');
+            core.setOutput('multi-platform', true);
+          }
 
-            echo "::debug::PLATFORM_ARCH=$PLATFORM_ARCH"
-            echo "::debug::RUNNER_ARCH=$RUNNER_ARCH"
+          const platform = `${{ inputs.platform }}`.trim();
+          if (platform.length === 0) {
+            return core.setFailed('Input "platform" is required.');
+          }
+          const [platformOs, ...platformArchParts] = platform.split('/');
+          const { stdout: runnerOsOutput } = await exec.getExecOutput('uname -s');
+          const runnerOs = runnerOsOutput.trim().toLowerCase();
 
-            # Convert runner arch to docker arch
-            case $RUNNER_ARCH in
-              x86_64)
-                RUNNER_ARCH="amd64"
-                ;;
-              aarch64)
-                RUNNER_ARCH="arm64"
-                ;;
-              armv7l)
-                RUNNER_ARCH="arm/v7"
-                ;;
-              *)
-                echo "::warning::Unsupported architecture: $RUNNER_ARCH"
-                ;;
-            esac
+          core.debug(`Platform OS: ${platformOs}`);
+          core.debug(`Runner OS: ${runnerOs}`);
 
-            if [ "$PLATFORM_ARCH" = "$RUNNER_ARCH" ]; then
-              echo "platform-exists=true" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-        fi
+          if (platformOs.toLowerCase() === runnerOs) {
+            const platformArch = platformArchParts.join('/');
+
+            const { stdout: runnerArchOutput } = await exec.getExecOutput('uname -m');
+            const runnerArch = runnerArchOutput.trim();
+
+            core.debug(`Platform arch: ${platformArch}`);
+            core.debug(`Runner arch: ${runnerArch}`);
+
+            let runnerArchNormalized = runnerArch;
+            switch (runnerArch) {
+              case 'x86_64':
+                runnerArchNormalized = 'amd64';
+                break;
+              case 'aarch64':
+                runnerArchNormalized = 'arm64';
+                break;
+              case 'armv7l':
+                runnerArchNormalized = 'arm/v7';
+                break;
+              default:
+                core.warning(`Unsupported architecture: ${runnerArchRaw}`);
+                break;
+            }
+
+            if (platformArch === runnerArchNormalized) {
+              core.setOutput('platform-exists', 'true');
+            }
+          }
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
       uses: docker/setup-docker-action@3fb92d6d9c634363128c8cce4bc3b2826526370a # v4.4.0
@@ -304,10 +321,11 @@ runs:
         # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to ||'
         # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
         cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache-arguments.outputs.cache-to }}
-        outputs: ${{ inputs.push-by-digest == 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
+        outputs: |
+          ${{ steps.get-docker-config.outputs.multi-platform && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
-        tags: ${{ inputs.push-by-digest == 'true' && steps.metadata.outputs.image || steps.metadata.outputs.tags }}
+        tags: ${{ steps.get-docker-config.outputs.multi-platform && steps.metadata.outputs.image || steps.metadata.outputs.tags }}
         provenance: false # Disable provenance to avoid unknown/unknown arch
         sbom: false # Disable sbom to avoid unknown/unknown arch
 
@@ -399,6 +417,8 @@ runs:
               return annotations;
             }, {})
 
+          const isMultiplatform = Boolean(`${{ steps.get-docker-config.outputs.multi-platform }}`);
+
           const builtImage = {
             name,
             tags,
@@ -407,7 +427,8 @@ runs:
             repository,
             image: imageWithDigest,
             digest,
-            platform
+            platform,
+            "multi-platform": isMultiplatform,
           };
 
           core.setOutput("built-image", JSON.stringify(builtImage));
