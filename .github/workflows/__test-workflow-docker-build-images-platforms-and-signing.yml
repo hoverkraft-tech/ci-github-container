@@ -1,6 +1,6 @@
 ---
-name: Test for "docker-build-images" workflow
-run-name: Test for "docker-build-images" workflow
+name: Test for "docker-build-images" workflow - Platforms and Signing
+run-name: Test for "docker-build-images" workflow - Platforms and Signing
 
 on: # yamllint disable-line rule:truthy
   workflow_call:
@@ -166,7 +166,9 @@ jobs:
             // Expected untagged versions:
             // - For single platform: 0 (no untagged versions when optimized)
             // - For multi platform: number of platforms (one per platform digest-only push)
-            const expectedUntaggedVersions = isSinglePlatform ? 0 : platforms.length;
+            // - Plus 1 for cosign "dsse-envelope" attachment when signed
+            //   Note: ghcr.io doesn't support OCI 1.1 referrers yet, so cosign falls back to legacy attachments
+            const expectedUntaggedVersions = (isSinglePlatform ? 0 : platforms.length) + (isSigned ? 1 : 0);
 
             assert.equal(
               taggedVersions.length,
@@ -190,22 +192,29 @@ jobs:
             const imageName = process.env.IMAGE_NAME;
             const image = `ghcr.io/hoverkraft-tech/ci-github-container/${imageName}`;
 
+            const expectedPlatforms = JSON.parse(process.env.EXPECTED_PLATFORMS);
+            const expectedPlatformCount = expectedPlatforms.length;
+
             const { exitCode, stdout, stderr } = await exec.getExecOutput('docker', ['manifest', 'inspect', '-v', image]);
 
             if (exitCode !== 0 || stderr) {
               throw new Error(`Failed to inspect manifest for image: ${image}: ${stderr || stdout}`);
             }
 
-            const manifest = JSON.parse(stdout);
+            let manifests = JSON.parse(stdout);
 
-            const expectedPlatforms = JSON.parse(process.env.EXPECTED_PLATFORMS);
-            const expectedPlatformCount = expectedPlatforms.length;
-
-            assert.equal(manifest.length, expectedPlatformCount, `Expected ${expectedPlatformCount} platforms, got: ${manifest.length}`);
+            if (expectedPlatformCount === 1) {
+              assert(manifests.Descriptor, `Manifest for single platform image is missing Descriptor field`);
+              // For single platform images, the manifest is not a list but a single object
+              manifests = [manifests];
+            } else{
+              assert(Array.isArray(manifests), `Manifest for multi platform image is not an array`);
+              assert.equal(manifests.length, expectedPlatformCount, `Expected ${expectedPlatformCount} platforms, got: ${manifests.length}`);
+            }
 
             expectedPlatforms.forEach(platformStr => {
               const [os, arch] = platformStr.split('/');
-              const platformExists = manifest.some(
+              const platformExists = manifests.some(
                 platform => (
                   platform?.Descriptor?.platform?.architecture === arch &&
                   platform?.Descriptor?.platform?.os === os
@@ -276,127 +285,5 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             /orgs/${{ github.repository_owner }}/packages/container/ci-github-container%2F"${IMAGE_NAME}" || echo "No ${IMAGE_NAME} package to delete"
-
-  act-build-args-secrets-and-registry-caching:
-    name: Act - Build with args, secrets and registry caching
-    needs: arrange
-    uses: ./.github/workflows/docker-build-images.yml
-    secrets:
-      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
-      build-secrets: |
-        SECRET_TEST=test-secret
-        SECRET_ANOTHER_TEST=another-test-secret
-      build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
-    with:
-      cache-type: registry
-      images: |
-        [
-          {
-            "name": "test-build-args-secrets",
-            "context": ".",
-            "target": "test",
-            "dockerfile": "./tests/application/Dockerfile",
-            "platforms": ["linux/amd64","linux/arm64"],
-            "build-args": {
-              "BUILD_RUN_ID": "${{ github.run_id }}",
-              "BUILD_ARG_TEST": "test-arg",
-              "BUILD_ARG_ANOTHER_TEST": "another-test-arg"
-            },
-            "secret-envs": {
-              "SECRET_ENV_TEST": "GITHUB_ACTION",
-              "SECRET_ENV_ANOTHER_TEST": "GITHUB_JOB"
-            }
-          }
-        ]
-      build-secret-github-app-id: ${{ vars.CI_BOT_APP_ID }}
-      build-secret-github-app-token-env: |
-        SECRET_ENV_GITHUB_APP_TOKEN_1
-        SECRET_ENV_GITHUB_APP_TOKEN_2
-
-  assert-build-args-secrets-and-registry-caching:
-    name: Assert - Build with args, secrets and registry caching
-    needs: act-build-args-secrets-and-registry-caching
-    runs-on: "ubuntu-latest"
-    steps:
-      - name: Check built images ouput
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-        with:
-          script: |
-            const assert = require("assert");
-
-            const builtImagesOutput = `${{ needs.act-build-args-secrets-and-registry-caching.outputs.built-images }}`;
-            assert(builtImagesOutput.length, `"built-images" output is empty`);
-
-            // Check if is valid Json
-            let builtImages = null;
-            try {
-              builtImages = JSON.parse(builtImagesOutput);
-            } catch (error) {
-              throw new Error(`"built-images" output is not a valid JSON: ${error}`);
-            }
-
-            const expectedCreatedImages = [
-              "test-build-args-secrets"
-            ];
-
-            assert(typeof builtImages === "object" && !Array.isArray(builtImages), `"built-images" output is not an object`);
-            assert.equal(Object.keys(builtImages).length, expectedCreatedImages.length, `"built-images" output does not contain ${expectedCreatedImages.length} images`);
-
-            for (const image of expectedCreatedImages) {
-              assert(builtImages[image], `"built-images" output does not contain "${image}" image`);
-            }
-      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ github.token }}
-
-      - name: Check docker image and cache
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-        with:
-          script: |
-            const assert = require("assert");
-
-            let expectedTag;
-
-            const isPullRequest = `${{ github.event_name }}` === "pull_request";
-            if (isPullRequest) {
-              const shortSha = `${{ github.sha }}`.substring(0, 7);
-              expectedTag = `pr-${{ github.event.pull_request.number }}-${shortSha}`;
-            } else {
-              expectedTag = `${{ github.ref_name }}`;
-            }
-
-            const digest = `${{ fromJson(needs.act-build-args-secrets-and-registry-caching.outputs.built-images).test-build-args-secrets.digest }}`;
-            assert(digest.length, `"built-images" output does not contain digest for "test-build-args-secrets" image`);
-            assert.match(digest, /^sha256:[0-9a-f]{64}$/, `"built-images" output does not contain valid digest for "test-build-args-secrets" image`);
-
-            const expectedImage = `ghcr.io/hoverkraft-tech/ci-github-container/test-build-args-secrets`;
-            const expectedImageTag = `${expectedImage}:${expectedTag}@${digest}`;
-
-            const image = `${{ fromJson(needs.act-build-args-secrets-and-registry-caching.outputs.built-images).test-build-args-secrets.images[0] }}`;
-
-            assert.equal(image, expectedImageTag, `"built-images" output is not valid. Expected "${expectedImage}", got "${image}"`);
-
-            await exec.exec('docker', ['pull', image]);
-
-            let expectedCacheTag;
-
-            if (isPullRequest) {
-              expectedCacheTag = `pr-${{ github.event.pull_request.number }}`;
-            } else {
-              expectedCacheTag = `${{ github.ref_name }}`;
-            }
-
-            const cacheImage = `${expectedImage}/cache:${expectedCacheTag}`;
-
-            const cacheImages = [
-              `${cacheImage}-linux-arm64`,
-              `${cacheImage}-linux-amd64`
-            ];
-
-            for (const cacheImage of cacheImages) {
-              await exec.exec('docker', ['manifest', 'inspect', cacheImage]);
-            }
 
 # jscpd:ignore-end
