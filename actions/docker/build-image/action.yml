@@ -307,7 +307,7 @@ runs:
         outputs: ${{ inputs.push-by-digest == 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
-        tags: ${{ steps.metadata.outputs.image }}
+        tags: ${{ inputs.push-by-digest == 'true' && steps.metadata.outputs.image || steps.metadata.outputs.tags }}
         provenance: false # Disable provenance to avoid unknown/unknown arch
         sbom: false # Disable sbom to avoid unknown/unknown arch
 
