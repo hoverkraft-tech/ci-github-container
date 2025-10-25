@@ -164,10 +164,9 @@ jobs:
             const expectedTaggedVersions = isSigned ? 2 : 1;
 
             // Expected untagged versions:
-            // - For single platform: 1 (the digest-only push from build step)
+            // - For single platform: 0 (no untagged versions when optimized)
             // - For multi platform: number of platforms (one per platform digest-only push)
-            // Note: The build step uses push-by-digest which creates untagged versions
-            const expectedUntaggedVersions = platforms.length;
+            const expectedUntaggedVersions = isSinglePlatform ? 0 : platforms.length;
 
             assert.equal(
               taggedVersions.length,
