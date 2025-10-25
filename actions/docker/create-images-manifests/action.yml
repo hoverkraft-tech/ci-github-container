@@ -109,41 +109,88 @@ runs:
             throw new Error(`"built-images" input is not a valid JSON: ${error}`);
           }
 
-          // Create manifest for each image
-          const commands = Object.keys(builtImages).map(imageName => {
-            const builtImage = builtImages[imageName];
+          // Helper function to build image tags from registry, repository and tag list
+          function buildImageTags(builtImage) {
+            return builtImage.tags.map(tag =>
+              `${builtImage.registry}/${builtImage.repository}:${tag}`
+            );
+          }
 
-            const imagesWithTags = builtImage.tags.map(tag => {
-              return `${builtImage.registry}/${builtImage.repository}:${tag}`;
-            });
+          // Helper function to validate image data
+          function validateImage(builtImage) {
+            if (!builtImage.images || builtImage.images.length === 0) {
+              throw new Error(`No images found for "${builtImage.name}"`);
+            }
+          }
 
-            const platformsOption = builtImage.platforms.map(platform => `--platform ${platform}`).join(" ");
+          // Helper function to tag single-platform image
+          async function tagSinglePlatformImage(builtImage, imagesWithTags) {
+            core.info(`Tagging single-platform image "${builtImage.name}" (skipping multiarch manifest creation)`);
 
-            const tagsOption = imagesWithTags.map(image => {
-              return `--tag ${image}`;
-            }).join(" ");
+            validateImage(builtImage);
 
-            const sources = builtImage.images.join(" ");
+            const sourceImage = builtImage.images[0];
+            for (const targetImage of imagesWithTags) {
+              const tagCommand = `docker buildx imagetools create --tag ${targetImage} ${sourceImage}`;
+              await exec.exec(tagCommand);
+              core.debug(`Tagged single-platform image "${builtImage.name}"`);
+            }
 
+            builtImage.images = imagesWithTags;
+          }
+
+          // Helper function to build annotations options
+          function buildAnnotationsOption(annotations) {
             const annotationLevels = ["index"];
-            const annotationsOption = Object.keys(builtImage.annotations)
+            return Object.keys(annotations)
               .map(annotation => annotationLevels
-                .map(annotationLevel => `--annotation "${annotationLevel}:${annotation}=${builtImage.annotations[annotation]}"`)
+                .map(annotationLevel => `--annotation "${annotationLevel}:${annotation}=${annotations[annotation]}"`)
               )
-              .flat().join(" ");
+              .flat()
+              .join(" ");
+          }
+
+          // Helper function to create multiarch manifest
+          async function createMultiarchManifest(builtImage, imagesWithTags) {
+            const platformsOption = builtImage.platforms.map(platform => `--platform ${platform}`).join(" ");
+            const tagsOption = imagesWithTags.map(image => `--tag ${image}`).join(" ");
+            const sources = builtImage.images.join(" ");
+            const annotationsOption = buildAnnotationsOption(builtImage.annotations);
 
             const createManifestCommand = `docker buildx imagetools create ${platformsOption} ${annotationsOption} ${tagsOption} ${sources}`;
 
-            return new Promise(async (resolve, reject)  => {
+            await exec.exec(createManifestCommand);
+            core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+
+            builtImage.images = imagesWithTags;
+          }
+
+          // Process each image
+          const commands = Object.keys(builtImages).map(imageName => {
+            const builtImage = builtImages[imageName];
+            const imagesWithTags = buildImageTags(builtImage);
+
+            return new Promise(async (resolve, reject) => {
               try {
-                await exec.exec(createManifestCommand);
-                core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+                if (builtImage.platforms.length <= 1) {
+                  // For single-platform builds pushed with tags (not by digest),
+                  // the image reference already includes the tag, so we just need to update the images array
+                  const sourceImage = builtImage.images[0];
+                  const isPushedByDigest = sourceImage.match(/@sha256:[a-f0-9]{64}$/) && !sourceImage.match(/:[^:@]+@sha256:/);
 
-                // Update builtImage with the images with tags
-                builtImage.images = imagesWithTags;
-
+                  if (isPushedByDigest) {
+                    // Image was pushed by digest only, need to tag it
+                    await tagSinglePlatformImage(builtImage, imagesWithTags);
+                  } else {
+                    // Image was already pushed with tags, just ensure images array is updated
+                    core.info(`Single-platform image "${builtImage.name}" was already pushed with tags`);
+                    builtImage.images = imagesWithTags;
+                  }
+                } else {
+                  await createMultiarchManifest(builtImage, imagesWithTags);
+                }
                 resolve();
-              } catch(error){
+              } catch (error) {
                 reject(error);
               }
             });

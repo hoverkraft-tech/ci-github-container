@@ -73,7 +73,7 @@ runs:
         script: |
           const tagInput = `${{ inputs.tag }}`
           if (tagInput.length) {
-            core.setOutput('tags',`type=semver,pattern={{raw}},value=${tagInput}`);
+            core.setOutput('tags',`type=raw,value=${tagInput}`);
             core.setOutput('flavor', 'latest=false');
             return;
           }

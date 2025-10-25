@@ -43,6 +43,8 @@ runs:
 
     - name: Sign the images with GitHub OIDC Token
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        COSIGN_EXPERIMENTAL: "1"
       with:
         github-token: ${{ inputs.github-token }}
         script: |
@@ -88,7 +90,10 @@ runs:
           // Sign the images
           const annotationsArgs = tags.size > 0 ? `-a tag=${Array.from(tags).at(-1)}` : "";
           const imagesArgs = Array.from(imagesToSign).join(" ");
-          const signImageCommand = `cosign sign ${annotationsArgs} --yes ${imagesArgs}`;
+          // Use OCI 1.1 referrers mode to avoid creating legacy sha256-... tags
+          // Note: If the registry doesn't support OCI 1.1 referrers (like ghcr.io currently),
+          // cosign will fall back to legacy attachments and create a sha256-... tag
+          const signImageCommand = `cosign sign ${annotationsArgs} --registry-referrers-mode=oci-1-1 --yes ${imagesArgs}`;
 
           core.debug(`Signing images with command: "${signImageCommand}"`);
           await exec.exec(signImageCommand);

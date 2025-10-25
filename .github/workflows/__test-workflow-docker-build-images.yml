@@ -153,21 +153,30 @@ jobs:
             const taggedVersions = versions.filter(version => version.metadata.container.tags.length > 0);
             const untaggedVersions = versions.filter(version => version.metadata.container.tags.length === 0);
 
-            // Expected tagged version is 1 for unsigned images (tag) and 2 for signed images (tag, cosing legacy tag sha256-...)
-            const expectedTaggedVersions = process.env.SIGN === 'true' ? 2 : 1;
+            const platforms = JSON.parse(process.env.PLATFORMS);
+            const isSinglePlatform = platforms.length === 1;
+            const isSigned = process.env.SIGN === 'true';
 
-            // Expected untagged versions are 1 by platform for unsigned images and number of platforms + 1 (cosing legacy tag sha256-...) for signed images
-            const expectedUntaggedVersions = JSON.parse(process.env.PLATFORMS).length + (process.env.SIGN === 'true' ? 1 : 0);
+            // Expected tagged versions:
+            // - Always 1 for the main tag
+            // - Plus 1 for cosign legacy tag (sha256-...) when signed
+            //   Note: ghcr.io doesn't support OCI 1.1 referrers yet, so cosign falls back to legacy attachments
+            const expectedTaggedVersions = isSigned ? 2 : 1;
+
+            // Expected untagged versions:
+            // - For single platform: 0 (no untagged versions when optimized)
+            // - For multi platform: number of platforms (one per platform digest-only push)
+            const expectedUntaggedVersions = isSinglePlatform ? 0 : platforms.length;
 
             assert.equal(
               taggedVersions.length,
               expectedTaggedVersions,
-              `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}`
+              `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}: ${JSON.stringify(taggedVersions, null, 2)}`
             );
             assert.equal(
               untaggedVersions.length,
               expectedUntaggedVersions,
-              `Expected ${expectedUntaggedVersions} untagged versions, but found ${untaggedVersions.length}`
+              `Expected ${expectedUntaggedVersions} untagged versions, but found ${untaggedVersions.length}: ${JSON.stringify(untaggedVersions, null, 2)}`
             );
 
       - name: Verify image manifest and platforms

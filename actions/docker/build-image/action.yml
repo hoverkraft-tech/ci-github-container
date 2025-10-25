@@ -87,6 +87,13 @@ inputs:
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
+  push-by-digest:
+    description: |
+      Whether to push by digest only (without tags).
+      Set to false for single-platform builds to avoid creating untagged versions.
+      Set to true for multi-platform builds (required for manifest creation).
+    default: "true"
+    required: false
 
 outputs:
   built-image:
@@ -234,7 +241,8 @@ runs:
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
         cache-type: ${{ inputs.cache-type }}
-        extra-cache-to: "image-manifest=true,oci-mediatypes=true"
+        # Only use image-manifest for push-by-digest builds to avoid creating untagged versions
+        extra-cache-to: ${{ inputs.push-by-digest == 'true' && 'image-manifest=true,oci-mediatypes=true' || 'oci-mediatypes=true' }}
 
     # FIXME: Remove this when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
     - id: transform-cache-gha
@@ -297,10 +305,10 @@ runs:
         # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to ||'
         # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
         cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache-arguments.outputs.cache-to }}
-        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+        outputs: ${{ inputs.push-by-digest == 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
-        tags: ${{ steps.metadata.outputs.image }}
+        tags: ${{ inputs.push-by-digest == 'true' && steps.metadata.outputs.image || steps.metadata.outputs.tags }}
         provenance: false # Disable provenance to avoid unknown/unknown arch
         sbom: false # Disable sbom to avoid unknown/unknown arch
 
