@@ -51,7 +51,7 @@ jobs:
       images: |
         [
           "test-caching-mono-arch-registry",
-          "test-caching-multi-arch-registry",
+          "test-caching-multi-arch-registry"
         ]
 
   helm-docs:
