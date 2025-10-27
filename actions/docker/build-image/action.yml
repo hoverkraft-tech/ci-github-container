@@ -149,90 +149,81 @@ runs:
         value: ${{ inputs.platform }}
 
     - id: get-docker-config
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      with:
-        script: |
-          const fs = require('fs');
-          const path = require('path');
+      shell: bash
+      run: |
+        DOCKERFILE_PATH="${{ github.workspace }}/${{ inputs.context }}/${{ inputs.dockerfile }}"
+        if [ ! -f "$DOCKERFILE_PATH" ]; then
+          echo "::error::Dockerfile not found at path: $DOCKERFILE_PATH"
+          exit 1
+        fi
+        DOCKERFILE_PATH=$(realpath "$DOCKERFILE_PATH")
+        echo "dockerfile-path=$DOCKERFILE_PATH" >> "$GITHUB_OUTPUT"
 
-          const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
-          const rawContext = `${{ inputs.context }}`.trim();
-          const contextPath = rawContext.length > 0 ? rawContext : '.';
-          const rawDockerfile = `${{ inputs.dockerfile }}`.trim();
-          const dockerfileName = rawDockerfile.length > 0 ? rawDockerfile : 'Dockerfile';
+        TAG_SUFFIX="-${{ steps.slugify-platform.outputs.result }}"
 
-          const dockerfilePath = path.resolve(workspace, contextPath, dockerfileName);
+        # Add tag suffix flavor
+        CACHE_FLAVOR="suffix=$TAG_SUFFIX"
 
-          if (!fs.existsSync(dockerfilePath) || !fs.statSync(dockerfilePath).isFile()) {
-            return core.setFailed(`Dockerfile not found at path: ${dockerfilePath}`);
-          }
+        echo "cache-flavor=$CACHE_FLAVOR" >> "$GITHUB_OUTPUT"
 
-          const resolvedDockerfilePath = fs.realpathSync(dockerfilePath);
-          core.setOutput('dockerfile-path', resolvedDockerfilePath);
+        # Define cache image
+        CACHE_TYPE="${{ inputs.cache-type }}"
+        if [ "$CACHE_TYPE" = "registry" ]; then
+          echo "cache-image=${{ steps.metadata.outputs.image }}/cache" >> "$GITHUB_OUTPUT"
+        else
+          echo "cache-image=${{ steps.metadata.outputs.image }}" >> "$GITHUB_OUTPUT"
+        fi
 
-          const slugifiedPlatform = `${{ steps.slugify-platform.outputs.result }}`;
-          const tagSuffix = `-${slugifiedPlatform}`;
-          core.setOutput('cache-flavor', `suffix=${tagSuffix}`);
+        # Check if docker exists
+        if command -v docker &> /dev/null; then
+          echo "docker-exists=true" >> "$GITHUB_OUTPUT"
+        fi
 
-          const cacheType = `${{ inputs.cache-type }}`.trim();
-          const metadataImage = `${{ steps.metadata.outputs.image }}`;
-          const cacheImage = cacheType === 'registry' ? `${metadataImage}/cache` : metadataImage;
-          core.setOutput('cache-image', cacheImage);
+        MULTI_PLATFORM="${{ inputs.multi-platform }}"
+        if [ -z "$MULTI_PLATFORM" || "$MULTI_PLATFORM" = "false" ]; then
+          echo "multi-platform=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "multi-platform=true" >> "$GITHUB_OUTPUT"
+        fi
 
-          try {
-            await exec.exec('command -v docker', { stdio: 'ignore' });
-            core.setOutput('docker-exists', 'true');
-          } catch (error) {
-            // docker not available on runner
-          }
+        PLATFORM="${{ inputs.platform }}"
+        if [ -z "$PLATFORM" ]; then
+          echo "platform-exists=true" >> "$GITHUB_OUTPUT"
+        else
+          PLATFORM_OS=$(echo "$PLATFORM" | cut -d'/' -f1)
+          RUNNER_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-          const multiplatformInput = `${{ inputs.multi-platform }}`.trim().toLowerCase();
-          const isMultiplatform = !(multiplatformInput.length === 0 || multiplatformInput === 'false');
-          if (isMultiplatform) {
-            core.debug('Multi-platform build is enabled.');
-            core.setOutput('multi-platform', true);
-          }
+          echo "::debug::PLATFORM_OS=$PLATFORM_OS"
+          echo "::debug::RUNNER_OS=$RUNNER_OS"
 
-          const platform = `${{ inputs.platform }}`.trim();
-          if (platform.length === 0) {
-            return core.setFailed('Input "platform" is required.');
-          }
-          const [platformOs, ...platformArchParts] = platform.split('/');
-          const { stdout: runnerOsOutput } = await exec.getExecOutput('uname -s');
-          const runnerOs = runnerOsOutput.trim().toLowerCase();
+          if [ "$PLATFORM_OS" = "$RUNNER_OS" ]; then
+            PLATFORM_ARCH=$(echo "$PLATFORM" | cut -d'/' -f2-)
+            RUNNER_ARCH=$(uname -m)
 
-          core.debug(`Platform OS: ${platformOs}`);
-          core.debug(`Runner OS: ${runnerOs}`);
+            echo "::debug::PLATFORM_ARCH=$PLATFORM_ARCH"
+            echo "::debug::RUNNER_ARCH=$RUNNER_ARCH"
 
-          if (platformOs.toLowerCase() === runnerOs) {
-            const platformArch = platformArchParts.join('/');
+            # Convert runner arch to docker arch
+            case $RUNNER_ARCH in
+              x86_64)
+                RUNNER_ARCH="amd64"
+                ;;
+              aarch64)
+                RUNNER_ARCH="arm64"
+                ;;
+              armv7l)
+                RUNNER_ARCH="arm/v7"
+                ;;
+              *)
+                echo "::warning::Unsupported architecture: $RUNNER_ARCH"
+                ;;
+            esac
 
-            const { stdout: runnerArchOutput } = await exec.getExecOutput('uname -m');
-            const runnerArch = runnerArchOutput.trim();
-
-            core.debug(`Platform arch: ${platformArch}`);
-            core.debug(`Runner arch: ${runnerArch}`);
-
-            let runnerArchNormalized = runnerArch;
-            switch (runnerArch) {
-              case 'x86_64':
-                runnerArchNormalized = 'amd64';
-                break;
-              case 'aarch64':
-                runnerArchNormalized = 'arm64';
-                break;
-              case 'armv7l':
-                runnerArchNormalized = 'arm/v7';
-                break;
-              default:
-                core.warning(`Unsupported architecture: ${runnerArchRaw}`);
-                break;
-            }
-
-            if (platformArch === runnerArchNormalized) {
-              core.setOutput('platform-exists', 'true');
-            }
-          }
+            if [ "$PLATFORM_ARCH" = "$RUNNER_ARCH" ]; then
+              echo "platform-exists=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+        fi
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
       uses: docker/setup-docker-action@3fb92d6d9c634363128c8cce4bc3b2826526370a # v4.4.0
@@ -290,13 +281,13 @@ runs:
         path: cache-mount
         key: cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}
 
-    - name: Restore Docker cache mounts
-      uses: reproducible-containers/buildkit-cache-dance@5b81f4d29dc8397a7d341dba3aeecc7ec54d6361 # v3.3.0
-      with:
-        builder: ${{ steps.setup-buildx.outputs.name }}
-        cache-dir: cache-mount
-        dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
-        skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+    # - name: Restore Docker cache mounts
+    #   uses: reproducible-containers/buildkit-cache-dance@5b81f4d29dc8397a7d341dba3aeecc7ec54d6361 # v3.3.0
+    #   with:
+    #     builder: ${{ steps.setup-buildx.outputs.name }}
+    #     cache-dir: cache-mount
+    #     dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
+    #     skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
     - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
       with:
@@ -326,8 +317,8 @@ runs:
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
         tags: ${{ steps.get-docker-config.outputs.multi-platform && steps.metadata.outputs.image || steps.metadata.outputs.tags }}
-        provenance: false # Disable provenance to avoid unknown/unknown arch
-        sbom: false # Disable sbom to avoid unknown/unknown arch
+        # provenance: false # Disable provenance to avoid unknown/unknown arch
+        # sbom: false # Disable sbom to avoid unknown/unknown arch
 
     - id: get-built-image
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
