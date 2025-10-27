@@ -52,3 +52,9 @@ jobs:
     needs: linter
     uses: ./.github/workflows/__test-workflow-docker-build-images.yml
     secrets: inherit
+
+  test-workflow-docker-build-images-caching:
+    name: Test docker build images caching
+    needs: linter
+    uses: ./.github/workflows/__test-workflow-docker-build-images-caching.yml
+    secrets: inherit
