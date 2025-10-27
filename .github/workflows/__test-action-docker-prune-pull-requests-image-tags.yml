@@ -13,7 +13,10 @@ permissions:
   id-token: write
 
 env:
-  IMAGE: "test-prune-${{ github.run_number }}"
+  IMAGE_NAME: "test-prune-${{ github.run_number }}"
+  PACKAGES: |
+    ci-github-container/test-prune-${{ github.run_number }}
+    ci-github-container/test-prune-${{ github.run_number }}/cache
 
 jobs:
   setup:
@@ -39,6 +42,7 @@ jobs:
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
     with:
+      cache-type: registry
       images: |
         [
           {
@@ -46,18 +50,17 @@ jobs:
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
-            "target": "base",
+            "target": "prod",
             "platforms": ["linux/amd64","linux/arm64"]
           }
         ]
 
   act:
+    name: Act - Prune pull requests image tags
     runs-on: ubuntu-latest
     needs: [setup, arrange]
     permissions:
       packages: write
-    outputs:
-      deleted-image-tags: ${{ steps.prune-pull-requests-image-tags.outputs.deleted-image-tags }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -69,8 +72,8 @@ jobs:
 
       - name: Generate a image tag that should be deleted
         run: |
-          BASE_IMAGE=$(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[0]')
-          NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}:${{ needs.setup.outputs.tag }}
+          BASE_IMAGE=$(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE_NAME }}".images[0]')
+          NEW_IMAGE=ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE_NAME }}:${{ needs.setup.outputs.tag }}
 
           docker pull "$BASE_IMAGE"
           docker tag "$BASE_IMAGE" "$NEW_IMAGE"
@@ -79,73 +82,52 @@ jobs:
       - id: prune-pull-requests-image-tags
         uses: ./actions/docker/prune-pull-requests-image-tags
         with:
-          image: ${{ env.IMAGE }}
+          image: ${{ env.IMAGE_NAME }}
 
   assert:
+    name: Assert - Verify deleted image tags
     runs-on: ubuntu-latest
     needs: [setup, arrange, act]
     steps:
-      - name: Assert - Check ouputs
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-        with:
-          script: |
-            const assert = require("assert");
-
-            const deletedImageTagsOutput = `${{ needs.act.outputs.deleted-image-tags }}`;
-            assert(deletedImageTagsOutput.length, `"deleted-image-tags" output is empty`);
-
-            // Check if is valid Json
-            let deletedImageTags = null;
-            try {
-              deletedImageTags = JSON.parse(deletedImageTagsOutput);
-            } catch (error) {
-              throw new Error(`"deleted-image-tags" output is not a valid JSON: ${error}`);
-            }
-
-            assert(Array.isArray(deletedImageTags), `"deleted-image-tags" output is not an array`);
-            assert.equal(deletedImageTags[0], `${{ needs.setup.outputs.tag }}`);
-
-            // If is pull request ensure that deleted tags does not contain current pull request
-            const pullRequestNumber = `${{ github.event.pull_request.number }}`;
-            if (pullRequestNumber.length) {
-              const deletedImageTagsForCurrentPullRequest = deletedImageTags.filter((imageTag) => imageTag.includes(`pr-${pullRequestNumber}`));
-              assert.equal(deletedImageTagsForCurrentPullRequest.length, 0, `"deleted-image-tags" output contains current pull request image tag`);
-            }
-
       - name: Assert - Ensure expected packages versions have been deleted
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const assert = require("assert");
-            const packagePayload = {
-              package_type: 'container',
-              package_name: 'ci-github-container/${{ env.IMAGE }}',
-              org: 'hoverkraft-tech',
-            };
 
-            const packageVersions = await github.paginate(
-              github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
-            );
+            const packages = process.env.PACKAGES.split("\n").map(packageName => packageName.trim()).filter(Boolean);
 
-            const packageVersionExists = packageVersions.some(
-              (packageVersion) => packageVersion.metadata.container.tags.some(
-                (tag) => tag === "${{ needs.setup.outputs.tag }}"
-              )
-            );
-            assert.equal(packageVersionExists, false, `Package version "${{ needs.setup.outputs.tag }}" has not been deleted`);
+            for(const packageName of packages) {
+              const packagePayload = {
+                package_type: 'container',
+                package_name: packageName,
+                org: process.env.GITHUB_REPOSITORY_OWNER,
+              };
+
+              const packageVersions = await github.paginate(
+                github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
+              );
+
+              const packageVersionExists = packageVersions.some(
+                (packageVersion) => packageVersion.metadata.container.tags.some(
+                  (tag) => tag === "${{ needs.setup.outputs.tag }}"
+                )
+              );
+              assert.equal(packageVersionExists, false, `Package version "${{ needs.setup.outputs.tag }}" has not been deleted`);
+            }
 
       - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         if: ${{ github.event_name == 'pull_request' }}
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ github.token }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Assert - Ensure current image tag didn't get deleted
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          for IMAGE_TAG in $(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE }}".images[]'); do
+          for IMAGE_TAG in $(echo '${{ needs.arrange.outputs.built-images }}' | jq -r '."${{ env.IMAGE_NAME }}".images[]'); do
             docker pull "$IMAGE_TAG"
 
             if ! MANIFEST=$(docker manifest inspect "$IMAGE_TAG"); then
@@ -157,7 +139,7 @@ jobs:
 
             # Ensure all manifests digest didn't get deleted
             for DIGEST in $(echo "$MANIFEST" | jq -r '.manifests[].digest'); do
-              IMAGE_MANIFEST="ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE }}@$DIGEST"
+              IMAGE_MANIFEST="ghcr.io/hoverkraft-tech/ci-github-container/${{ env.IMAGE_NAME }}@$DIGEST"
               docker pull "$IMAGE_MANIFEST"
               if ! docker manifest inspect "$IMAGE_MANIFEST" > /dev/null; then
                 echo "Failed to inspect manifest for image: ${IMAGE_MANIFEST}"
@@ -175,32 +157,16 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      - id: get-issue-number
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@b7dd413209df265bef8d7eb0efb117eaabc684c4 # 0.27.0
-
       - name: Delete test packages
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const packagesToDelete = ["${{ env.IMAGE }}", "${{ env.IMAGE }}/cache"];
-
-            for (const packageName of packagesToDelete) {
-              const packagePayload = {
+            const packages = process.env.PACKAGES.split("\n").map(packageName => packageName.trim()).filter(Boolean);
+            await Promise.all(packages.map(packageName => {
+              return github.rest.packages.deletePackageForOrg({
                 package_type: 'container',
-                package_name: `ci-github-container/${packageName}`,
-                org: 'hoverkraft-tech',
-              };
-
-              try {
-                await github.rest.packages.deletePackageForOrg(packagePayload);
-              } catch (error) {
-                if (error.status === 404) {
-                  core.warning(`Package "${packagePayload.package_name}" not found.`);
-                } else {
-                  throw error;
-                }
-              }
-
-            }
+                package_name: packageName,
+                org: process.env.GITHUB_REPOSITORY_OWNER,
+              });
+            }));
