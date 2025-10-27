@@ -78,7 +78,7 @@ jobs:
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
-            "target": "base",
+            "target": "prod",
             "platforms": ["linux/amd64"]
           },
           {
@@ -86,7 +86,7 @@ jobs:
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
-            "target": "base",
+            "target": "prod",
             "platforms": ["linux/amd64","linux/arm64"]
           }
         ]
@@ -108,7 +108,7 @@ jobs:
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
-            "target": "base",
+            "target": "prod",
             "platforms": ["linux/amd64"]
           },
           {
@@ -116,7 +116,7 @@ jobs:
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
-            "target": "base",
+            "target": "prod",
             "platforms": ["linux/amd64","linux/arm64"]
           }
         ]
