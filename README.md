@@ -24,6 +24,8 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 #### - [Build image](actions/docker/build-image/README.md)
 
+#### - [Clean images](actions/docker/clean-images/README.md)
+
 #### - [Create images manifests](actions/docker/create-images-manifests/README.md)
 
 #### - [Get image metadata](actions/docker/get-image-metadata/README.md)
