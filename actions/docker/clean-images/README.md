@@ -45,7 +45,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@c5d2c29ccdc9d357ea7b0e8e2567fa4643c05758 # copilot/refactor-cleanup-action-architecture
+- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
   with:
     # Comma-separated list of packages to cleanup.
     # Example: "application-1,application-2"
@@ -87,14 +87,6 @@ permissions:
 <!-- secrets:end -->
 
 <!-- outputs:start -->
-
-## Outputs
-
-| **Output**                     | **Description**                         |
-| ------------------------------ | --------------------------------------- |
-| **`deleted-package-ids`**      | The package IDs that were deleted.      |
-| **`deleted-package-versions`** | The package versions that were deleted. |
-
 <!-- outputs:end -->
 
 <!-- examples:start -->
@@ -117,7 +109,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@c5d2c29ccdc9d357ea7b0e8e2567fa4643c05758 # copilot/refactor-cleanup-action-architecture
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
         with:
           package: my-app
           delete-tags: pr-${{ github.event.pull_request.number }}-*
@@ -139,7 +131,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@c5d2c29ccdc9d357ea7b0e8e2567fa4643c05758 # copilot/refactor-cleanup-action-architecture
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
         with:
           package: my-app
           delete-untagged: true
