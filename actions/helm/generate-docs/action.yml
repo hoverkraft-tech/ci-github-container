@@ -94,6 +94,12 @@ runs:
           if (!existsSync(textlintConfigPath)) {
             textlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.textlintrc.json`);
             const defaultConfig = {
+              "filters": {
+                "comments": true
+              },
+              "rules": {
+                "terminology": true
+              },
               "plugins": {
                   "@textlint/markdown": true
               }
