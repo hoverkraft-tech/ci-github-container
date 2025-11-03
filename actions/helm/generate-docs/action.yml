@@ -92,7 +92,7 @@ runs:
           // Generate textlint config file if not exists
           let textlintConfigPath = join(workingDirectory, ".textlintrc");
           if (!existsSync(textlintConfigPath)) {
-            textlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.textlintrc.json`);
+            textlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.textlintrc`);
             const defaultConfig = {
               "filters": {
                 "comments": true
@@ -101,7 +101,7 @@ runs:
                 "terminology": true
               },
               "plugins": {
-                  "@textlint/markdown": true
+                "@textlint/markdown": true
               }
             };
             writeFileSync(textlintConfigPath, JSON.stringify(defaultConfig, null, 2));
@@ -127,8 +127,25 @@ runs:
         config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
         globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
+    - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+
+    - id: npm-cache-dir
+      shell: bash
+      run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      id: npm-cache
+      with:
+        path: ${{ steps.npm-cache-dir.outputs.dir }}
+        key: ${{ runner.os }}-node-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
     - shell: bash
-      run: npx textlint --config ${{ steps.prepare-variables.outputs.textlint-config-path }} ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
+      run: npm install -g textlint @textlint/plugin-markdown @textlint/filter-comments textlint-rule-terminology
+
+    - shell: bash
+      run: npx textlint --fix --config ${{ steps.prepare-variables.outputs.textlint-config-path }} ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
     - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
       if: inputs.github-app-id
