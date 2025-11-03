@@ -120,6 +120,14 @@ runs:
         input: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
+    - name: Prettify code
+      uses: creyD/prettier_action@8c18391fdc98ed0d884c6345f03975edac71b8f0 # v4.6
+      with:
+        prettier_options: --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md ${{ steps.prepare-variables.outputs.values-file }}
+        no_commit: true
+        working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
+        clean_node_folder: true
+
     - name: Lint code
       uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
       with:
@@ -145,6 +153,7 @@ runs:
       run: npm install -g textlint @textlint/textlint-plugin-markdown textlint-filter-rule-comments textlint-rule-terminology
 
     - shell: bash
+      working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
       run: npx textlint --fix --config ${{ steps.prepare-variables.outputs.textlint-config-path }} ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
     - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
