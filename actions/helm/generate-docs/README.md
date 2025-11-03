@@ -35,7 +35,7 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@f9e149b6cdfa8443994994f10085691a57b8cf0e # 0.27.1
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
@@ -68,19 +68,19 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 
 ## Inputs
 
-| **Input**               | **Description**                                                           | **Required** | **Default**               |
-| ----------------------- | ------------------------------------------------------------------------- | ------------ | ------------------------- |
-| **`working-directory`** | Working directory                                                         | **false**    | `${{ github.workspace }}` |
-| **`values-file`**       | Path to the values file to use for generating the documentation.          | **false**    | -                         |
-|                         | See <https://github.com/losisin/helm-values-schema-json-action>.          |              |                           |
-| **`github-token`**      | GitHub Token to create and merge pull request.                            | **false**    | `${{ github.token }}`     |
-|                         | Permissions:                                                              |              |                           |
-|                         | - contents: write                                                         |              |                           |
-|                         | - pull-requests: write                                                    |              |                           |
-| **`github-app-id`**     | GitHub App ID to generate GitHub token in place of github-token.          | **false**    | -                         |
-|                         | See <https://github.com/actions/create-github-app-token>.                 |              |                           |
-| **`github-app-key`**    | GitHub App private key to generate GitHub token in place of github-token. | **false**    | -                         |
-|                         | See <https://github.com/actions/create-github-app-token>.                 |              |                           |
+| **Input**               | **Description**                                                           | **Required** | **Default**                 |
+| ----------------------- | ------------------------------------------------------------------------- | ------------ | --------------------------- |
+| **`working-directory`** | Working directory                                                         | **false**    | `$\{\{ github.workspace }}` |
+| **`values-file`**       | Path to the values file to use for generating the documentation.          | **false**    | -                           |
+|                         | See <https://github.com/losisin/helm-values-schema-json-action>.          |              |                             |
+| **`github-token`**      | GitHub Token to create and merge pull request.                            | **false**    | `$\{\{ github.token }}`     |
+|                         | Permissions:                                                              |              |                             |
+|                         | - contents: write                                                         |              |                             |
+|                         | - pull-requests: write                                                    |              |                             |
+| **`github-app-id`**     | GitHub App ID to generate GitHub token in place of github-token.          | **false**    | -                           |
+|                         | See <https://github.com/actions/create-github-app-token>.                 |              |                             |
+| **`github-app-key`**    | GitHub App private key to generate GitHub token in place of github-token. | **false**    | -                           |
+|                         | See <https://github.com/actions/create-github-app-token>.                 |              |                             |
 
 <!-- inputs:end -->
 
