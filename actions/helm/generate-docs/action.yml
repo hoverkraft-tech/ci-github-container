@@ -120,13 +120,6 @@ runs:
         input: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
-    - name: Lint Fix markdown
-      uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
-      with:
-        fix: true
-        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
-        globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
-
     - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
 
     - id: npm-cache-dir
@@ -144,13 +137,20 @@ runs:
     - shell: bash
       run: npm install -g prettier textlint @textlint/textlint-plugin-markdown textlint-filter-rule-comments textlint-rule-terminology
 
-    - name: Text lint and fix markdown
+    - name: Text lint and fix markdown files
       shell: bash
       run: npx textlint --fix --config ${{ steps.prepare-variables.outputs.textlint-config-path }} ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
     - name: Prettify markdown and values file
       shell: bash
       run: npx prettier --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md ${{ steps.prepare-variables.outputs.values-file || '' }}
+
+    - name: Lint Fix markdown files
+      uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
+      with:
+        fix: true
+        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
+        globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
     - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
       if: inputs.github-app-id
