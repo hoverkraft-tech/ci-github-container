@@ -6,68 +6,69 @@ An umbrella Helm chart for Kubernetes (app component)
 
 ## Values
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| affinity | object | `{}` |  |
-| app.dbConnection | string | `"mysql"` |  |
-| app.dbDatabase | string | `"test"` |  |
-| app.dbHost | string | `"mysql"` |  |
-| app.dbPassword | string | `"test"` |  |
-| app.dbPort | int | `3306` |  |
-| app.dbUsername | string | `"test"` |  |
-| autoscaling.enabled | bool | `false` |  |
-| autoscaling.maxReplicas | int | `100` |  |
-| autoscaling.minReplicas | int | `1` |  |
-| autoscaling.targetCPUUtilizationPercentage | int | `80` |  |
-| autoscaling.targetMemoryUtilizationPercentage | int | `80` |  |
-| fullnameOverride | string | `""` |  |
-| image.digest | string | `"sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"` |  |
-| image.pullPolicy | string | `"Always"` |  |
-| image.registry | string | `"ghcr.io"` |  |
-| image.repository | string | `"hoverkraft-tech/ci-github-container/application-test"` |  |
-| image.tag | string | `""` |  |
-| imagePullSecrets | list | `[]` |  |
-| ingress.annotations | object | `{}` |  |
-| ingress.className | string | `""` |  |
-| ingress.enabled | bool | `false` |  |
-| ingress.hosts[0].host | string | `"chart-example.local"` |  |
-| ingress.hosts[0].paths[0].path | string | `"/"` |  |
-| ingress.hosts[0].paths[0].pathType | string | `"ImplementationSpecific"` |  |
-| ingress.tls | list | `[]` |  |
-| mysql.auth.database | string | `"test"` |  |
-| mysql.auth.password | string | `"test"` |  |
-| mysql.auth.rootPassword | string | `"root"` |  |
-| mysql.auth.username | string | `"test"` |  |
-| mysql.enabled | bool | `false` |  |
-| mysql.fullnameOverride | string | `"mysql"` |  |
-| mysql.image.repository | string | `"bitnamilegacy/mysql"` |  |
-| mysql.metrics.image.repository | string | `"bitnamilegacy/mysqld-exporter"` |  |
-| mysql.volumePermissions.image.repository | string | `"bitnamilegacy/os-shell"` |  |
-| nameOverride | string | `""` |  |
-| namespace | string | `"app-system"` |  |
-| networkPolicy.egress | list | `[]` |  |
-| networkPolicy.enabled | bool | `true` |  |
-| networkPolicy.ingress | list | `[]` |  |
-| nodeSelector | object | `{}` |  |
-| podAnnotations | object | `{}` |  |
-| podSecurityContext | object | `{}` |  |
-| replicaCount | int | `1` |  |
-| resources.limits.cpu | string | `"100m"` |  |
-| resources.limits.memory | string | `"128Mi"` |  |
-| resources.requests.cpu | string | `"100m"` |  |
-| resources.requests.memory | string | `"128Mi"` |  |
-| securityContext.allowPrivilegeEscalation | bool | `false` |  |
-| securityContext.capabilities.drop[0] | string | `"ALL"` |  |
-| securityContext.readOnlyRootFilesystem | bool | `true` |  |
-| securityContext.runAsNonRoot | bool | `true` |  |
-| securityContext.runAsUser | int | `10001` |  |
-| securityContext.seccompProfile.type | string | `"RuntimeDefault"` |  |
-| service.port | int | `8080` |  |
-| service.type | string | `"ClusterIP"` |  |
-| serviceAccount.annotations | object | `{}` |  |
-| serviceAccount.create | bool | `true` |  |
-| serviceAccount.name | string | `""` |  |
-| tolerations | list | `[]` |  |
+| Key                                           | Type   | Default                                                                     | Description |
+| --------------------------------------------- | ------ | --------------------------------------------------------------------------- | ----------- |
+| affinity                                      | object | `{}`                                                                        |             |
+| app.dbConnection                              | string | `"mysql"`                                                                   |             |
+| app.dbDatabase                                | string | `"test"`                                                                    |             |
+| app.dbHost                                    | string | `"mysql"`                                                                   |             |
+| app.dbPassword                                | string | `"test"`                                                                    |             |
+| app.dbPort                                    | int    | `3306`                                                                      |             |
+| app.dbUsername                                | string | `"test"`                                                                    |             |
+| autoscaling.enabled                           | bool   | `false`                                                                     |             |
+| autoscaling.maxReplicas                       | int    | `100`                                                                       |             |
+| autoscaling.minReplicas                       | int    | `1`                                                                         |             |
+| autoscaling.targetCPUUtilizationPercentage    | int    | `80`                                                                        |             |
+| autoscaling.targetMemoryUtilizationPercentage | int    | `80`                                                                        |             |
+| fullnameOverride                              | string | `""`                                                                        |             |
+| image.digest                                  | string | `"sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"` |             |
+| image.pullPolicy                              | string | `"Always"`                                                                  |             |
+| image.registry                                | string | `"ghcr.io"`                                                                 |             |
+| image.repository                              | string | `"hoverkraft-tech/ci-github-container/application-test"`                    |             |
+| image.tag                                     | string | `""`                                                                        |             |
+| imagePullSecrets                              | list   | `[]`                                                                        |             |
+| ingress.annotations                           | object | `{}`                                                                        |             |
+| ingress.className                             | string | `""`                                                                        |             |
+| ingress.enabled                               | bool   | `false`                                                                     |             |
+| ingress.hosts[0].host                         | string | `"chart-example.local"`                                                     |             |
+| ingress.hosts[0].paths[0].path                | string | `"/"`                                                                       |             |
+| ingress.hosts[0].paths[0].pathType            | string | `"ImplementationSpecific"`                                                  |             |
+| ingress.tls                                   | list   | `[]`                                                                        |             |
+| mysql.auth.database                           | string | `"test"`                                                                    |             |
+| mysql.auth.password                           | string | `"test"`                                                                    |             |
+| mysql.auth.rootPassword                       | string | `"root"`                                                                    |             |
+| mysql.auth.username                           | string | `"test"`                                                                    |             |
+| mysql.enabled                                 | bool   | `false`                                                                     |             |
+| mysql.fullnameOverride                        | string | `"mysql"`                                                                   |             |
+| mysql.image.repository                        | string | `"bitnamilegacy/mysql"`                                                     |             |
+| mysql.metrics.image.repository                | string | `"bitnamilegacy/mysqld-exporter"`                                           |             |
+| mysql.volumePermissions.image.repository      | string | `"bitnamilegacy/os-shell"`                                                  |             |
+| nameOverride                                  | string | `""`                                                                        |             |
+| namespace                                     | string | `"app-system"`                                                              |             |
+| networkPolicy.egress                          | list   | `[]`                                                                        |             |
+| networkPolicy.enabled                         | bool   | `true`                                                                      |             |
+| networkPolicy.ingress                         | list   | `[]`                                                                        |             |
+| nodeSelector                                  | object | `{}`                                                                        |             |
+| podAnnotations                                | object | `{}`                                                                        |             |
+| podSecurityContext                            | object | `{}`                                                                        |             |
+| replicaCount                                  | int    | `1`                                                                         |             |
+| resources.limits.cpu                          | string | `"100m"`                                                                    |             |
+| resources.limits.memory                       | string | `"128Mi"`                                                                   |             |
+| resources.requests.cpu                        | string | `"100m"`                                                                    |             |
+| resources.requests.memory                     | string | `"128Mi"`                                                                   |             |
+| securityContext.allowPrivilegeEscalation      | bool   | `false`                                                                     |             |
+| securityContext.capabilities.drop[0]          | string | `"ALL"`                                                                     |             |
+| securityContext.readOnlyRootFilesystem        | bool   | `true`                                                                      |             |
+| securityContext.runAsNonRoot                  | bool   | `true`                                                                      |             |
+| securityContext.runAsUser                     | int    | `10001`                                                                     |             |
+| securityContext.seccompProfile.type           | string | `"RuntimeDefault"`                                                          |             |
+| service.port                                  | int    | `8080`                                                                      |             |
+| service.type                                  | string | `"ClusterIP"`                                                               |             |
+| serviceAccount.annotations                    | object | `{}`                                                                        |             |
+| serviceAccount.create                         | bool   | `true`                                                                      |             |
+| serviceAccount.name                           | string | `""`                                                                        |             |
+| tolerations                                   | list   | `[]`                                                                        |             |
 
-----------------------------------------------
+---
+
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
