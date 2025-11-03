@@ -6,9 +6,9 @@ An umbrella Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository                           | Name            | Version |
-| ------------------------------------ | --------------- | ------- |
-| file://./charts/app                  | app             | 0.0.0   |
+| Repository                         | Name            | Version |
+| ---------------------------------- | --------------- | ------- |
+| file://./charts/app                | app             | 0.0.0   |
 | <https://charts.bitnami.com/bitnami> | database(MySQL) | 14.0.3  |
 
 ## Values
