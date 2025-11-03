@@ -44,7 +44,7 @@ runs:
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         script: |
-          const { existsSync, realpathSync } = require('node:fs');
+          const { existsSync, realpathSync, writeFileSync } = require('node:fs');
           const { basename, isAbsolute, join } = require('node:path');
 
           let workingDirectory = ${{ toJson(inputs.working-directory) }};
@@ -77,6 +77,38 @@ runs:
             core.setOutput("values-file", valuesFile);
           }
 
+          // Generate markdownlint config file if not exists
+          let markdownlintConfigPath = join(workingDirectory, ".markdownlint.json");
+          if (!existsSync(markdownlintConfigPath)) {
+            markdownlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.markdownlint.json`);
+
+            const defaultConfig = {
+              "default": true,
+              "line-length": false
+            };
+            writeFileSync(markdownlintConfigPath, JSON.stringify(defaultConfig, null, 2));
+          }
+          core.setOutput("markdownlint-config-path", markdownlintConfigPath);
+
+          // Generate textlint config file if not exists
+          let textlintConfigPath = join(workingDirectory, ".textlintrc");
+          if (!existsSync(textlintConfigPath)) {
+            textlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.textlintrc`);
+            const defaultConfig = {
+              "filters": {
+                "comments": true
+              },
+              "rules": {
+                "terminology": true
+              },
+              "plugins": {
+                "@textlint/markdown": true
+              }
+            };
+            writeFileSync(textlintConfigPath, JSON.stringify(defaultConfig, null, 2));
+          }
+          core.setOutput("textlint-config-path", textlintConfigPath);
+
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@5f11437c716059f30c635f90055060e4ef8b31a0 # 0.28.0
 
     - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
@@ -89,13 +121,64 @@ runs:
         input: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
-    - name: Prettify code
-      uses: creyD/prettier_action@8c18391fdc98ed0d884c6345f03975edac71b8f0 # v4.6
+    - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+
+    - id: npm-cache-dir
+      shell: bash
+      run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      id: npm-cache
       with:
-        prettier_options: --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md ${{ steps.prepare-variables.outputs.values-file }}
-        no_commit: true
-        working_directory: ${{ steps.prepare-variables.outputs.working-directory }}
-        clean_node_folder: true
+        path: ${{ steps.npm-cache-dir.outputs.dir }}
+        key: ${{ runner.os }}-node-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - shell: bash
+      run: npm install -g prettier textlint @textlint/textlint-plugin-markdown textlint-filter-rule-comments textlint-rule-terminology
+
+    - name: Cache textlint
+      id: cache-textlint
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ${{ runner.temp }}/.cache-textlint
+        key: ${{ runner.os }}-textlint-${{ hashFiles(steps.prepare-variables.outputs.textlint-config-path) }}
+
+    - name: Text lint and fix markdown files
+      shell: bash
+      working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
+      env:
+        CACHE_PATH: ${{ runner.temp }}/.cache-textlint
+        CONFIG_PATH: ${{ steps.prepare-variables.outputs.textlint-config-path }}
+      run: npx textlint --cache-location $CACHE_PATH --fix --config $CONFIG_PATH $(pwd)/**/*.md
+
+    - name: Lint Fix markdown files
+      uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
+      with:
+        fix: true
+        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
+        globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
+
+    - name: Cache prettier
+      id: cache-prettier
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ${{ runner.temp }}/.cache-prettier
+        key: ${{ runner.os }}-prettier
+
+    - name: Prettify markdown and values file
+      shell: bash
+      working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
+      env:
+        CACHE_PATH: ${{ runner.temp }}/.cache-prettier
+        VALUES_FILE: ${{ steps.prepare-variables.outputs.values-file || '' }}
+      run: |
+        # First run
+        npx prettier --cache-location $CACHE_PATH --write $(pwd)/**/*.md $VALUES_FILE
+
+        # Second run to ensure idempotency
+        npx prettier --cache-location $CACHE_PATH --write $(pwd)/**/*.md $VALUES_FILE
 
     - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
       if: inputs.github-app-id
