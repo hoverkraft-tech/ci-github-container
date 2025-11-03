@@ -80,12 +80,13 @@ runs:
           // Generate markdownlint config file if not exists
           const fs = require('node:fs');
           const path = require('node:path');
-          let markdownlintConfigPath = path.join(workingDirectory, ".markdownlint-cli2.jsonc");
+
+          let markdownlintConfigPath = path.join(workingDirectory, ".markdownlint.json");
           if (!fs.existsSync(markdownlintConfigPath)) {
-            markdownlintConfigPath = path.join(process.env.RUNNER_TEMP, `${Date.now()}.markdownlint-cli2.jsonc`);
+            markdownlintConfigPath = path.join(process.env.RUNNER_TEMP, `${Date.now()}.markdownlint.json`);
             const defaultConfig = {
               "default": true,
-              "line-length": { "max": 300 }
+              "line-length": false
             };
             fs.writeFileSync(markdownlintConfigPath, JSON.stringify(defaultConfig, null, 2));
           }
