@@ -142,7 +142,7 @@ runs:
           ${{ runner.os }}-node-
 
     - shell: bash
-      run: npm install -g textlint @textlint/plugin-markdown textlint-filter-rule-comments textlint-rule-terminology
+      run: npm install -g textlint @textlint/textlint-plugin-markdown textlint-filter-rule-comments textlint-rule-terminology
 
     - shell: bash
       run: npx textlint --fix --config ${{ steps.prepare-variables.outputs.textlint-config-path }} ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
