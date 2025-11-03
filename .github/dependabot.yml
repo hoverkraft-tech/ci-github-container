@@ -39,3 +39,11 @@ updates:
       helm-dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: "devcontainers"
+    open-pull-requests-limit: 20
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: friday
+      time: "04:00"
