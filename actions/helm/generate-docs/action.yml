@@ -77,6 +77,20 @@ runs:
             core.setOutput("values-file", valuesFile);
           }
 
+          // Generate markdownlint config file if not exists
+          const fs = require('node:fs');
+          const path = require('node:path');
+          let markdownlintConfigPath = path.join(workingDirectory, ".markdownlint.json");
+          if (!fs.existsSync(markdownlintConfigPath)) {
+            markdownlintConfigPath = path.join(process.env.RUNNER_TEMP, `markdownlint-config-${Date.now()}.json`);
+            const defaultConfig = {
+              "default": true,
+              "line-length": { "max": 300 }
+            };
+            fs.writeFileSync(markdownlintConfigPath, JSON.stringify(defaultConfig, null, 2));
+          }
+          core.setOutput("markdownlint-config-path", markdownlintConfigPath);
+
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@5f11437c716059f30c635f90055060e4ef8b31a0 # 0.28.0
 
     - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
@@ -93,6 +107,7 @@ runs:
       uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
       with:
         fix: true
+        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
         globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
     - shell: bash
