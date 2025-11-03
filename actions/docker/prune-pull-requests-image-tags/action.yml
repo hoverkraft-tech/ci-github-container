@@ -42,7 +42,7 @@ runs:
         image: ${{ inputs.image }}
 
     - id: is-organization-or-user
-      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@b7dd413209df265bef8d7eb0efb117eaabc684c4 # 0.27.0
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@5f11437c716059f30c635f90055060e4ef8b31a0 # 0.28.0
 
     - id: get-tags-to-delete
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
