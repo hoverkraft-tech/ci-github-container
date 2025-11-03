@@ -147,7 +147,7 @@ runs:
         fix: true
         config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
         globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
-    
+
     - name: Prettify markdown and values file
       shell: bash
       run: npx prettier --write ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md ${{ steps.prepare-variables.outputs.values-file || '' }}
