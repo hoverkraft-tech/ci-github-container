@@ -29,9 +29,9 @@ See [prune-pull-requests-image-tags](../../actions/docker/prune-pull-requests-im
 ### Permissions
 
 - **`contents`**: `read`
-- **`pull-requests`**: `read`
-- **`packages`**: `write`
 - **`id-token`**: `write`
+- **`packages`**: `write`
+- **`pull-requests`**: `read`
 
 <!-- overview:end -->
 
@@ -52,7 +52,7 @@ permissions:
   id-token: write
 jobs:
   prune-pull-requests-images-tags:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@f9e149b6cdfa8443994994f10085691a57b8cf0e # 0.27.1
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
     with:
       # JSON array of runner(s) to use.
       # See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job.
