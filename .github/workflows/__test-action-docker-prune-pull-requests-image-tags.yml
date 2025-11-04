@@ -16,7 +16,10 @@ env:
   IMAGE_NAME: "test-prune-${{ github.run_number }}"
   PACKAGES: |
     ci-github-container/test-prune-${{ github.run_number }}
-    ${{ github.event_name != 'workflow_dispatch' && format('ci-github-container/test-prune-{0}/cache', github.run_number) || '' }}
+    ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref_name != github.event.repository.default_branch)
+        && ''
+        || format('ci-github-container/test-prune-{0}/cache', github.run_number)
+    }}
 
 jobs:
   setup:
