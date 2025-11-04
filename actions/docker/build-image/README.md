@@ -83,7 +83,7 @@ permissions:
     # Force image tag to publish
     tag: ""
 
-    # Platform to build for.
+    # Platform to build for. Example: `linux/amd64`.
     # See https://github.com/docker/build-push-action#inputs.
     #
     # This input is required.
@@ -122,6 +122,11 @@ permissions:
     #
     # Default: `gha`
     cache-type: gha
+
+    # Whether this build participates in a multi-platform image publication.
+    # When true, the image is pushed by digest only so manifests can be assembled later.
+    # When false, the image is pushed with its tags directly.
+    multi-platform: ""
 ```
 
 <!-- usage:end -->
@@ -130,39 +135,40 @@ permissions:
 
 ## Inputs
 
-| **Input**                   | **Description**                                                                                          | **Required** | **Default**                      |
-| --------------------------- | -------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
-| **`oci-registry`**          | OCI registry where to pull and push images                                                               | **true**     | `ghcr.io`                        |
-| **`oci-registry-username`** | Username used to log against the OCI registry.                                                           | **true**     | `${{ github.repository_owner }}` |
-|                             | See <https://github.com/docker/login-action#usage>.                                                      |              |                                  |
-| **`oci-registry-password`** | Password or personal access token used to log against the OCI registry.                                  | **true**     | `${{ github.token }}`            |
-|                             | Can be passed in using `secrets.GITHUB_TOKEN`.                                                           |              |                                  |
-|                             | See <https://github.com/docker/login-action#usage>.                                                      |              |                                  |
-| **`repository`**            | Repository name.                                                                                         | **false**    | `${{ github.repository }}`       |
-|                             | Example: `my-org/my-repo`.                                                                               |              |                                  |
-|                             | See [Docker get-image-metadata action](../get-image-metadata/README.md).                                 |              |                                  |
-| **`image`**                 | Additional image name.                                                                                   | **false**    | -                                |
-|                             | Example: `application`.                                                                                  |              |                                  |
-|                             | See [Docker get-image-metadata action](../get-image-metadata/README.md).                                 |              |                                  |
-| **`tag`**                   | Force image tag to publish                                                                               | **false**    | -                                |
-| **`platform`**              | Platform to build for.                                                                                   | **true**     | -                                |
-|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                  |
-| **`context`**               | Build's context is the set of files located in the specified PATH or URL.                                | **false**    | `.`                              |
-|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                  |
-| **`dockerfile`**            | Location of Dockerfile (defaults to Dockerfile).                                                         | **false**    | `Dockerfile`                     |
-|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                  |
-| **`build-args`**            | List of build-time variables.                                                                            | **false**    | -                                |
-|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                  |
-| **`target`**                | Sets the target stage to build.                                                                          | **false**    | -                                |
-|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                  |
-| **`secrets`**               | List of secrets to expose to the build.                                                                  | **false**    | -                                |
-|                             | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                          |              |                                  |
-| **`secret-envs`**           | List of secret environment variables to expose to the build (e.g., `key=envname, MY_SECRET=MY_ENV_VAR`). | **false**    | -                                |
-|                             | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                          |              |                                  |
-| **`cache-type`**            | Cache type.                                                                                              | **false**    | `gha`                            |
-|                             | See <https://docs.docker.com/build/cache/backends>.                                                      |              |                                  |
-| **`multi-platform`**        | Flag to indicate participation in a multi-platform publish (push by digest only).                        | **false**    | `false`                          |
-|                             | Set to `true` when the image will later be assembled into a multi-arch manifest.                         |              |                                  |
+| **Input**                   | **Description**                                                                                          | **Required** | **Default**                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------- |
+| **`oci-registry`**          | OCI registry where to pull and push images                                                               | **true**     | `ghcr.io`                          |
+| **`oci-registry-username`** | Username used to log against the OCI registry.                                                           | **true**     | `$\{\{ github.repository_owner }}` |
+|                             | See <https://github.com/docker/login-action#usage>.                                                      |              |                                    |
+| **`oci-registry-password`** | Password or personal access token used to log against the OCI registry.                                  | **true**     | `$\{\{ github.token }}`            |
+|                             | Can be passed in using `secrets.GITHUB_TOKEN`.                                                           |              |                                    |
+|                             | See <https://github.com/docker/login-action#usage>.                                                      |              |                                    |
+| **`repository`**            | Repository name.                                                                                         | **false**    | `$\{\{ github.repository }}`       |
+|                             | Example: `my-org/my-repo`.                                                                               |              |                                    |
+|                             | See [Docker get-image-metadata action](../get-image-metadata/README.md).                                 |              |                                    |
+| **`image`**                 | Additional image name.                                                                                   | **false**    | -                                  |
+|                             | Example: `application`.                                                                                  |              |                                    |
+|                             | See [Docker get-image-metadata action](../get-image-metadata/README.md).                                 |              |                                    |
+| **`tag`**                   | Force image tag to publish                                                                               | **false**    | -                                  |
+| **`platform`**              | Platform to build for. Example: `linux/amd64`.                                                           | **true**     | -                                  |
+|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                    |
+| **`context`**               | Build's context is the set of files located in the specified PATH or URL.                                | **false**    | `.`                                |
+|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                    |
+| **`dockerfile`**            | Location of Dockerfile (defaults to Dockerfile).                                                         | **false**    | `Dockerfile`                       |
+|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                    |
+| **`build-args`**            | List of build-time variables.                                                                            | **false**    | -                                  |
+|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                    |
+| **`target`**                | Sets the target stage to build.                                                                          | **false**    | -                                  |
+|                             | See <https://github.com/docker/build-push-action#inputs>.                                                |              |                                    |
+| **`secrets`**               | List of secrets to expose to the build.                                                                  | **false**    | -                                  |
+|                             | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                          |              |                                    |
+| **`secret-envs`**           | List of secret environment variables to expose to the build (e.g., `key=envname, MY_SECRET=MY_ENV_VAR`). | **false**    | -                                  |
+|                             | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                          |              |                                    |
+| **`cache-type`**            | Cache type.                                                                                              | **false**    | `gha`                              |
+|                             | See <https://docs.docker.com/build/cache/backends>.                                                      |              |                                    |
+| **`multi-platform`**        | Whether this build participates in a multi-platform image publication.                                   | **false**    | `false`                            |
+|                             | When true, the image is pushed by digest only so manifests can be assembled later.                       |              |                                    |
+|                             | When false, the image is pushed with its tags directly.                                                  |              |                                    |
 
 <!-- inputs:end -->
 
@@ -175,11 +181,11 @@ permissions:
 
 ## Outputs
 
-| **Output**        | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`built-image`** | Built image data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|                   | Example:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-|                   | <!-- textlint-disable --><pre lang="json">{&#13; "name": "application",&#13; "registry": "ghcr.io",&#13; "repository": "my-org/my-repo/application",&#13; "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "image": "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "tags": [&#13; "pr-63-5222075",&#13; "pr-63"&#13; ],&#13; "annotations": {&#13; "org.opencontainers.image.created": "2021-09-30T14:00:00Z",&#13; "org.opencontainers.image.description": "Application image"&#13; }&#13;}</pre><!-- textlint-enable --> |
+| **Output**        | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`built-image`** | Built image data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|                   | Example:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+|                   | <!-- textlint-disable --><pre lang="json">{&#13; "name": "application",&#13; "registry": "ghcr.io",&#13; "repository": "my-org/my-repo/application",&#13; "digest": "sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "image": "ghcr.io/my-org/my-repo/application@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d",&#13; "tags": [&#13; "pr-63-5222075",&#13; "pr-63"&#13; ],&#13; "annotations": {&#13; "org.opencontainers.image.created": "2021-09-30T14:00:00Z",&#13; "org.opencontainers.image.description": "Application image"&#13; },&#13; "platform": "linux/amd64",&#13; "multi-platform": false&#13;}</pre><!-- textlint-enable --> |
 
 <!-- outputs:end -->
 

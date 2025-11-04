@@ -33,7 +33,7 @@ Action to forge the name of a given image including registry, repository and giv
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-name@f9e149b6cdfa8443994994f10085691a57b8cf0e # 0.27.1
+- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-name@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
   with:
     # OCI registry to prefix the image full name
     oci-registry: ""
@@ -52,11 +52,11 @@ Action to forge the name of a given image including registry, repository and giv
 
 ## Inputs
 
-| **Input**          | **Description**                            | **Required** | **Default**                |
-| ------------------ | ------------------------------------------ | ------------ | -------------------------- |
-| **`oci-registry`** | OCI registry to prefix the image full name | **false**    | -                          |
-| **`repository`**   | Repository name                            | **false**    | `${{ github.repository }}` |
-| **`image`**        | Additional image name                      | **false**    | -                          |
+| **Input**          | **Description**                            | **Required** | **Default**                  |
+| ------------------ | ------------------------------------------ | ------------ | ---------------------------- |
+| **`oci-registry`** | OCI registry to prefix the image full name | **false**    | -                            |
+| **`repository`**   | Repository name                            | **false**    | `$\{\{ github.repository }}` |
+| **`image`**        | Additional image name                      | **false**    | -                            |
 
 <!-- inputs:end -->
 
