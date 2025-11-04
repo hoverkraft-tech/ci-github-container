@@ -117,7 +117,7 @@ jobs:
               const prTag = `pr-${{ github.event.pull_request.number }}`;
 
               expectedTags.push(prShaTag, prTag);
-              expectedImageVersion = prShaTag;
+              expectedImageVersion = prTag;
             } else {
               const refTag = `${{ github.ref_name }}`;
               expectedTags.push(refTag);
@@ -213,8 +213,18 @@ jobs:
 
             assert(builtImage, `"built-image" output is empty`);
 
-            assert.equal(builtImage.tags.length, 1, `"tags" output is not valid`);
-            assert.equal(builtImage.tags[0], '0.1.0', `"tags" output is not valid`);
+            const expectedTags = ['0.1.0'];
+            assert.equal(
+              builtImage.tags.length,
+              expectedTags.length,
+              `"tags" output is not valid, expected ${expectedTags.length} tag but got ${builtImage.tags.length}`
+            );
+
+            for (const expectedTag of expectedTags) {
+              if (!builtImage.tags.includes(expectedTag)) {
+                assert.fail(`Expected tag "${expectedTag}" not found in "tags" output`);
+              }
+            }
 
       - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
