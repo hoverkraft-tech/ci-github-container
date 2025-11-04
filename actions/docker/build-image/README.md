@@ -46,7 +46,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@e44dc0064b073031aa93d8f0d4aea040a7c3ba7d # 0.29.0
   with:
     # OCI registry where to pull and push images
     # This input is required.
