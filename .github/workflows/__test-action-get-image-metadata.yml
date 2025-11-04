@@ -77,31 +77,33 @@ jobs:
             const tags = tagsOutput.split("\n").filter(Boolean);
             assert(tags.length, `"tags" output is empty`);
 
+            const expectedTags = [];
+
             if (`${{ github.event_name }}` === "pull_request") {
-              assert.equal(
-                tags.length,
-                2,
-                `"tags" output must contain 2 tags for pull_request event`
-              );
+              const shortSha = `${{ github.sha }}`.substring(0, 7);
+              const prShaTag = `pr-${{ github.event.pull_request.number }}-${shortSha}`;
+              const prTag = `pr-${{ github.event.pull_request.number }}`;
 
-              assert(
-                tags[0].startsWith("ghcr.io/hoverkraft-tech/ci-github-container/application-test:pr-${{ github.event.pull_request.number }}-"),
-                `"tags" output is not valid`
-              );
-
-              assert.equal(
-                tags[1],
-                "ghcr.io/hoverkraft-tech/ci-github-container/application-test:pr-${{ github.event.pull_request.number }}", `"tags" output is not valid`
-              );
+              expectedTags.push(prShaTag, prTag);
             } else {
-              assert.equal(
-                tags.length,
-                2,
-                `"tags" output must contain 2 tags for push event`
-              );
+              expectedTags.push("main");
+              if (`${{ github.event_name }}` !== "workflow_dispatch") {
+                expectedTags.push("latest");
+              }
+            }
 
-              assert.equal(tags[0],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:main", `"tags" output is not valid`);
-              assert.equal(tags[1],"ghcr.io/hoverkraft-tech/ci-github-container/application-test:latest", `"tags" output is not valid`);
+            assert.equal(
+              tags.length,
+              expectedTags.length,
+              `"tags" output must contain ${expectedTags.length} tags for ${{ github.event_name }} event`
+            );
+
+            for(const expectedTag of expectedTags) {
+              const fullTag = `ghcr.io/hoverkraft-tech/ci-github-container/application-test:${expectedTag}`;
+              assert(
+                tags.includes(fullTag),
+                `Expected tag "${fullTag}" not found in "tags" output`
+              );
             }
 
   tests-with-given-tag:

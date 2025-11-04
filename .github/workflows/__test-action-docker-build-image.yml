@@ -109,34 +109,42 @@ jobs:
               `"annotations.org.opencontainers.image.url" output is not valid`
             );
 
+            const expectedTags = [];
+            let expectedImageVersion;
             if (`${{ github.event_name }}` === "pull_request") {
               const shortSha = `${{ github.sha }}`.substring(0, 7);
               const prShaTag = `pr-${{ github.event.pull_request.number }}-${shortSha}`;
               const prTag = `pr-${{ github.event.pull_request.number }}`;
 
-              assert.equal(builtImage.tags.length, 2, `"tags" output is not valid`);
-
-              assert.equal(builtImage.tags[0], prShaTag, `"tags" output is not valid`);
-              assert.equal(builtImage.tags[1], prTag, `"tags" output is not valid`);
-
-              assert.equal(
-                builtImage.annotations["org.opencontainers.image.version"],
-                prTag,
-                `"annotations.org.opencontainers.image.version" output is not valid`
-              );
+              expectedTags.push(prShaTag, prTag);
+              expectedImageVersion = prShaTag;
             } else {
               const refTag = `${{ github.ref_name }}`;
+              expectedTags.push(refTag);
+              expectedImageVersion = refTag;
 
-              assert.equal(builtImage.tags.length, 2, `"tags" output is not valid`);
-              assert.equal(builtImage.tags[0], refTag, `"tags" output is not valid`);
-              assert.equal(builtImage.tags[1], "latest", `"tags" output is not valid`);
-
-              assert.equal(
-                builtImage.annotations["org.opencontainers.image.version"],
-                refTag,
-                `"annotations.org.opencontainers.image.version" output is not valid`
-              );
+              if (`${{ github.event_name }}` !== "workflow_dispatch") {
+                expectedTags.push("latest");
+              }
             }
+
+            assert.equal(
+              builtImage.tags.length,
+              expectedTags.length,
+              `"tags" output is not valid, expected ${expectedTags.length} tags but got ${builtImage.tags.length}`
+            );
+
+            for (const expectedTag of expectedTags) {
+              if (!builtImage.tags.includes(expectedTag)) {
+                assert.fail(`Expected tag "${expectedTag}" not found in "tags" output`);
+              }
+            }
+
+            assert.equal(
+              builtImage.annotations["org.opencontainers.image.version"],
+              expectedImageVersion,
+              `"annotations.org.opencontainers.image.version" output is not valid`
+            );
 
       - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
