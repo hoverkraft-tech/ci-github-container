@@ -151,7 +151,7 @@ runs:
       env:
         CACHE_PATH: ${{ runner.temp }}/.cache-textlint
         CONFIG_PATH: ${{ steps.prepare-variables.outputs.textlint-config-path }}
-      run: npx textlint --cache-location $CACHE_PATH --fix --config $CONFIG_PATH $(pwd)/**/*.md
+      run: npx textlint --cache-location "$CACHE_PATH" --fix --config "$CONFIG_PATH" "$(pwd)/**/*.md"
 
     - name: Lint Fix markdown files
       uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
@@ -175,10 +175,10 @@ runs:
         VALUES_FILE: ${{ steps.prepare-variables.outputs.values-file || '' }}
       run: |
         # First run
-        npx prettier --cache-location $CACHE_PATH --write $(pwd)/**/*.md $VALUES_FILE
+        npx prettier --cache-location "$CACHE_PATH" --write "$(pwd)/**/*.md" "$VALUES_FILE"
 
         # Second run to ensure idempotency
-        npx prettier --cache-location $CACHE_PATH --write $(pwd)/**/*.md $VALUES_FILE
+        npx prettier --cache-location "$CACHE_PATH" --write "$(pwd)/**/*.md" "$VALUES_FILE"
 
     - uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
       if: inputs.github-app-id
