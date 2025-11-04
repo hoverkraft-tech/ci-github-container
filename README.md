@@ -134,4 +134,6 @@ This project is licensed under the MIT License.
 
 SPDX-License-Identifier: MIT
 
-© 2025 hoverkraft-tech. See [LICENSE](LICENSE) for details.
+Copyright © 2025 hoverkraft-tech
+
+For more details, see the [license](http://choosealicense.com/licenses/mit/).
