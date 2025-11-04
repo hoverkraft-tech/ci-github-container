@@ -2,9 +2,20 @@ FROM scratch AS base
 
 USER test
 
-FROM nginx:1-alpine AS prod
+FROM nginx:1 AS prod
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 CMD ["curl", "-f", "http://localhost:8080/health/check"]
+
+# Install curl for healthcheck
+ENV DEBIAN_FRONTEND=noninteractive
+# hadolint ignore=DL3008
+RUN \
+  --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  rm -f /etc/apt/apt.conf.d/docker-clean && \
+  echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' >/etc/apt/apt.conf.d/keep-cache && \
+  apt-get update && \
+  apt-get install -y curl
 
 # Configure nginx to listen on port 8080
 RUN sed -i 's/listen       80;/listen       8080;/' /etc/nginx/conf.d/default.conf

@@ -124,8 +124,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-    # #region Prepare build variables
-
     - shell: bash
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
@@ -243,6 +241,7 @@ runs:
         platforms: ${{ inputs.platform }}
 
     - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      id: setup-buildx
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
         version: v0.29.1
