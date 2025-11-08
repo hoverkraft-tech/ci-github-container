@@ -86,8 +86,13 @@ jobs:
 
               expectedTags.push(prShaTag, prTag);
             } else {
-              expectedTags.push("main");
-              if (`${{ github.event_name }}` === "push" && `${{ github.ref_name }}` === "${{ github.event.repository.default_branch }}") {
+              const refTag = `${{ github.ref_name }}`;
+              expectedTags.push(refTag);
+
+              const isTag = `${{ github.ref }}`.startsWith('refs/tags/');
+              const isPushOnDefaultBranch = `${{ github.event_name }}` === "push" && !isTag && refTag === "${{ github.event.repository.default_branch }}";
+
+              if (isPushOnDefaultBranch) {
                 expectedTags.push("latest");
               }
             }
