@@ -17,6 +17,7 @@ This project contains **opinionated GitHub Actions and reusable workflows** to s
 - **[Reusable Workflows](README.md#reusable-workflows)** – Orchestration playbooks for common CI tasks
 - **[Contributing](README.md#contributing)** – Contribution guidelines, action structure patterns, and development standards
 - **[Development Workflow](README.md#development-workflow)** – Commands for linting, testing, and local development
+- **[CI Testing Strategy](README.md#ci-testing-strategy)** – How we test local actions with arrange-act-assert patterns across different trigger contexts
 
 ## Agent-Specific Development Patterns
 
