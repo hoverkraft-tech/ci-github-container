@@ -80,7 +80,9 @@ runs:
 
           // If push on default branch set tag to latest
           const isPushOnDefaultBranch = context.eventName === 'push' && `${{ github.ref }}` === `refs/heads/${{ github.event.repository.default_branch }}`;
-          core.setOutput('flavor', isPushOnDefaultBranch ? 'latest=true' : 'latest=false');
+          // For schedule events, don't set latest tag to avoid unintended updates
+          const isSchedule = context.eventName === 'schedule';
+          core.setOutput('flavor', (isPushOnDefaultBranch && !isSchedule) ? 'latest=true' : 'latest=false');
 
           const isPullRequestOrIssueComment =
             context.eventName === 'pull_request'
@@ -99,6 +101,12 @@ runs:
           if(isPushOrWorkflowDispatch) {
             const isTag = context.ref.startsWith('refs/tags/');
             core.setOutput('tags', isTag ? `type=ref,event=tag` : `type=ref,event=branch`);
+            return;
+          }
+
+          // For schedule events, use the default branch name as tag
+          if(context.eventName === 'schedule') {
+            core.setOutput('tags', `type=raw,value=${{ github.event.repository.default_branch }}`);
             return;
           }
 
