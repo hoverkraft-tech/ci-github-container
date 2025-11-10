@@ -34,7 +34,30 @@ jobs:
             }
 
             // Generate random PR tag
-            core.setOutput("tag", `pr-${1 + Math.floor(Math.random() * 210)}`);
+            let prNumber;
+            let attempt = 0;
+            while(!prNumber && attempt < 5) {
+              attempt++;
+              prNumber = 1 + Math.floor(Math.random() * 210);
+              try {
+                await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+              } catch (error) {
+                if (error.status === 404) {
+                  prNumber = null; // PR does not exist, try again
+                } else {
+                  throw error; // Other errors
+                }
+              }
+            }
+            if (!prNumber) {
+              return core.setFailed("Failed to generate a valid pull request number after multiple attempts");
+            }
+
+            core.setOutput("tag", `pr-${prNumber}`);
 
             // Define expected packages
             const packages = [
@@ -127,7 +150,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate a image tag that should be deleted
+      - name: Generate an image tag that should be deleted
         env:
           BASE_IMAGE: ${{ needs.arrange-verify.outputs.base-image }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
@@ -143,6 +166,7 @@ jobs:
       - id: prune-pull-requests-image-tags
         uses: ./actions/docker/prune-pull-requests-image-tags
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           image: ${{ env.IMAGE_NAME }}
 
   assert:

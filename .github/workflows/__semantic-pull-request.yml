@@ -1,0 +1,18 @@
+---
+name: "Pull Request - Semantic Lint"
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+
+permissions: {}
+
+jobs:
+  main:
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/semantic-pull-request.yml@5f11437c716059f30c635f90055060e4ef8b31a0 # 0.28.0
+    permissions:
+      contents: write
+      pull-requests: write

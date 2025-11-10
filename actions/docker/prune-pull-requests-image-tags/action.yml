@@ -25,7 +25,7 @@ inputs:
     default: "^pr-([0-9]+)(?:-|$)"
   github-token:
     description: |
-      GitHub token with the packages:read and packages:delete scopes.
+      GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.
       See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries.
     default: ${{ github.token }}
 
