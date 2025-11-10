@@ -35,7 +35,7 @@ It uses the [docker/metadata-action](https://github.com/docker/metadata-action) 
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-metadata@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-metadata@6b0d5ca498b7a533b43e1f2e8d988678d164a429 # 0.29.1
   with:
     # OCI registry where to pull and push images
     # This input is required.
