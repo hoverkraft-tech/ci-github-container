@@ -44,7 +44,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@6b0d5ca498b7a533b43e1f2e8d988678d164a429 # 0.29.1
   with:
     # Image name
     image: ""
@@ -53,7 +53,7 @@ permissions:
     # Default: `^pr-([0-9]+)(?:-|$)`
     pull-request-tag-filter: ^pr-([0-9]+)(?:-|$)
 
-    # GitHub token with the packages:read and packages:delete scopes.
+    # GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.
     # See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries.
     #
     # Default: `${{ github.token }}`
@@ -70,7 +70,7 @@ permissions:
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------- |
 | **`image`**                   | Image name                                                                                                                                                 | **false**    | -                       |
 | **`pull-request-tag-filter`** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                  | **false**    | `^pr-([0-9]+)(?:-\|$)`  |
-| **`github-token`**            | GitHub token with the packages:read and packages:delete scopes.                                                                                            | **false**    | `$\{\{ github.token }}` |
+| **`github-token`**            | GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.                                                        | **false**    | `$\{\{ github.token }}` |
 |                               | See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>. |              |                         |
 
 <!-- inputs:end -->
