@@ -225,19 +225,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const packages = process.env.PACKAGES.split("\n").map(packageName => packageName.trim()).filter(Boolean);
-            await Promise.all(packages.map(async (packageName) => {
-              try {
-                return await github.rest.packages.deletePackageForOrg({
-                  package_type: 'container',
-                  package_name: packageName,
-                  org: process.env.GITHUB_REPOSITORY_OWNER,
-                });
-              } catch (error) {
-                // Ignore 404 errors (package not found)
-                if (error.status === 404) {
-                  console.log(`Package "${packageName}" not found, skipping deletion`);
-                  return;
-                }
-                throw error;
-              }
+            await Promise.all(packages.map(packageName => {
+              return github.rest.packages.deletePackageForOrg({
+                package_type: 'container',
+                package_name: packageName,
+                org: process.env.GITHUB_REPOSITORY_OWNER,
+              });
             }));
