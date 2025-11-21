@@ -109,7 +109,7 @@ runs:
           }
           core.setOutput("textlint-config-path", textlintConfigPath);
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@753288393de1f3d92f687a6761d236ca800f5306 # 0.28.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@1127e708e4072515056a4b0d26bcb0653646cedc # 0.30.0
 
     - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
       with:
@@ -154,7 +154,7 @@ runs:
       run: npx textlint --cache-location "$CACHE_PATH" --fix --config "$CONFIG_PATH" "$(pwd)/**/*.md"
 
     - name: Lint Fix markdown files
-      uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20.0.0
+      uses: DavidAnson/markdownlint-cli2-action@30a0e04f1870d58f8d717450cc6134995f993c63 # v21.0.0
       with:
         fix: true
         config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
@@ -182,7 +182,7 @@ runs:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@753288393de1f3d92f687a6761d236ca800f5306 # 0.28.1
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@1127e708e4072515056a4b0d26bcb0653646cedc # 0.30.0
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}

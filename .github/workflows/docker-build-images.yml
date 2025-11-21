@@ -347,7 +347,7 @@ jobs:
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       id-token: write
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@753288393de1f3d92f687a6761d236ca800f5306 # 0.28.1
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@1127e708e4072515056a4b0d26bcb0653646cedc # 0.30.0
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -358,7 +358,7 @@ jobs:
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
       - id: oidc
         uses: ChristopherHX/oidc@73eee1ff03fdfce10eda179f617131532209edbd # v3
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
@@ -431,13 +431,13 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@753288393de1f3d92f687a6761d236ca800f5306 # 0.28.1
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@1127e708e4072515056a4b0d26bcb0653646cedc # 0.30.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
 
       # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         if: always() && steps.oidc.outputs.job_workflow_repo_name_and_owner
         with:
           path: ./self-workflow
@@ -459,7 +459,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@753288393de1f3d92f687a6761d236ca800f5306 # 0.28.1
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@1127e708e4072515056a4b0d26bcb0653646cedc # 0.30.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
@@ -497,7 +497,7 @@ jobs:
       # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
       - id: oidc
         uses: ChristopherHX/oidc@73eee1ff03fdfce10eda179f617131532209edbd # v3
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
           path: ./self-workflow
           repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
