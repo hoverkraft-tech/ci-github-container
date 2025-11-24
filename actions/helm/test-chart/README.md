@@ -34,7 +34,7 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@0d92511a38c93e30ae0f8b82346116946987a9ca # 0.30.0
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
