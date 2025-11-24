@@ -45,14 +45,15 @@ on:
   push:
     branches:
       - main
-permissions:
-  contents: read
-  pull-requests: read
-  packages: write
-  id-token: write
+permissions: {}
 jobs:
   prune-pull-requests-images-tags:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@0d92511a38c93e30ae0f8b82346116946987a9ca # 0.30.0
+    permissions:
+      contents: read
+      pull-requests: read
+      packages: write
+      id-token: write
     with:
       # JSON array of runner(s) to use.
       # See https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job.

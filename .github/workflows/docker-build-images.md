@@ -47,15 +47,16 @@ on:
   push:
     branches:
       - main
-permissions:
-  contents: read
-  issues: read
-  packages: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0d92511a38c93e30ae0f8b82346116946987a9ca # 0.30.0
+    permissions:
+      contents: read
+      issues: read
+      packages: write
+      pull-requests: read
+      id-token: write
     secrets:
       # Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry.
       # See https://github.com/docker/login-action#usage.
