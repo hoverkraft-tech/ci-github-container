@@ -5,15 +5,18 @@ run-name: Test for "docker/get-image-metadata" action
 on: # yamllint disable-line rule:truthy
   workflow_call:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   tests:
     name: Test for "docker/get-image-metadata" action
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
 
       - name: Act
         id: get-image-metadata
@@ -114,8 +117,12 @@ jobs:
   tests-with-given-tag:
     name: Test for "docker/get-image-metadata" action with given tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
 
       - name: Act
         id: get-image-metadata

@@ -6,21 +6,22 @@ on: # yamllint disable-line rule:truthy
   pull_request:
     branches: [main]
 
-permissions:
-  actions: read
-  contents: write
-  issues: read
-  packages: write
-  pull-requests: write
-  security-events: write
-  statuses: write
-  id-token: write
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   ci:
     uses: ./.github/workflows/__shared-ci.yml
+    permissions:
+      actions: read
+      contents: write
+      issues: read
+      packages: write
+      pull-requests: write
+      security-events: write
+      statuses: write
+      id-token: write
     secrets: inherit

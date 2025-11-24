@@ -5,14 +5,15 @@ run-name: Test for "helm/release-chart" action
 on: # yamllint disable-line rule:truthy
   workflow_call:
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
 
 jobs:
   tests:
     name: Test for "helm/release-chart" action with simple chart
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -40,6 +41,8 @@ jobs:
               ]
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
 
       - run: |
           if [ -z "${{ github.token }}" ]; then
