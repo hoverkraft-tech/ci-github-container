@@ -1,1 +1,2 @@
 tests/charts/node_modules
+actions/**/node_modules
