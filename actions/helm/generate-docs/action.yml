@@ -187,16 +187,21 @@ runs:
         WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
         CACHE_PATH: ${{ steps.prepare-variables.outputs.prettier-cache-path }}
         FILES_PATTERN: ${{ steps.prepare-variables.outputs.files-pattern }}
-        VALUES_FILE: ${{ steps.prepare-variables.outputs.values-file || '' }}
+        VALUES_FILE: ${{ steps.prepare-variables.outputs.values-file }}
       with:
         script: |
-          await exec.exec('npx', [
+          const args = [
             'prettier',
             '--cache-location', process.env.CACHE_PATH,
             '--write',
             process.env.FILES_PATTERN,
-            process.env.VALUES_FILE,
-          ], {
+          ];
+
+          if (process.env.VALUES_FILE) {
+            args.push(process.env.VALUES_FILE);
+          }
+
+          await exec.exec('npx', args, {
             cwd: process.env.WORKING_DIRECTORY,
           });
 
