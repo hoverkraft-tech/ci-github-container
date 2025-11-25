@@ -77,19 +77,6 @@ runs:
             core.setOutput("values-file", valuesFile);
           }
 
-          // Generate markdownlint config file if not exists
-          let markdownlintConfigPath = join(workingDirectory, ".markdownlint.json");
-          if (!existsSync(markdownlintConfigPath)) {
-            markdownlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.markdownlint.json`);
-
-            const defaultConfig = {
-              "default": true,
-              "line-length": false
-            };
-            writeFileSync(markdownlintConfigPath, JSON.stringify(defaultConfig, null, 2));
-          }
-          core.setOutput("markdownlint-config-path", markdownlintConfigPath);
-
           // Generate textlint config file if not exists
           let textlintConfigPath = join(workingDirectory, ".textlintrc");
           if (!existsSync(textlintConfigPath)) {
@@ -108,6 +95,28 @@ runs:
             writeFileSync(textlintConfigPath, JSON.stringify(defaultConfig, null, 2));
           }
           core.setOutput("textlint-config-path", textlintConfigPath);
+
+          // Generate markdownlint config file if not exists
+          let markdownlintConfigPath = join(workingDirectory, ".markdownlint.json");
+          if (!existsSync(markdownlintConfigPath)) {
+            markdownlintConfigPath = join(process.env.RUNNER_TEMP, `${Date.now()}.markdownlint.json`);
+
+            const defaultConfig = {
+              "default": true,
+              "line-length": false,
+              "outputFormatters": [
+                [
+                  "markdownlint-cli2-formatter-template",
+                  {
+                    "template": "::${errorSeverity:${errorSeverity}}${errorSeverity!error} " +
+                      "file=${fileName},line=${lineNumber},${columnNumber:col=${columnNumber},}title=${ruleName}::${ruleDescription}"
+                  }
+                ]
+              ]
+            };
+            writeFileSync(markdownlintConfigPath, JSON.stringify(defaultConfig, null, 2));
+          }
+          core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@5e8d0e6d1e76d8577a070db6d0128a91b1c9d5ad # 0.30.2
 
@@ -153,13 +162,6 @@ runs:
         CONFIG_PATH: ${{ steps.prepare-variables.outputs.textlint-config-path }}
       run: npx textlint --cache-location "$CACHE_PATH" --fix --config "$CONFIG_PATH" "$(pwd)/**/*.md"
 
-    - name: Lint Fix markdown files
-      uses: DavidAnson/markdownlint-cli2-action@30a0e04f1870d58f8d717450cc6134995f993c63 # v21.0.0
-      with:
-        fix: true
-        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
-        globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
-
     - name: Cache prettier
       id: cache-prettier
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -174,6 +176,13 @@ runs:
         CACHE_PATH: ${{ runner.temp }}/.cache-prettier
         VALUES_FILE: ${{ steps.prepare-variables.outputs.values-file || '' }}
       run: npx prettier --cache-location "$CACHE_PATH" --write "$(pwd)/**/*.md" $VALUES_FILE
+
+    - name: Lint Fix markdown files
+      uses: DavidAnson/markdownlint-cli2-action@30a0e04f1870d58f8d717450cc6134995f993c63 # v21.0.0
+      with:
+        fix: true
+        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
+        globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
 
     - uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
       if: inputs.github-app-id
