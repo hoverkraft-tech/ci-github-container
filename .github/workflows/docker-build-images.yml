@@ -143,12 +143,7 @@ on: # yamllint disable-line rule:truthy
           ```
         value: ${{ jobs.publish-manifests.outputs.built-images }}
 
-permissions:
-  contents: read
-  issues: read
-  packages: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 jobs:
   prepare-variables:
@@ -239,12 +234,16 @@ jobs:
 
       - id: define-images-by-platform
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          IMAGES: ${{ steps.validate-inputs.outputs.images }}
+          RUNS_ON_INPUT: ${{ inputs.runs-on }}
+          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
         with:
           script: |
-            const imagesInput = `${{ steps.validate-inputs.outputs.images }}`;
+            const imagesInput = process.env.IMAGES;
             const images = JSON.parse(imagesInput.replace(/\n/g, '\\n'));
 
-            const runsOnInput = `${{ inputs.runs-on }}`;
+            const runsOnInput = process.env.RUNS_ON_INPUT;
             const isDefaultRunsOn = runsOnInput === '["ubuntu-latest"]';
             const runsOn = JSON.parse(runsOnInput);
 
@@ -254,7 +253,7 @@ jobs:
               { runner: "windows-latest", platformPattern: /^windows\// }
             ];
 
-            const isRepositoryPrivate = `${{ github.event.repository.private }}` === 'true';
+            const isRepositoryPrivate = process.env.REPOSITORY_PRIVATE === 'true';
             if (!isRepositoryPrivate) {
               standardHostedRunnerByPlatform.unshift(
                 { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available,
@@ -317,6 +316,8 @@ jobs:
               }
             }
 
+            core.debug(`Images by platform: ${JSON.stringify(imagesByPlatform, null, 2)}`);
+
             core.setOutput('images', JSON.stringify(imagesByPlatform));
 
       - id: define-artifact-name
@@ -344,10 +345,9 @@ jobs:
       pull-requests: read
       issues: read
       packages: write
-      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
-      id-token: write
+      id-token: write # Needed for getting local workflow actions
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@5e8d0e6d1e76d8577a070db6d0128a91b1c9d5ad # 0.30.2
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@a55670b58d3e064526201acde6c720ede638420c # 0.31.0
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -355,20 +355,10 @@ jobs:
         shell: bash
         run: git lfs pull
 
-      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
-      - id: oidc
-        uses: ChristopherHX/oidc@73eee1ff03fdfce10eda179f617131532209edbd # v3
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - id: local-workflow-actions
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@e6733528d06b6e1668674c35ef3612ac416cedda # 0.31.1
         with:
-          persist-credentials: false
-          path: ./self-workflow
-          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
-          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
-          sparse-checkout: |
-            actions
-      - run: |
-          echo "self-workflow" >> .gitignore
-          echo "self-workflow" >> .dockerignore
+          actions-path: actions
 
       - uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         if: inputs.build-secret-github-app-id
@@ -432,36 +422,31 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@5e8d0e6d1e76d8577a070db6d0128a91b1c9d5ad # 0.30.2
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@a55670b58d3e064526201acde6c720ede638420c # 0.31.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
 
-      # FIXME: This is a workaround for having workflow actions. See https://github.com/orgs/community/discussions/38659
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        if: always() && steps.oidc.outputs.job_workflow_repo_name_and_owner
+      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@e6733528d06b6e1668674c35ef3612ac416cedda # 0.31.1
+        if: always() && steps.local-workflow-actions.outputs.repository
         with:
-          persist-credentials: false
-          path: ./self-workflow
-          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
-          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
-          sparse-checkout: |
-            actions
+          actions-path: actions
+          repository: ${{ steps.local-workflow-actions.outputs.repository }}
+          ref: ${{ steps.local-workflow-actions.outputs.ref }}
 
   publish-manifests:
     name: Publish images manifests
     permissions:
       contents: read
       packages: write
-      # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
-      id-token: write
+      id-token: write # Needed for getting local workflow actions
     needs: [prepare-variables, build-images]
     runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@5e8d0e6d1e76d8577a070db6d0128a91b1c9d5ad # 0.30.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@a55670b58d3e064526201acde6c720ede638420c # 0.31.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
@@ -496,21 +481,10 @@ jobs:
 
             core.setOutput('built-images', JSON.stringify(images));
 
-      # FIXME: This is a workaround for having workflow ref. See https://github.com/orgs/community/discussions/38659
-      - id: oidc
-        uses: ChristopherHX/oidc@73eee1ff03fdfce10eda179f617131532209edbd # v3
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - id: local-workflow-actions
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@e6733528d06b6e1668674c35ef3612ac416cedda # 0.31.1
         with:
-          persist-credentials: false
-          path: ./self-workflow
-          repository: ${{ steps.oidc.outputs.job_workflow_repo_name_and_owner }}
-          ref: ${{ steps.oidc.outputs.job_workflow_repo_ref }}
-          sparse-checkout: |
-            actions
-      - name: ignore self-worfklow changes
-        run: |
-          echo "self-workflow" >> .gitignore
-          echo "self-workflow" >> .dockerignore
+          actions-path: actions
 
       - id: create-images-manifests
         uses: ./self-workflow/actions/docker/create-images-manifests
@@ -536,8 +510,16 @@ jobs:
             // Get images to sign
             const imagesToSign = Object.values(builtImages).map(image => image.images).flat();
             core.setOutput('images-to-sign', JSON.stringify(imagesToSign));
+
       - uses: ./self-workflow/actions/docker/sign-images
         if: steps.get-images-to-sign.outputs.images-to-sign
         with:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@e6733528d06b6e1668674c35ef3612ac416cedda # 0.31.1
+        if: always() && steps.local-workflow-actions.outputs.repository
+        with:
+          actions-path: actions
+          repository: ${{ steps.local-workflow-actions.outputs.repository }}
+          ref: ${{ steps.local-workflow-actions.outputs.ref }}
