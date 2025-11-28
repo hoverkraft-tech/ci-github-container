@@ -142,7 +142,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@5e8d0e6d1e76d8577a070db6d0128a91b1c9d5ad # 0.30.2
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@a55670b58d3e064526201acde6c720ede638420c # 0.31.0
       with:
         value: ${{ inputs.platform }}
 
@@ -233,7 +233,7 @@ runs:
           }
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
-      uses: docker/setup-docker-action@efe9e3891a4f7307e689f2100b33a155b900a608 # v4.5.0
+      uses: docker/setup-docker-action@e61617a16c407a86262fb923c35a616ddbe070b3 # v4.6.0
 
     - if: steps.get-docker-config.outputs.platform-exists != 'true'
       uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
