@@ -115,6 +115,9 @@ runs:
             const defaultConfig = {
               "default": true,
               "line-length": false,
+              // Disable MD060 because Prettier formats tables without aligned pipes,
+              // and markdownlint cannot auto-fix this rule
+              "MD060": false,
               "outputFormatters": [
                 [
                   "markdownlint-cli2-formatter-template",
