@@ -115,9 +115,6 @@ runs:
             const defaultConfig = {
               "default": true,
               "line-length": false,
-              // Disable MD060 because Prettier formats tables without aligned pipes,
-              // and markdownlint cannot auto-fix this rule
-              "MD060": false,
               "outputFormatters": [
                 [
                   "markdownlint-cli2-formatter-template",
@@ -176,6 +173,25 @@ runs:
             cwd: process.env.WORKING_DIRECTORY,
           });
 
+    - name: Lint Fix markdown files
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        NODE_PATH: ${{ github.action_path }}/node_modules
+        WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
+        FILES_PATTERN: ${{ steps.prepare-variables.outputs.files-pattern }}
+        CONFIG_PATH: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
+      with:
+        script: |
+          await exec.exec('npx', [
+            'markdownlint-cli2',
+            '--fix',
+            '--config', process.env.CONFIG_PATH,
+            process.env.FILES_PATTERN,
+          ], {
+            cwd: process.env.WORKING_DIRECTORY,
+            ignoreReturnCode: true,
+          });
+
     - name: Cache prettier
       id: cache-prettier
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -205,24 +221,6 @@ runs:
           }
 
           await exec.exec('npx', args, {
-            cwd: process.env.WORKING_DIRECTORY,
-          });
-
-    - name: Lint Fix markdown files
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      env:
-        NODE_PATH: ${{ github.action_path }}/node_modules
-        WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
-        FILES_PATTERN: ${{ steps.prepare-variables.outputs.files-pattern }}
-        CONFIG_PATH: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
-      with:
-        script: |
-          await exec.exec('npx', [
-            'markdownlint-cli2',
-            '--fix',
-            '--config', process.env.CONFIG_PATH,
-            process.env.FILES_PATTERN,
-          ], {
             cwd: process.env.WORKING_DIRECTORY,
           });
 
