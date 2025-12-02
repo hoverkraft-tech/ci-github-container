@@ -223,13 +223,6 @@ runs:
             cwd: process.env.WORKING_DIRECTORY,
           });
 
-    - name: Lint Fix markdown files
-      uses: DavidAnson/markdownlint-cli2-action@30a0e04f1870d58f8d717450cc6134995f993c63 # v21.0.0
-      with:
-        fix: true
-        config: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
-        globs: ${{ steps.prepare-variables.outputs.working-directory }}/**/*.md
-
     - uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
       if: inputs.github-app-id
       id: generate-token
