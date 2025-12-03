@@ -50,7 +50,7 @@ on:
 permissions: {}
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@0d92511a38c93e30ae0f8b82346116946987a9ca # 0.30.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@6901a2c6c6f5fc6d75fc40f0fb216e6984093f4b # 0.30.1
     permissions: {}
     secrets:
       # Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry.

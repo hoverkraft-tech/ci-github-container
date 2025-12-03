@@ -42,7 +42,7 @@ This action requires the following permissions on the repository:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@0d92511a38c93e30ae0f8b82346116946987a9ca # 0.30.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@6901a2c6c6f5fc6d75fc40f0fb216e6984093f4b # 0.30.1
   with:
     # OCI registry where to push chart.
     # See https://github.com/appany/helm-oci-chart-releaser#usage.
