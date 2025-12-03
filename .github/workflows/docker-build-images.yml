@@ -347,7 +347,7 @@ jobs:
       packages: write
       id-token: write # Needed for getting local workflow actions
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -356,7 +356,7 @@ jobs:
         run: git lfs pull
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         with:
           actions-path: actions
 
@@ -422,12 +422,12 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
 
-      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         if: always() && steps.local-workflow-actions.outputs.repository
         with:
           actions-path: actions
@@ -446,7 +446,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
@@ -482,7 +482,7 @@ jobs:
             core.setOutput('built-images', JSON.stringify(images));
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         with:
           actions-path: actions
 
@@ -517,7 +517,7 @@ jobs:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@2d3c39a47c6af3b9d57a230bcaf57d03093e96db # 0.31.2
+      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@5ac504609f6ef35c5ac94bd8199063aa32104721 # 0.31.3
         if: always() && steps.local-workflow-actions.outputs.repository
         with:
           actions-path: actions
