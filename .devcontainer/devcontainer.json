@@ -20,7 +20,10 @@
         "esbenp.prettier-vscode",
         "ms-azuretools.vscode-containers",
         "Tim-Koehler.helm-intellisense"
-      ]
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
     }
   }
 }
