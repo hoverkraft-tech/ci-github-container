@@ -129,7 +129,7 @@ runs:
           }
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@666b7b6eb000db3e8614647871fa60c9f1eb7179 # 0.31.4
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@a8d9ca49a0e025238acd97ee3c5014f4d6525bc3 # 0.31.5
 
     - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
       with:
@@ -231,7 +231,7 @@ runs:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@666b7b6eb000db3e8614647871fa60c9f1eb7179 # 0.31.4
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@a8d9ca49a0e025238acd97ee3c5014f4d6525bc3 # 0.31.5
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}
