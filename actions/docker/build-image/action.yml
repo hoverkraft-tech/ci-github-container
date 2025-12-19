@@ -142,7 +142,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@a8d9ca49a0e025238acd97ee3c5014f4d6525bc3 # 0.31.5
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@b17226e57c8ef31f860719766656ebb6df017218 # 0.31.6
       with:
         value: ${{ inputs.platform }}
 
@@ -240,7 +240,7 @@ runs:
       with:
         platforms: ${{ inputs.platform }}
 
-    - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+    - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       id: setup-buildx
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
