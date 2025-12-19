@@ -34,7 +34,7 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@d706f273f42e4b4b0caf1b3a385cb8b9cb058fa0 # 0.30.2
+- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@67e5563d6681bb610c1c961eecb6dfcd5b3cc62f # 0.30.5
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
@@ -94,26 +94,26 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 
 ## Inputs
 
-| **Input**                   | **Description**                                                                         | **Required** | **Default**                        |
-| --------------------------- | --------------------------------------------------------------------------------------- | ------------ | ---------------------------------- |
-| **`working-directory`**     | Working directory                                                                       | **false**    | `$\{\{ github.workspace }}`        |
-| **`helm-set`**              | Set values for Helm chart.                                                              | **false**    | -                                  |
-|                             | Multiple values can be set using multiline string.                                      |              |                                    |
-|                             | Example:                                                                                |              |                                    |
-|                             | <!-- textlint-disable --><pre>key1=value1&#13;key2=value2</pre><!-- textlint-enable --> |              |                                    |
-| **`helm-repositories`**     | List of Helm repositories to add before testing charts.                                 | **false**    | -                                  |
-|                             | See <https://helm.sh/docs/helm/helm_repo_add/>.                                         |              |                                    |
-| **`oci-registry`**          | OCI registry where to pull and push images                                              | **false**    | `ghcr.io`                          |
-| **`oci-registry-username`** | Username used to log against the OCI registry.                                          | **false**    | `$\{\{ github.repository_owner }}` |
-|                             | See <https://github.com/docker/login-action#usage>.                                     |              |                                    |
-| **`oci-registry-password`** | Password or personal access token used to log against the OCI registry.                 | **false**    | `$\{\{ github.token }}`            |
-|                             | Can be passed in using `secrets.GITHUB_TOKEN`.                                          |              |                                    |
-|                             | See <https://github.com/docker/login-action#usage>.                                     |              |                                    |
-| **`check-diff-only`**       | Only run lint and tests on changed charts.                                              | **false**    | `true`                             |
-| **`enable-lint`**           | Enable linting of the Helm chart.                                                       | **false**    | `true`                             |
-|                             | See <https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md>.                   |              |                                    |
-| **`enable-install`**        | Enable installing the Helm chart.                                                       | **false**    | `true`                             |
-|                             | See <https://github.com/helm/chart-testing/blob/main/doc/ct_install.md>.                |              |                                    |
+| **Input**                   | **Description**                                                                                     | **Required** | **Default**                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
+| **`working-directory`**     | Working directory                                                                                   | **false**    | `${{ github.workspace }}`        |
+| **`helm-set`**              | Set values for Helm chart.                                                                          | **false**    | -                                |
+|                             | Multiple values can be set using multiline string.                                                  |              |                                  |
+|                             | Example:                                                                                            |              |                                  |
+|                             | <!-- textlint-disable --><pre lang="text">key1=value1&#13;key2=value2</pre><!-- textlint-enable --> |              |                                  |
+| **`helm-repositories`**     | List of Helm repositories to add before testing charts.                                             | **false**    | -                                |
+|                             | See <https://helm.sh/docs/helm/helm_repo_add/>.                                                     |              |                                  |
+| **`oci-registry`**          | OCI registry where to pull and push images                                                          | **false**    | `ghcr.io`                        |
+| **`oci-registry-username`** | Username used to log against the OCI registry.                                                      | **false**    | `${{ github.repository_owner }}` |
+|                             | See <https://github.com/docker/login-action#usage>.                                                 |              |                                  |
+| **`oci-registry-password`** | Password or personal access token used to log against the OCI registry.                             | **false**    | `${{ github.token }}`            |
+|                             | Can be passed in using `secrets.GITHUB_TOKEN`.                                                      |              |                                  |
+|                             | See <https://github.com/docker/login-action#usage>.                                                 |              |                                  |
+| **`check-diff-only`**       | Only run lint and tests on changed charts.                                                          | **false**    | `true`                           |
+| **`enable-lint`**           | Enable linting of the Helm chart.                                                                   | **false**    | `true`                           |
+|                             | See <https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md>.                               |              |                                  |
+| **`enable-install`**        | Enable installing the Helm chart.                                                                   | **false**    | `true`                           |
+|                             | See <https://github.com/helm/chart-testing/blob/main/doc/ct_install.md>.                            |              |                                  |
 
 <!-- inputs:end -->
 
