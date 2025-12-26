@@ -142,7 +142,7 @@ runs:
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@009e0e9d11a45eda39342243a14a4e5c3c6eaef3 # 0.21.1
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@c9d9d041ba4ef35695ee469c4782fa6a8bbebbcc # 0.21.2
       with:
         working-directory: ${{ github.action_path }}
 
