@@ -35,7 +35,7 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@67e5563d6681bb610c1c961eecb6dfcd5b3cc62f # 0.30.5
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
