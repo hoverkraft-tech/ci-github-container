@@ -233,7 +233,7 @@ runs:
           }
 
     - if: steps.get-docker-config.outputs.docker-exists != 'true'
-      uses: docker/setup-docker-action@e61617a16c407a86262fb923c35a616ddbe070b3 # v4.6.0
+      uses: docker/setup-docker-action@e43656e248c0bd0647d3f5c195d116aacf6fcaf4 # v4.7.0
 
     - if: steps.get-docker-config.outputs.platform-exists != 'true'
       uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
