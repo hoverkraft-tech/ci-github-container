@@ -251,37 +251,13 @@ runs:
 
     # Caching setup
     - id: cache-arguments
-      uses: int128/docker-build-cache-config-action@ce0c27484fc5f89cfd9fc210a794d42b9ad9b82f # v1.41.0
+      uses: int128/docker-build-cache-config-action@113b5dc2a397fc088bfbddc8ffb44ea9f2565a99 # v1.42.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
         cache-type: ${{ inputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
-
-    # FIXME: Remove this when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
-    - id: transform-cache-gha
-      if: inputs.cache-type == 'gha'
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      with:
-        script: |
-          const cacheFrom = `${{ steps.cache-arguments.outputs.cache-from }}`;
-          const cacheTo = `${{ steps.cache-arguments.outputs.cache-to }}`;
-
-          core.info(`Original cache-from: ${cacheFrom}`);
-          core.info(`Original cache-to: ${cacheTo}`);
-
-          // Transform cache-from: replace ref= with scope=
-          const transformedCacheFrom = cacheFrom.replace(/ref=/g, 'scope=');
-
-          // Transform cache-to: replace ref= with scope=
-          const transformedCacheTo = cacheTo.replace(/ref=/g, 'scope=');
-
-          core.info(`Transformed cache-from: ${transformedCacheFrom}`);
-          core.info(`Transformed cache-to: ${transformedCacheTo}`);
-
-          core.setOutput('cache-from', transformedCacheFrom);
-          core.setOutput('cache-to', transformedCacheTo);
 
     - uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
       id: cache
@@ -314,12 +290,8 @@ runs:
         secrets: ${{ inputs.secrets }}
         secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
-        # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from ||'
-        # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
-        cache-from: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-from || steps.cache-arguments.outputs.cache-from }}
-        # FIXME: Remove 'inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to ||'
-        # when https://github.com/int128/docker-build-cache-config-action/pull/1213 is merged
-        cache-to: ${{ inputs.cache-type == 'gha' && steps.transform-cache-gha.outputs.cache-to || steps.cache-arguments.outputs.cache-to }}
+        cache-from: ${{ steps.cache-arguments.outputs.cache-from }}
+        cache-to: ${{ steps.cache-arguments.outputs.cache-to }}
         outputs: |
           ${{ steps.get-docker-config.outputs.multi-platform && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
