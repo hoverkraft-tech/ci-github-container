@@ -178,7 +178,7 @@ runs:
           core.setOutput('cache-image', cacheImage);
 
           try {
-            await exec.exec('command -v docker', { stdio: 'ignore' });
+            await exec.exec('which', ['docker'], { silent: true });
             core.setOutput('docker-exists', 'true');
           } catch (error) {
             // docker not available on runner
