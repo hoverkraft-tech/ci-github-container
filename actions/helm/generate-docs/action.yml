@@ -138,7 +138,7 @@ runs:
     - if: ${{ steps.prepare-variables.outputs.values-file }}
       uses: losisin/helm-values-schema-json-action@f3517c55537e26953c8a11be7549ea908990130d # v2.3.2
       with:
-        input: ${{ steps.prepare-variables.outputs.values-file }}
+        values: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js

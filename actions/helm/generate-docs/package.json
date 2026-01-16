@@ -1,4 +1,5 @@
 {
+  "name": "generate-docs",
   "dependencies": {
     "@textlint/textlint-plugin-markdown": "^15.5.0",
     "markdownlint-cli2": "^0.20.0",
