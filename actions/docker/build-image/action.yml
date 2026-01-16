@@ -87,6 +87,31 @@ inputs:
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
+  cache-registry:
+    description: |
+      Optional separate registry for Docker build cache.
+      Use this when cache is stored on a different registry than the final image.
+      If not set, cache operations use the main oci-registry.
+    required: false
+  cache-registry-username:
+    description: |
+      Username for the cache registry.
+      Required if cache-registry is set and requires authentication.
+    required: false
+  cache-registry-password:
+    description: |
+      Password for the cache registry.
+      Required if cache-registry is set and requires authentication.
+    required: false
+  buildkitd-config-inline:
+    description: |
+      Inline BuildKit daemon configuration.
+      See https://github.com/docker/setup-buildx-action#inputs.
+      Example for insecure registry:
+        [registry."my-registry.local:5000"]
+          http = true
+          insecure = true
+    required: false
   multi-platform:
     description: |
       Whether this build participates in a multi-platform image publication.
@@ -174,7 +199,19 @@ runs:
 
           const cacheType = `${{ inputs.cache-type }}`.trim();
           const metadataImage = `${{ steps.metadata.outputs.image }}`;
-          const cacheImage = cacheType === 'registry' ? `${metadataImage}/cache` : metadataImage;
+          const cacheRegistry = `${{ inputs.cache-registry }}`.trim();
+
+          let cacheImage;
+          if (cacheRegistry) {
+            // Use separate cache registry: replace the registry part of the image
+            const imageParts = metadataImage.split('/');
+            // Remove the original registry (first part) and join with cache registry
+            imageParts.shift();
+            cacheImage = `${cacheRegistry}/${imageParts.join('/')}/cache`;
+          } else {
+            // Use main registry for cache
+            cacheImage = cacheType === 'registry' ? `${metadataImage}/cache` : metadataImage;
+          }
           core.setOutput('cache-image', cacheImage);
 
           try {
@@ -248,6 +285,7 @@ runs:
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
           image=moby/buildkit:v0.26.2
+        buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
 
     # Caching setup
     - id: cache-arguments
@@ -278,6 +316,13 @@ runs:
         registry: ${{ inputs.oci-registry }}
         username: ${{ inputs.oci-registry-username }}
         password: ${{ inputs.oci-registry-password }}
+
+    - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+      if: inputs.cache-registry
+      with:
+        registry: ${{ inputs.cache-registry }}
+        username: ${{ inputs.cache-registry-username }}
+        password: ${{ inputs.cache-registry-password }}
     # jscpd:ignore-end
 
     - id: build

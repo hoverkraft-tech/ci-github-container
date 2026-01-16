@@ -93,6 +93,28 @@ on: # yamllint disable-line rule:truthy
         default: "gha"
         type: string
         required: false
+      buildkitd-config-inline:
+        description: |
+          Inline BuildKit daemon configuration.
+          See https://github.com/docker/setup-buildx-action#inputs.
+          Example for insecure registry:
+            [registry."my-registry.local:5000"]
+              http = true
+              insecure = true
+        type: string
+        required: false
+      cache-registry:
+        description: |
+          Optional separate registry for Docker build cache.
+          Use this when cache is stored on a different registry than the final image.
+        type: string
+        required: false
+      cache-registry-username:
+        description: |
+          Username for the cache registry.
+          Required if cache-registry is set and requires authentication.
+        type: string
+        required: false
       sign:
         description: |
           Sign built images.
@@ -115,6 +137,11 @@ on: # yamllint disable-line rule:truthy
         description: |
           GitHub App private key to generate GitHub token to be passed as build secret env.
           See https://github.com/actions/create-github-app-token.
+        required: false
+      cache-registry-password:
+        description: |
+          Password for the cache registry.
+          Required if cache-registry is set and requires authentication.
         required: false
     outputs:
       built-images:
@@ -418,6 +445,10 @@ jobs:
           secret-envs: ${{ steps.prepare-secret-envs.outputs.secret-envs }}
           secrets: ${{ secrets.build-secrets }}
           cache-type: ${{ inputs.cache-type }}
+          cache-registry: ${{ inputs.cache-registry }}
+          cache-registry-username: ${{ inputs.cache-registry-username }}
+          cache-registry-password: ${{ secrets.cache-registry-password }}
+          buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
           multi-platform: ${{ matrix.image.multi-platform }}
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
