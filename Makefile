@@ -15,6 +15,26 @@ lint-fix: ## Execute linting and fix
 		-e FIX_MARKDOWN_PRETTIER=true \
 		-e FIX_NATURAL_LANGUAGE=true)
 
+npm-audit-fix: ## Execute npm audit fix
+	@set -uo pipefail; \
+	overall_status=0; \
+	packages="$$(find actions -type f -name package.json -not -path '*/node_modules/*' -print | sort)"; \
+	echo "Running npm audit fix for package.json files under actions/ ..."; \
+	for pkg in $$packages; do \
+		pkg_dir="$$(dirname "$$pkg")"; \
+		echo "---"; \
+		npm install --prefix "$$pkg_dir"; \
+		echo "npm audit fix in $$pkg_dir"; \
+		if ! npm --prefix "$$pkg_dir" audit fix; then \
+			overall_status=1; \
+		fi; \
+	done; \
+	exit $$overall_status
+
+ci: ## Execute CI tasks
+	$(MAKE) npm-audit-fix
+	$(MAKE) lint
+
 test-build-application: ## Build the test application image
 	@docker buildx build \
 		--push --platform linux/amd64,linux/arm64 \
