@@ -131,12 +131,12 @@ runs:
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@b17226e57c8ef31f860719766656ebb6df017218 # 0.31.6
 
-    - uses: losisin/helm-docs-github-action@a57fae5676e4c55a228ea654a1bcaec8dd3cf5b5 # v1.6.2
+    - uses: losisin/helm-docs-github-action@6f957579ac122ecc167bf515fe84e828686c9a15 # v1.7.1
       with:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.prepare-variables.outputs.values-file }}
-      uses: losisin/helm-values-schema-json-action@f3517c55537e26953c8a11be7549ea908990130d # v2.3.2
+      uses: losisin/helm-values-schema-json-action@b0c5e688b224ce7c36fcf005184f1105850d8f3b # v2.4.1
       with:
         values: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
@@ -148,7 +148,7 @@ runs:
 
     - name: Cache textlint
       id: cache-textlint
-      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
       with:
         path: ${{ steps.prepare-variables.outputs.textlint-cache-path }}
         key: ${{ runner.os }}-textlint-${{ hashFiles(steps.prepare-variables.outputs.textlint-config-path) }}
@@ -194,7 +194,7 @@ runs:
 
     - name: Cache prettier
       id: cache-prettier
-      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
       with:
         path: ${{ steps.prepare-variables.outputs.prettier-cache-path }}
         key: ${{ runner.os }}-prettier

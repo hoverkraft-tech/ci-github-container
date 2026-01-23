@@ -251,7 +251,7 @@ runs:
 
     # Caching setup
     - id: cache-arguments
-      uses: int128/docker-build-cache-config-action@113b5dc2a397fc088bfbddc8ffb44ea9f2565a99 # v1.42.0
+      uses: int128/docker-build-cache-config-action@6f35e569a326eea3621c1f4422031b047a535e4a # v1.44.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -259,7 +259,7 @@ runs:
         cache-type: ${{ inputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
-    - uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+    - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
       id: cache
       with:
         path: cache-mount
