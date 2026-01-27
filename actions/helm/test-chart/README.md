@@ -34,7 +34,7 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@67e5563d6681bb610c1c961eecb6dfcd5b3cc62f # 0.30.5
+- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
@@ -149,7 +149,7 @@ This project is licensed under the MIT License.
 
 SPDX-License-Identifier: MIT
 
-Copyright © 2025 hoverkraft
+Copyright © 2026 hoverkraft
 
 For more details, see the [license](http://choosealicense.com/licenses/mit/).
 
