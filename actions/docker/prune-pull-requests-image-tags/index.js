@@ -4,6 +4,7 @@ module.exports = async ({
   core,
   imageName,
   pullRequestTagFilter,
+  preserveTagsFilter,
   isOrganization,
 }) => {
   const repositoryOwner = `${context.repo.owner}`.toLowerCase();
@@ -33,6 +34,7 @@ module.exports = async ({
           context,
           core,
           pullRequestTagFilter,
+          preserveTagsFilter,
           packageVersion,
         }),
       ),
@@ -84,6 +86,7 @@ async function getTagsToDeleteFromPackageVersion({
   context,
   core,
   pullRequestTagFilter,
+  preserveTagsFilter,
   packageVersion,
 }) {
   const tags = packageVersion.metadata.container.tags;
@@ -121,6 +124,17 @@ async function getTagsToDeleteFromPackageVersion({
       `Package version ${packageVersion.name} cannot be deleted as pull request ${pullRequestNumber} is not closed}`,
     );
     return [];
+  }
+
+  // Filter out tags that should be preserved
+  if (preserveTagsFilter && preserveTagsFilter.length > 0) {
+    const preservedTags = tags.filter((tag) => tag.match(preserveTagsFilter));
+    if (preservedTags.length > 0) {
+      core.debug(
+        `Preserving tags matching filter ${preserveTagsFilter}: ${preservedTags.join(", ")}`,
+      );
+    }
+    return tags.filter((tag) => !tag.match(preserveTagsFilter));
   }
 
   return tags;
