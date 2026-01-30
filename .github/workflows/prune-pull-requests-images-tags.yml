@@ -37,6 +37,14 @@ on: # yamllint disable-line rule:truthy
         default: "^pr-([0-9]+)(?:-|$)"
         type: string
         required: false
+      preserve-tags-filter:
+        description: |
+          Optional regular expression to match tags that should be preserved (not deleted).
+          Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.
+          Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.
+        default: ""
+        type: string
+        required: false
 
 permissions: {}
 
@@ -105,6 +113,7 @@ jobs:
         with:
           image: ${{ matrix.image }}
           pull-request-tag-filter: ${{ inputs.pull-request-tag-filter }}
+          preserve-tags-filter: ${{ inputs.preserve-tags-filter }}
 
       - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@b17226e57c8ef31f860719766656ebb6df017218 # 0.31.6
         if: always() && steps.local-workflow-actions.outputs.repository
