@@ -259,7 +259,7 @@ runs:
         cache-type: ${{ inputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
-    - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+    - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       id: cache
       with:
         path: cache-mount
@@ -273,7 +273,7 @@ runs:
         dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
-    - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+    - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
       with:
         registry: ${{ inputs.oci-registry }}
         username: ${{ inputs.oci-registry-username }}
