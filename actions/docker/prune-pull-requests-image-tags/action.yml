@@ -53,34 +53,36 @@ runs:
 
     - id: get-tags-to-delete
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        PULL_REQUEST_TAG_FILTER: ${{ inputs.pull-request-tag-filter }}
+        PRESERVE_TAGS_FILTER: ${{ inputs.preserve-tags-filter }}
+        IMAGE_NAME: ${{ steps.image-name.outputs.image-name }}
+        IS_ORGANIZATION: ${{ steps.is-organization-or-user.outputs.is-organization }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const pullRequestTagFilter = `${{ inputs.pull-request-tag-filter }}`;
+          const pullRequestTagFilter = process.env.PULL_REQUEST_TAG_FILTER;
           if (!pullRequestTagFilter.length) {
-              core.setFailed('Input "pull-request-tag-filter" is undefined');
-              return;
+              return core.setFailed('Input "pull-request-tag-filter" is undefined');
           }
 
           // Assert that the regex has a valid capture group for the pull request number
           const hasCaptureGroupMatch = pullRequestTagFilter.match(/\([^?]([^)]+)\)/g);
           if (!hasCaptureGroupMatch) {
-            core.setFailed(
+            return core.setFailed(
               `Input "pull-request-tag-filter" ${pullRequestTagFilter} must have a capture group for the pull request number`
             );
-            return;
           }
 
           if (hasCaptureGroupMatch.length !== 1) {
-            core.setFailed(
+            return core.setFailed(
               `Input "pull-request-tag-filter" ${pullRequestTagFilter} must have only one capture group for the pull request number`
             );
-            return;
           }
 
-          const imageName = `${{ steps.image-name.outputs.image-name }}`;
-          const isOrganization = `${{ steps.is-organization-or-user.outputs.is-organization }}` === 'true';
-          const preserveTagsFilter = `${{ inputs.preserve-tags-filter }}`;
+          const imageName = process.env.IMAGE_NAME;
+          const isOrganization = process.env.IS_ORGANIZATION === 'true';
+          const preserveTagsFilter = process.env.PRESERVE_TAGS_FILTER;
 
           const script = require(`${{ github.action_path }}/index.js`)
           const tagsToDelete = await script({
