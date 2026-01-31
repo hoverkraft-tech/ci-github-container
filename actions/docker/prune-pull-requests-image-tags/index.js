@@ -126,18 +126,7 @@ async function getTagsToDeleteFromPackageVersion({
     return [];
   }
 
-  // Filter out tags that should be preserved
-  if (preserveTagsFilter && preserveTagsFilter.length > 0) {
-    const preservedTags = tags.filter((tag) => tag.match(preserveTagsFilter));
-    if (preservedTags.length > 0) {
-      core.debug(
-        `Preserving tags matching filter ${preserveTagsFilter}: ${preservedTags.join(", ")}`,
-      );
-    }
-    return tags.filter((tag) => !tag.match(preserveTagsFilter));
-  }
-
-  return tags;
+  return filterPreservedTags({ tags, preserveTagsFilter, core });
 }
 
 function getPullRequestRelatedTags({ tags, pullRequestTagFilter }) {
@@ -156,6 +145,50 @@ function getPullRequestRelatedTags({ tags, pullRequestTagFilter }) {
     .filter((pullRequestNumber) => pullRequestNumber);
 
   return [...new Set(pullRequestRelatedTags)];
+}
+
+function filterPreservedTags({ tags, preserveTagsFilter, core }) {
+  if (!preserveTagsFilter || preserveTagsFilter.length === 0) {
+    return tags;
+  }
+
+  let preserveRegex;
+  try {
+    preserveRegex = new RegExp(preserveTagsFilter);
+  } catch (error) {
+    core.setFailed(
+      `Invalid preserve tag filter regex "${preserveTagsFilter}". Error: ${error.message}`,
+    );
+    throw error;
+  }
+
+  const preservedTags = tags.filter((tag) => {
+    try {
+      return preserveRegex.test(tag);
+    } catch (error) {
+      core.warning(
+        `Error while applying preserve tag filter regex "${preserveTagsFilter}" to tag "${tag}". Treating tag as not preserved. Error: ${error.message}`,
+      );
+      return false;
+    }
+  });
+
+  if (preservedTags.length > 0) {
+    core.debug(
+      `Preserving tags matching filter ${preserveTagsFilter}: ${preservedTags.join(", ")}`,
+    );
+  }
+
+  return tags.filter((tag) => {
+    try {
+      return !preserveRegex.test(tag);
+    } catch (error) {
+      core.warning(
+        `Error while applying preserve tag filter regex "${preserveTagsFilter}" to tag "${tag}". Keeping tag for safety. Error: ${error.message}`,
+      );
+      return true;
+    }
+  });
 }
 
 const closedPullRequests = new Map();
