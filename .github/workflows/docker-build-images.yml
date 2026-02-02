@@ -237,7 +237,6 @@ jobs:
         env:
           IMAGES: ${{ steps.validate-inputs.outputs.images }}
           RUNS_ON_INPUT: ${{ inputs.runs-on }}
-          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
         with:
           script: |
             const imagesInput = process.env.IMAGES;
@@ -253,13 +252,10 @@ jobs:
               { runner: "windows-latest", platformPattern: /^windows\// }
             ];
 
-            const isRepositoryPrivate = process.env.REPOSITORY_PRIVATE === 'true';
-            if (!isRepositoryPrivate) {
-              standardHostedRunnerByPlatform.unshift(
-                { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available,
-                { runner: "windows-11-arm", platformPattern: /^windows\/arm/ }
-              );
-            }
+            standardHostedRunnerByPlatform.unshift(
+              { runner: "ubuntu-24.04-arm", platformPattern: /^linux\/arm/ }, // FIXME: should use latest when available,
+              { runner: "windows-11-arm", platformPattern: /^windows\/arm/ }
+            );
 
             function getPlatformRunsOn(platform) {
               if (platform.hasOwnProperty('runs-on')) {
