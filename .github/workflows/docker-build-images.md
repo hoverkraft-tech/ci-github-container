@@ -228,7 +228,7 @@ jobs:
 
 If a platform entry omits the <code>runs-on</code> field, the following default strategy applies:
 
-- When the main <code>docker-build-images</code> job uses a standard hosted runner, that runner is automatically matched to each platform.
+- When the main <code>docker-build-images</code> job uses a standard hosted runner, that runner is automatically matched to each platform (including ARM64 standard runners for private repositories).
 - If the main <code>docker-build-images</code> job uses a custom or self-hosted runner, all platforms use the same runner.
 
 <!--
