@@ -48,7 +48,7 @@ on:
 permissions: {}
 jobs:
   prune-pull-requests-images-tags:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@67e5563d6681bb610c1c961eecb6dfcd5b3cc62f # 0.30.5
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
     permissions: {}
     with:
       # JSON array of runner(s) to use.
@@ -75,6 +75,11 @@ jobs:
       #
       # Default: `^pr-([0-9]+)(?:-|$)`
       pull-request-tag-filter: ^pr-([0-9]+)(?:-|$)
+
+      # Optional regular expression to match tags that should be preserved (not deleted).
+      # Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.
+      # Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.
+      preserve-tags-filter: ""
 ````
 
 <!-- usage:end -->
@@ -95,6 +100,9 @@ jobs:
 |                               | Useful when building image with "registry" cache backend.                                                  |              |             |                        |
 | **`pull-request-tag-filter`** | The regular expression to match pull request tags.                                                         | **false**    | **string**  | `^pr-([0-9]+)(?:-\|$)` |
 |                               | Must have a capture group for the pull request number.                                                     |              |             |                        |
+| **`preserve-tags-filter`**    | Optional regular expression to match tags that should be preserved (not deleted).                          | **false**    | **string**  | -                      |
+|                               | Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.      |              |             |                        |
+|                               | Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.                                         |              |             |                        |
 
 <!-- inputs:end -->
 <!-- secrets:start -->
@@ -125,7 +133,7 @@ This project is licensed under the MIT License.
 
 SPDX-License-Identifier: MIT
 
-Copyright © 2025 hoverkraft-tech
+Copyright © 2026 hoverkraft-tech
 
 For more details, see the [license](http://choosealicense.com/licenses/mit/).
 

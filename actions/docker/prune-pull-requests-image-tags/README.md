@@ -44,7 +44,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@67e5563d6681bb610c1c961eecb6dfcd5b3cc62f # 0.30.5
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
   with:
     # Image name
     image: ""
@@ -52,6 +52,11 @@ permissions:
     # The regular expression to match pull request tags. Must have a capture group for the pull request number.
     # Default: `^pr-([0-9]+)(?:-|$)`
     pull-request-tag-filter: ^pr-([0-9]+)(?:-|$)
+
+    # Optional regular expression to match tags that should be preserved (not deleted).
+    # Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.
+    # Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.
+    preserve-tags-filter: ""
 
     # GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.
     # See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries.
@@ -70,6 +75,9 @@ permissions:
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------- |
 | **`image`**                   | Image name                                                                                                                                                 | **false**    | -                      |
 | **`pull-request-tag-filter`** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                  | **false**    | `^pr-([0-9]+)(?:-\|$)` |
+| **`preserve-tags-filter`**    | Optional regular expression to match tags that should be preserved (not deleted).                                                                          | **false**    | -                      |
+|                               | Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.                                                      |              |                        |
+|                               | Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.                                                                                         |              |                        |
 | **`github-token`**            | GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.                                                        | **false**    | `${{ github.token }}`  |
 |                               | See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>. |              |                        |
 
@@ -122,7 +130,7 @@ This project is licensed under the MIT License.
 
 SPDX-License-Identifier: MIT
 
-Copyright © 2025 hoverkraft
+Copyright © 2026 hoverkraft
 
 For more details, see the [license](http://choosealicense.com/licenses/mit/).
 
