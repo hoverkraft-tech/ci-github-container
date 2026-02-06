@@ -142,7 +142,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@b17226e57c8ef31f860719766656ebb6df017218 # 0.31.6
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@f24ce3360a8abf9bf386a62ab13d0ae5de5f9d13 # 0.31.7
       with:
         value: ${{ inputs.platform }}
 
@@ -266,7 +266,7 @@ runs:
         key: cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}
 
     - name: Restore Docker cache mounts
-      uses: reproducible-containers/buildkit-cache-dance@5b81f4d29dc8397a7d341dba3aeecc7ec54d6361 # v3.3.0
+      uses: reproducible-containers/buildkit-cache-dance@6f699a72a59e4252f05a7435430009b77e25fe06 # v3.3.1
       with:
         builder: ${{ steps.setup-buildx.outputs.name }}
         cache-dir: cache-mount
