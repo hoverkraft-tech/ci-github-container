@@ -55,7 +55,7 @@ permissions:
 
     # Optional regular expression to match tags that should be preserved (not deleted).
     # Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.
-    # Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.
+    # Example: `^v.*` to preserve version tags like v1.0.0, v2.1.3, etc.
     preserve-tags-filter: ""
 
     # GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.
@@ -77,7 +77,7 @@ permissions:
 | **`pull-request-tag-filter`** | The regular expression to match pull request tags. Must have a capture group for the pull request number.                                                  | **false**    | `^pr-([0-9]+)(?:-\|$)` |
 | **`preserve-tags-filter`**    | Optional regular expression to match tags that should be preserved (not deleted).                                                                          | **false**    | -                      |
 |                               | Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.                                                      |              |                        |
-|                               | Example: "^v.\*" to preserve version tags like v1.0.0, v2.1.3, etc.                                                                                        |              |                        |
+|                               | Example: `^v.*` to preserve version tags like v1.0.0, v2.1.3, etc.                                                                                         |              |                        |
 | **`github-token`**            | GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.                                                        | **false**    | `${{ github.token }}`  |
 |                               | See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>. |              |                        |
 
