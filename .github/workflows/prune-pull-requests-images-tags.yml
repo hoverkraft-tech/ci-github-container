@@ -41,7 +41,7 @@ on: # yamllint disable-line rule:truthy
         description: |
           Optional regular expression to match tags that should be preserved (not deleted).
           Tags matching this pattern will never be deleted, even if they are on a package version with PR tags.
-          Example: "^v.*" to preserve version tags like v1.0.0, v2.1.3, etc.
+          Example: `^v.*` to preserve version tags like v1.0.0, v2.1.3, etc.
         default: ""
         type: string
         required: false
