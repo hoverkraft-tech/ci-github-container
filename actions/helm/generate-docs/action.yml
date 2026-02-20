@@ -129,7 +129,7 @@ runs:
           }
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@f24ce3360a8abf9bf386a62ab13d0ae5de5f9d13 # 0.31.7
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
 
     - uses: losisin/helm-docs-github-action@6f957579ac122ecc167bf515fe84e828686c9a15 # v1.7.1
       with:
@@ -142,7 +142,7 @@ runs:
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@c9d9d041ba4ef35695ee469c4782fa6a8bbebbcc # 0.21.2
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@775ce0902c528062cc94141dd7d13261083b752a # 0.22.0
       with:
         working-directory: ${{ github.action_path }}
 
@@ -231,7 +231,7 @@ runs:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@f24ce3360a8abf9bf386a62ab13d0ae5de5f9d13 # 0.31.7
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}

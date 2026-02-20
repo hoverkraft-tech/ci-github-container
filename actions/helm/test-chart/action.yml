@@ -72,7 +72,7 @@ runs:
         echo "::error ::At least one of 'enable-lint' or 'enable-install' input must be true"
         exit 1
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@f24ce3360a8abf9bf386a62ab13d0ae5de5f9d13 # 0.31.7
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
       with:
         fetch-depth: 0
 
@@ -153,7 +153,7 @@ runs:
 
     - name: Create kind cluster
       if: ${{ inputs.enable-install == 'true' }}
-      uses: helm/kind-action@92086f6be054225fa813e0a4b13787fc9088faab # v1.13.0
+      uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
 
     - name: Install default OCI registry secrets
       id: oci-registry-secret
