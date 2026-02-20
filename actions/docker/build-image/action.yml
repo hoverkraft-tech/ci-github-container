@@ -142,7 +142,7 @@ runs:
         rm -fr ./self-actions
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@f24ce3360a8abf9bf386a62ab13d0ae5de5f9d13 # 0.31.7
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
       with:
         value: ${{ inputs.platform }}
 
@@ -251,7 +251,7 @@ runs:
 
     # Caching setup
     - id: cache-arguments
-      uses: int128/docker-build-cache-config-action@6f35e569a326eea3621c1f4422031b047a535e4a # v1.44.0
+      uses: int128/docker-build-cache-config-action@3a4a4fababc091be29633e5a2b3bbf523996802a # v1.47.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -281,7 +281,7 @@ runs:
     # jscpd:ignore-end
 
     - id: build
-      uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
       with:
         context: ${{ inputs.context }}
         build-args: ${{ inputs.build-args }}
