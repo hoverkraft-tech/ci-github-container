@@ -28,8 +28,8 @@ inputs:
       OCI registry password.
       See https://github.com/appany/helm-oci-chart-releaser#usage.
     default: ${{ github.token }}
-  chart:
-    description: "Chart name to release"
+  name:
+    description: "Chart repository name to release"
     required: true
   path:
     description: "Path to the chart to release"
@@ -338,9 +338,10 @@ runs:
     - id: chart-releaser
       uses: appany/helm-oci-chart-releaser@d94988c92bed2e09c6113981f15f8bb495d10943 # v0.5.0
       with:
-        name: ${{ github.event.repository.name }}
-        repository: ${{ github.repository }}/charts/${{ inputs.chart }}
+        name: ${{ inputs.name }}
+        repository: ${{ github.repository }}/charts
         tag: ${{ inputs.tag }}
+        app_version: ${{ inputs.tag }}
         path: ${{ inputs.path }}
         registry: ${{ inputs.oci-registry }}
         registry_username: ${{ inputs.oci-registry-username }}
