@@ -98,9 +98,11 @@ on: # yamllint disable-line rule:truthy
           Inline BuildKit daemon configuration.
           See https://github.com/docker/setup-buildx-action#inputs.
           Example for insecure registry:
+            ```ini
             [registry."my-registry.local:5000"]
               http = true
               insecure = true
+            ```
         type: string
         required: false
       cache-registry:
