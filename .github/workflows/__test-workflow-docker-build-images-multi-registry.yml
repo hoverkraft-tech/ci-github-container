@@ -1,0 +1,88 @@
+---
+name: Test for "docker-build-images" workflow - Multi registry inputs
+run-name: Test for "docker-build-images" workflow - Multi registry inputs
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions:
+  contents: read
+  issues: read
+  packages: write
+  pull-requests: read
+  id-token: write
+
+jobs:
+  act-build-images-multi-registry:
+    name: Act - Build images with structured registry inputs
+    uses: ./.github/workflows/docker-build-images.yml
+    secrets:
+      oci-registry-password: |
+        {"ghcr.io":"${{ secrets.GITHUB_TOKEN }}"}
+      build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+    with:
+      cache-type: "registry"
+      sign: false
+      oci-registry: |
+        {"pull":["docker.io","ghcr.io"],"push":"ghcr.io","cache":"ghcr.io"}
+      oci-registry-username: |
+        {"ghcr.io":"${{ github.repository_owner }}"}
+      images: |
+        [
+          {
+            "name": "test-multi-registry-inputs",
+            "context": ".",
+            "dockerfile": "./tests/application/Dockerfile",
+            "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
+            "target": "prod",
+            "platforms": ["linux/amd64"]
+          }
+        ]
+
+  assert-multi-registry:
+    name: Assert - Build images with structured registry inputs
+    needs: act-build-images-multi-registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Assert built image output and pullability
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          BUILT_IMAGES: ${{ needs.act-build-images-multi-registry.outputs.built-images }}
+          EXPECTED_IMAGE: ghcr.io/${{ github.repository }}/test-multi-registry-inputs
+        with:
+          script: |
+            const assert = require("assert");
+            const sha = `${{ github.sha }}`;
+
+            const builtImages = JSON.parse(process.env.BUILT_IMAGES);
+            const builtImage = builtImages["test-multi-registry-inputs"];
+
+            assert(builtImage, `"built-images" output does not contain "test-multi-registry-inputs" image`);
+            assert.equal(builtImage.registry, "ghcr.io", `"registry" output is not valid`);
+            assert.match(builtImage.digest, /^sha256:[0-9a-f]{64}$/, `"digest" output is not valid`);
+
+            const expectedTag = `${{ github.event_name }}` === "pull_request"
+              ? `pr-${{ github.event.pull_request.number }}-${sha.substring(0, 7)}`
+              : `${{ github.ref_name }}`;
+
+            const expectedImage = `${process.env.EXPECTED_IMAGE}:${expectedTag}@${builtImage.digest}`;
+            assert.equal(builtImage.images[0], expectedImage, `"image" output is not valid`);
+
+            await exec.exec("docker", ["pull", expectedImage]);
+
+      - name: Assert registry cache usage with structured inputs
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          EXPECTED_CACHE_IMAGE: ghcr.io/${{ github.repository }}/test-multi-registry-inputs/cache
+          EXPECTED_CACHE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
+        with:
+          script: |
+            const cacheImage = `${process.env.EXPECTED_CACHE_IMAGE}:${process.env.EXPECTED_CACHE_TAG}-linux-amd64`;
+            await exec.exec("docker", ["manifest", "inspect", cacheImage]);

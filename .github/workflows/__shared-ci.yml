@@ -59,6 +59,12 @@ jobs:
     uses: ./.github/workflows/__test-workflow-docker-build-images-caching.yml
     secrets: inherit
 
+  test-workflow-docker-build-images-multi-registry:
+    name: Test docker build images - Multi registry inputs
+    needs: linter
+    uses: ./.github/workflows/__test-workflow-docker-build-images-multi-registry.yml
+    secrets: inherit
+
   test-workflow-docker-build-images-platforms-and-signing:
     name: Test docker build images - Platforms and Signing
     needs: linter

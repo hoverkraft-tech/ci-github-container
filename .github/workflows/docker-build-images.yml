@@ -15,13 +15,22 @@ on: # yamllint disable-line rule:truthy
         default: '["ubuntu-latest"]'
         required: false
       oci-registry:
-        description: "OCI registry where to pull and push images"
+        description: |
+          OCI registry configuration used to pull, push and cache images.
+          Accepts either a registry hostname string (legacy format) or a JSON object.
+          JSON object keys:
+          - `default`: fallback registry for unspecified operations
+          - `pull`: string or array of registries to authenticate for pulls
+          - `push`: registry used for published images
+          - `cache`: registry used when `cache-type` is `registry`
         type: string
         default: "ghcr.io"
         required: false
       oci-registry-username:
         description: |
-          Username used to log against the OCI registry.
+          Username configuration used to log against OCI registries.
+          Accepts either a single username string (legacy format) or a JSON object keyed by registry hostname.
+          JSON object can also define `default` as a fallback username.
           See https://github.com/docker/login-action#usage.
         type: string
         default: ${{ github.repository_owner }}
@@ -103,7 +112,9 @@ on: # yamllint disable-line rule:truthy
     secrets:
       oci-registry-password:
         description: |
-          Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry.
+          Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries.
+          Accepts either a single password/token string (legacy format) or a JSON object keyed by registry hostname.
+          JSON object can also define `default` as a fallback password/token.
           See https://github.com/docker/login-action#usage.
         required: true
       build-secrets:

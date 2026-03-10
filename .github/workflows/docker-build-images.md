@@ -73,11 +73,15 @@ jobs:
       # Default: `["ubuntu-latest"]`
       runs-on: '["ubuntu-latest"]'
 
-      # OCI registry where to pull and push images
+      # OCI registry configuration used to pull, push and cache images.
+      # Accepts either a registry hostname string or a JSON object with
+      # `default`, `pull`, `push` and `cache` keys.
       # Default: `ghcr.io`
       oci-registry: ghcr.io
 
-      # Username used to log against the OCI registry.
+      # Username configuration used to log against OCI registries.
+      # Accepts either a single username string or a JSON object keyed by registry hostname.
+      # JSON object can also define `default` as a fallback username.
       # See https://github.com/docker/login-action#usage.
       #
       # Default: `${{ github.repository_owner }}`
@@ -165,8 +169,10 @@ jobs:
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------- | -------------------------------- |
 | **`runs-on`**                           | Runner to use. JSON array of runners.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **false**    | **string**  | `["ubuntu-latest"]`              |
 |                                         | See <https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job>.                                                                                                                                                                                                                                                                                                                                                                                                                          |              |             |                                  |
-| **`oci-registry`**                      | OCI registry where to pull and push images                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **false**    | **string**  | `ghcr.io`                        |
-| **`oci-registry-username`**             | Username used to log against the OCI registry.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | **false**    | **string**  | `${{ github.repository_owner }}` |
+| **`oci-registry`**                      | OCI registry configuration used to pull, push and cache images.                                                                                                                                                                                                                                                                                                                                                                                                                                             | **false**    | **string**  | `ghcr.io`                        |
+|                                         | Accepts a single registry hostname or a JSON object with `default`, `pull`, `push` and `cache` keys.                                                                                                                                                                                                                                                                                                                                                                                                        |              |             |                                  |
+| **`oci-registry-username`**             | Username configuration used to log against OCI registries.                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **false**    | **string**  | `${{ github.repository_owner }}` |
+|                                         | Accepts a single username or a JSON object keyed by registry hostname, with optional `default`.                                                                                                                                                                                                                                                                                                                                                                                                             |              |             |                                  |
 |                                         | See <https://github.com/docker/login-action#usage>.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |              |             |                                  |
 | **`images`**                            | Images to build parameters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **true**     | **string**  | -                                |
 |                                         | JSON array of objects.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |              |             |                                  |
@@ -193,16 +199,45 @@ jobs:
 
 ## Secrets
 
-| **Secret**                        | **Description**                                                                                              | **Required** |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------ |
-| **`oci-registry-password`**       | Password or GitHub token (`packages:read` and `packages:write` scopes) used to log against the OCI registry. | **true**     |
-|                                   | See <https://github.com/docker/login-action#usage>.                                                          |              |
-| **`build-secrets`**               | List of secrets to expose to the build.                                                                      | **false**    |
-|                                   | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                              |              |
-| **`build-secret-github-app-key`** | GitHub App private key to generate GitHub token to be passed as build secret env.                            | **false**    |
-|                                   | See <https://github.com/actions/create-github-app-token>.                                                    |              |
+| **Secret**                        | **Description**                                                                                                          | **Required** |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| **`oci-registry-password`**       | Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries. | **true**     |
+|                                   | Accepts a single password/token or a JSON object keyed by registry hostname, with optional `default`.                    |              |
+|                                   | See <https://github.com/docker/login-action#usage>.                                                                      |              |
+| **`build-secrets`**               | List of secrets to expose to the build.                                                                                  | **false**    |
+|                                   | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                          |              |
+| **`build-secret-github-app-key`** | GitHub App private key to generate GitHub token to be passed as build secret env.                                        | **false**    |
+|                                   | See <https://github.com/actions/create-github-app-token>.                                                                |              |
 
 <!-- secrets:end -->
+
+## Multiple registries
+
+The legacy single-registry format still works:
+
+```yaml
+with:
+  oci-registry: ghcr.io
+  oci-registry-username: ${{ github.repository_owner }}
+secrets:
+  oci-registry-password: ${{ github.token }}
+```
+
+To configure distinct pull, push and cache registries, pass JSON objects:
+
+```yaml
+with:
+  oci-registry: |
+    {"pull":["docker.io","ghcr.io"],"push":"ghcr.io","cache":"ghcr.io"}
+  oci-registry-username: |
+    {"ghcr.io":"${{ github.repository_owner }}"}
+secrets:
+  oci-registry-password: |
+    {"ghcr.io":"${{ github.token }}"}
+```
+
+Registry credentials are resolved by hostname, then by the optional `default` entry when present.
+Optional pull registries without credentials are skipped, which is useful for public registries such as Docker Hub.
 
 ### Images entry parameters
 

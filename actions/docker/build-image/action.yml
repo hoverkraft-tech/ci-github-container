@@ -12,18 +12,29 @@ branding:
 
 inputs:
   oci-registry:
-    description: "OCI registry where to pull and push images"
+    description: |
+      OCI registry configuration used to pull, push and cache images.
+      Accepts either a registry hostname string (legacy format) or a JSON object.
+      JSON object keys:
+      - `default`: fallback registry for unspecified operations
+      - `pull`: string or array of registries to authenticate for pulls
+      - `push`: registry used for published images
+      - `cache`: registry used when `cache-type` is `registry`
     default: "ghcr.io"
     required: true
   oci-registry-username:
     description: |
-      Username used to log against the OCI registry.
+      Username configuration used to log against OCI registries.
+      Accepts either a single username string (legacy format) or a JSON object keyed by registry hostname.
+      JSON object can also define `default` as a fallback username.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
   oci-registry-password:
     description: |
-      Password or personal access token used to log against the OCI registry.
+      Password or personal access token configuration used to log against OCI registries.
+      Accepts either a single password/token string (legacy format) or a JSON object keyed by registry hostname.
+      JSON object can also define `default` as a fallback password/token.
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
@@ -128,10 +139,169 @@ runs:
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
 
+    - id: slugify-platform
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
+      with:
+        value: ${{ inputs.platform }}
+
+    - id: resolve-oci-registries
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      with:
+        script: |
+          function parseJsonObjectInput(inputName, rawValue) {
+            const value = `${rawValue}`.trim();
+            if (!value.length) {
+              return null;
+            }
+
+            if (!value.startsWith('{')) {
+              return value;
+            }
+
+            let parsedValue;
+            try {
+              parsedValue = JSON.parse(value);
+            } catch (error) {
+              throw new Error(`"${inputName}" input is not a valid JSON object: ${error}`);
+            }
+
+            if (parsedValue === null || Array.isArray(parsedValue) || typeof parsedValue !== 'object') {
+              throw new Error(`"${inputName}" input must be a string or a JSON object`);
+            }
+
+            return parsedValue;
+          }
+
+          function normalizeString(value, fieldName) {
+            if (typeof value !== 'string') {
+              throw new Error(`"${fieldName}" must be a string`);
+            }
+
+            const trimmedValue = value.trim();
+            if (!trimmedValue.length) {
+              throw new Error(`"${fieldName}" must not be empty`);
+            }
+
+            return trimmedValue;
+          }
+
+          function normalizeOptionalString(value, fieldName) {
+            if (value === undefined || value === null) {
+              return '';
+            }
+
+            return normalizeString(value, fieldName);
+          }
+
+          function normalizeRegistryList(value, fieldName) {
+            if (value === undefined || value === null) {
+              return [];
+            }
+
+            if (typeof value === 'string') {
+              return [normalizeString(value, fieldName)];
+            }
+
+            if (!Array.isArray(value)) {
+              throw new Error(`"${fieldName}" must be a string or an array of strings`);
+            }
+
+            return value.map((item, index) => normalizeString(item, `${fieldName}[${index}]`));
+          }
+
+          function normalizeCredentialMap(inputName, rawValue) {
+            const parsedValue = parseJsonObjectInput(inputName, rawValue);
+
+            if (parsedValue === null) {
+              return {};
+            }
+
+            if (typeof parsedValue === 'string') {
+              return { default: normalizeString(parsedValue, inputName) };
+            }
+
+            return Object.entries(parsedValue).reduce((credentialMap, [key, value]) => {
+              credentialMap[key] = normalizeString(value, `${inputName}.${key}`);
+              return credentialMap;
+            }, {});
+          }
+
+          function resolveCredential(credentialMap, registry) {
+            return credentialMap[registry] ?? credentialMap.default ?? '';
+          }
+
+          const registryInput = parseJsonObjectInput('oci-registry', `${{ inputs.oci-registry }}`);
+
+          let pushRegistry = '';
+          let cacheRegistry = '';
+          let pullRegistries = [];
+
+          if (typeof registryInput === 'string') {
+            pushRegistry = normalizeString(registryInput, 'oci-registry');
+            cacheRegistry = pushRegistry;
+            pullRegistries = [pushRegistry];
+          } else {
+            const defaultRegistry = normalizeOptionalString(registryInput?.default, 'oci-registry.default');
+            pushRegistry = normalizeOptionalString(registryInput?.push, 'oci-registry.push') || defaultRegistry;
+            cacheRegistry = normalizeOptionalString(registryInput?.cache, 'oci-registry.cache') || pushRegistry || defaultRegistry;
+            pullRegistries = normalizeRegistryList(registryInput?.pull, 'oci-registry.pull');
+
+            if (!pushRegistry.length) {
+              throw new Error(`"oci-registry.push" is required when "oci-registry" uses the JSON object format`);
+            }
+
+            if (!cacheRegistry.length) {
+              cacheRegistry = pushRegistry;
+            }
+          }
+
+          const cacheType = `${{ inputs.cache-type }}`.trim();
+          const requiredRegistries = new Set([pushRegistry]);
+          if (cacheType === 'registry') {
+            requiredRegistries.add(cacheRegistry);
+          }
+
+          const registriesToLogin = [...new Set([...pullRegistries, ...requiredRegistries].filter(Boolean))];
+
+          const usernameByRegistry = normalizeCredentialMap('oci-registry-username', `${{ inputs.oci-registry-username }}`);
+          const passwordByRegistry = normalizeCredentialMap('oci-registry-password', `${{ inputs.oci-registry-password }}`);
+
+          const registryLogins = registriesToLogin.map(registry => {
+            const username = resolveCredential(usernameByRegistry, registry);
+            const password = resolveCredential(passwordByRegistry, registry);
+
+            if ((username && !password) || (!username && password)) {
+              throw new Error(`Credentials for registry "${registry}" must define both username and password`);
+            }
+
+            if (requiredRegistries.has(registry) && (!username || !password)) {
+              throw new Error(`Credentials for registry "${registry}" are required`);
+            }
+
+            return {
+              registry,
+              username,
+              password,
+              required: requiredRegistries.has(registry),
+            };
+          });
+
+          const registryOutputNames = {
+            push: ['push', 'registry'].join('-'),
+            cache: ['cache', 'registry'].join('-'),
+            pull: ['pull', 'registries'].join('-'),
+            logins: ['registry', 'logins'].join('-'),
+          };
+
+          core.setOutput(registryOutputNames.push, pushRegistry);
+          core.setOutput(registryOutputNames.cache, cacheRegistry);
+          core.setOutput(registryOutputNames.pull, JSON.stringify(pullRegistries));
+          core.setOutput(registryOutputNames.logins, JSON.stringify(registryLogins));
+
     - id: metadata
       uses: ./self-actions/docker/get-image-metadata
       with:
-        oci-registry: ${{ inputs.oci-registry }}
+        oci-registry: ${{ steps.resolve-oci-registries.outputs.push-registry }}
         repository: ${{ inputs.repository }}
         image: ${{ inputs.image }}
         tag: ${{ inputs.tag }}
@@ -140,11 +310,6 @@ runs:
       # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
       run: |
         rm -fr ./self-actions
-
-    - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
-      with:
-        value: ${{ inputs.platform }}
 
     - id: get-docker-config
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -174,7 +339,10 @@ runs:
 
           const cacheType = `${{ inputs.cache-type }}`.trim();
           const metadataImage = `${{ steps.metadata.outputs.image }}`;
-          const cacheImage = cacheType === 'registry' ? `${metadataImage}/cache` : metadataImage;
+          const cacheRegistry = `${{ steps.resolve-oci-registries.outputs.cache-registry }}`.trim();
+          const metadataImageWithoutRegistry = metadataImage.replace(/^[^\/]+\//, '');
+          const cacheBaseImage = cacheRegistry.length ? `${cacheRegistry}/${metadataImageWithoutRegistry}` : metadataImage;
+          const cacheImage = cacheType === 'registry' ? `${cacheBaseImage}/cache` : metadataImage;
           core.setOutput('cache-image', cacheImage);
 
           try {
@@ -273,13 +441,42 @@ runs:
         dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
-    - uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+    - id: login-oci-registries
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
-        registry: ${{ inputs.oci-registry }}
-        username: ${{ inputs.oci-registry-username }}
-        password: ${{ inputs.oci-registry-password }}
-    # jscpd:ignore-end
+        script: |
+          const registryLoginsInput = `${{ steps.resolve-oci-registries.outputs.registry-logins }}`;
+          let registryLogins = [];
+          try {
+            registryLogins = JSON.parse(registryLoginsInput);
+          } catch (error) {
+            throw new Error(`Resolved registry logins are not a valid JSON array: ${error}`);
+          }
 
+          for (const registryLogin of registryLogins) {
+            const { registry, username, password, required } = registryLogin;
+
+            if (!username && !password) {
+              if (required) {
+                throw new Error(`Credentials for registry "${registry}" are required`);
+              }
+
+              core.info(`Skipping Docker login for optional registry "${registry}" because no credentials were provided.`);
+              continue;
+            }
+
+            await exec.exec(
+              'docker',
+              ['login', registry, '--username', username, '--password-stdin'],
+              {
+                input: `${password}\n`,
+                silent: true,
+              },
+            );
+
+            core.info(`Logged in to "${registry}".`);
+          }
+    # jscpd:ignore-end
     - id: build
       uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
       with:
