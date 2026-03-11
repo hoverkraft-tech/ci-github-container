@@ -15,9 +15,10 @@ inputs:
     description: |
       OCI registry configuration used to pull, push and cache images.
       Accepts either a registry hostname string (legacy format) or a JSON object.
+      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
       JSON object keys:
-      - `default`: fallback registry for unspecified operations
-      - `pull`: string or array of registries to authenticate for pulls
+      - `pull`: registry used to pull public or default base images
+      - `pull:<name>`: additional pull registry
       - `push`: registry used for published images
       - `cache`: registry used when `cache-type` is `registry`
     default: "ghcr.io"
@@ -25,16 +26,16 @@ inputs:
   oci-registry-username:
     description: |
       Username configuration used to log against OCI registries.
-      Accepts either a single username string (legacy format) or a JSON object keyed by registry hostname.
-      JSON object can also define `default` as a fallback username.
+      Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
+      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
   oci-registry-password:
     description: |
       Password or personal access token configuration used to log against OCI registries.
-      Accepts either a single password/token string (legacy format) or a JSON object keyed by registry hostname.
-      JSON object can also define `default` as a fallback password/token.
+      Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
+      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
@@ -185,31 +186,11 @@ runs:
             return trimmedValue;
           }
 
-          function normalizeOptionalString(value, fieldName) {
-            if (value === undefined || value === null) {
-              return '';
-            }
-
-            return normalizeString(value, fieldName);
+          function isPullRole(role) {
+            return role === 'pull' || role.startsWith('pull:');
           }
 
-          function normalizeRegistryList(value, fieldName) {
-            if (value === undefined || value === null) {
-              return [];
-            }
-
-            if (typeof value === 'string') {
-              return [normalizeString(value, fieldName)];
-            }
-
-            if (!Array.isArray(value)) {
-              throw new Error(`"${fieldName}" must be a string or an array of strings`);
-            }
-
-            return value.map((item, index) => normalizeString(item, `${fieldName}[${index}]`));
-          }
-
-          function normalizeCredentialMap(inputName, rawValue) {
+          function normalizeRoleMapInput(inputName, rawValue) {
             const parsedValue = parseJsonObjectInput(inputName, rawValue);
 
             if (parsedValue === null) {
@@ -217,73 +198,129 @@ runs:
             }
 
             if (typeof parsedValue === 'string') {
-              return { default: normalizeString(parsedValue, inputName) };
+              return { legacy: normalizeString(parsedValue, inputName) };
             }
 
-            return Object.entries(parsedValue).reduce((credentialMap, [key, value]) => {
-              credentialMap[key] = normalizeString(value, `${inputName}.${key}`);
-              return credentialMap;
+            return Object.entries(parsedValue).reduce((roleMap, [key, value]) => {
+              if (key !== 'push' && key !== 'cache' && !isPullRole(key)) {
+                throw new Error(`"${inputName}.${key}" is not supported`);
+              }
+
+              roleMap[key] = normalizeString(value, `${inputName}.${key}`);
+              return roleMap;
             }, {});
           }
 
-          function resolveCredential(credentialMap, registry) {
-            return credentialMap[registry] ?? credentialMap.default ?? '';
+          function resolveCredential(credentialMap, role, registry, pushRegistry) {
+            const legacyCredential = credentialMap.legacy ?? '';
+
+            if (role === 'push') {
+              return credentialMap.push ?? legacyCredential;
+            }
+
+            if (role === 'cache') {
+              return credentialMap.cache ?? credentialMap.push ?? legacyCredential;
+            }
+
+            if (!isPullRole(role)) {
+              return legacyCredential;
+            }
+
+            if (credentialMap[role] !== undefined) {
+              return credentialMap[role];
+            }
+
+            if (credentialMap.pull !== undefined) {
+              return credentialMap.pull;
+            }
+
+            if (registry === pushRegistry && credentialMap.push !== undefined) {
+              return credentialMap.push;
+            }
+
+            return legacyCredential;
           }
 
-          const registryInput = parseJsonObjectInput('oci-registry', `${{ inputs.oci-registry }}`);
+          const registryInput = normalizeRoleMapInput('oci-registry', `${{ inputs.oci-registry }}`);
 
           let pushRegistry = '';
           let cacheRegistry = '';
+          let pullRegistryEntries = [];
           let pullRegistries = [];
 
-          if (typeof registryInput === 'string') {
-            pushRegistry = normalizeString(registryInput, 'oci-registry');
+          if (registryInput.legacy) {
+            pushRegistry = registryInput.legacy;
             cacheRegistry = pushRegistry;
             pullRegistries = [pushRegistry];
           } else {
-            const defaultRegistry = normalizeOptionalString(registryInput?.default, 'oci-registry.default');
-            pushRegistry = normalizeOptionalString(registryInput?.push, 'oci-registry.push') || defaultRegistry;
-            cacheRegistry = normalizeOptionalString(registryInput?.cache, 'oci-registry.cache') || pushRegistry || defaultRegistry;
-            pullRegistries = normalizeRegistryList(registryInput?.pull, 'oci-registry.pull');
+            pushRegistry = registryInput.push ?? '';
+            cacheRegistry = registryInput.cache ?? pushRegistry;
+            pullRegistryEntries = Object.entries(registryInput)
+              .filter(([key]) => isPullRole(key))
+              .map(([role, registry]) => ({ role, registry }));
 
             if (!pushRegistry.length) {
               throw new Error(`"oci-registry.push" is required when "oci-registry" uses the JSON object format`);
             }
 
-            if (!cacheRegistry.length) {
-              cacheRegistry = pushRegistry;
+            if (!pullRegistryEntries.length) {
+              pullRegistryEntries = [{ role: 'pull', registry: pushRegistry }];
             }
+
+            pullRegistries = pullRegistryEntries.map(({ registry }) => registry);
           }
 
           const cacheType = `${{ inputs.cache-type }}`.trim();
-          const requiredRegistries = new Set([pushRegistry]);
+          const registryEntries = [
+            { role: 'push', registry: pushRegistry, required: true },
+            ...pullRegistryEntries.map(pullRegistryEntry => ({ ...pullRegistryEntry, required: false })),
+          ];
+
           if (cacheType === 'registry') {
-            requiredRegistries.add(cacheRegistry);
+            registryEntries.push({ role: 'cache', registry: cacheRegistry, required: true });
           }
 
-          const registriesToLogin = [...new Set([...pullRegistries, ...requiredRegistries].filter(Boolean))];
+          const usernameByRole = normalizeRoleMapInput('oci-registry-username', `${{ inputs.oci-registry-username }}`);
+          const passwordByRole = normalizeRoleMapInput('oci-registry-password', `${{ inputs.oci-registry-password }}`);
 
-          const usernameByRegistry = normalizeCredentialMap('oci-registry-username', `${{ inputs.oci-registry-username }}`);
-          const passwordByRegistry = normalizeCredentialMap('oci-registry-password', `${{ inputs.oci-registry-password }}`);
-
-          const registryLogins = registriesToLogin.map(registry => {
-            const username = resolveCredential(usernameByRegistry, registry);
-            const password = resolveCredential(passwordByRegistry, registry);
+          const registryLoginsByRegistry = new Map();
+          for (const registryEntry of registryEntries) {
+            const { role, registry, required } = registryEntry;
+            const username = resolveCredential(usernameByRole, role, registry, pushRegistry);
+            const password = resolveCredential(passwordByRole, role, registry, pushRegistry);
 
             if ((username && !password) || (!username && password)) {
-              throw new Error(`Credentials for registry "${registry}" must define both username and password`);
+              throw new Error(`Credentials for "${role}" must define both username and password`);
             }
 
-            if (requiredRegistries.has(registry) && (!username || !password)) {
-              throw new Error(`Credentials for registry "${registry}" are required`);
+            const existingRegistryLogin = registryLoginsByRegistry.get(registry);
+            if (existingRegistryLogin) {
+              const hasDifferentUsername = existingRegistryLogin.username && username && existingRegistryLogin.username !== username;
+              const hasDifferentPassword = existingRegistryLogin.password && password && existingRegistryLogin.password !== password;
+              if (hasDifferentUsername || hasDifferentPassword) {
+                throw new Error(`Conflicting credentials configured for registry "${registry}"`);
+              }
+
+              existingRegistryLogin.username ||= username;
+              existingRegistryLogin.password ||= password;
+              existingRegistryLogin.required ||= required;
+              continue;
             }
 
-            return {
+            registryLoginsByRegistry.set(registry, {
               registry,
               username,
               password,
-              required: requiredRegistries.has(registry),
-            };
+              required,
+            });
+          }
+
+          const registryLogins = [...registryLoginsByRegistry.values()].map(registryLogin => {
+            if (registryLogin.required && (!registryLogin.username || !registryLogin.password)) {
+              throw new Error(`Credentials for registry "${registryLogin.registry}" are required`);
+            }
+
+            return registryLogin;
           });
 
           const registryOutputNames = {

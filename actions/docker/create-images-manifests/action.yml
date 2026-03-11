@@ -15,9 +15,10 @@ inputs:
     description: |
       OCI registry configuration used to pull, push and cache images.
       Accepts either a registry hostname string (legacy format) or a JSON object.
+      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
       JSON object keys:
-      - `default`: fallback registry for unspecified operations
-      - `pull`: string or array of registries to authenticate for pulls
+      - `pull`: registry used to pull public or default base images
+      - `pull:<name>`: additional pull registry
       - `push`: registry used for published images
       - `cache`: registry used when `cache-type` is `registry`
     default: "ghcr.io"
@@ -25,16 +26,16 @@ inputs:
   oci-registry-username:
     description: |
       Username configuration used to log against OCI registries.
-      Accepts either a single username string (legacy format) or a JSON object keyed by registry hostname.
-      JSON object can also define `default` as a fallback username.
+      Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
+      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
   oci-registry-password:
     description: |
       Password or personal access token configuration used to log against OCI registries.
-      Accepts either a single password/token string (legacy format) or a JSON object keyed by registry hostname.
-      JSON object can also define `default` as a fallback password/token.
+      Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
+      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
@@ -144,15 +145,11 @@ runs:
             return trimmedValue;
           }
 
-          function normalizeOptionalString(value, fieldName) {
-            if (value === undefined || value === null) {
-              return '';
-            }
-
-            return normalizeString(value, fieldName);
+          function isPullRole(role) {
+            return role === 'pull' || role.startsWith('pull:');
           }
 
-          function normalizeCredentialMap(inputName, rawValue) {
+          function normalizeRoleMapInput(inputName, rawValue) {
             const parsedValue = parseJsonObjectInput(inputName, rawValue);
 
             if (parsedValue === null) {
@@ -160,17 +157,21 @@ runs:
             }
 
             if (typeof parsedValue === 'string') {
-              return { default: normalizeString(parsedValue, inputName) };
+              return { legacy: normalizeString(parsedValue, inputName) };
             }
 
-            return Object.entries(parsedValue).reduce((credentialMap, [key, value]) => {
-              credentialMap[key] = normalizeString(value, `${inputName}.${key}`);
-              return credentialMap;
+            return Object.entries(parsedValue).reduce((roleMap, [key, value]) => {
+              if (key !== 'push' && key !== 'cache' && !isPullRole(key)) {
+                throw new Error(`"${inputName}.${key}" is not supported`);
+              }
+
+              roleMap[key] = normalizeString(value, `${inputName}.${key}`);
+              return roleMap;
             }, {});
           }
 
-          function resolveCredential(credentialMap, registry) {
-            return credentialMap[registry] ?? credentialMap.default ?? '';
+          function resolvePushCredential(credentialMap) {
+            return credentialMap.push ?? credentialMap.legacy ?? '';
           }
 
           const builtImagesInput = `${{ inputs.built-images }}`;
@@ -205,31 +206,26 @@ runs:
 
           if (!registries.length) {
             const registryInputName = ['oci', 'registry'].join('-');
-            const registryInput = parseJsonObjectInput(registryInputName, `${{ inputs.oci-registry }}`);
-            if (typeof registryInput === 'string') {
-              registries.push(normalizeString(registryInput, registryInputName));
+            const registryInput = normalizeRoleMapInput(registryInputName, `${{ inputs.oci-registry }}`);
+            if (registryInput.legacy) {
+              registries.push(registryInput.legacy);
             } else {
-              const fallbackRegistry =
-                normalizeOptionalString(registryInput?.push, `${registryInputName}.push`)
-                || normalizeOptionalString(registryInput?.default, `${registryInputName}.default`)
-                || normalizeOptionalString(registryInput?.cache, `${registryInputName}.cache`);
-
-              if (!fallbackRegistry.length) {
+              const pullRegistryEntry = Object.entries(registryInput).find(([key]) => isPullRole(key));
+              const pushRegistry = registryInput.push ?? registryInput.cache ?? pullRegistryEntry?.[1] ?? '';
+              if (!pushRegistry.length) {
                 throw new Error('Unable to resolve any OCI registry to authenticate against');
               }
 
-              registries.push(fallbackRegistry);
+              registries.push(pushRegistry);
             }
           }
 
-          const usernameInputName = ['oci', 'registry', 'username'].join('-');
-          const passwordInputName = ['oci', 'registry', 'password'].join('-');
-          const usernameByRegistry = normalizeCredentialMap(usernameInputName, `${{ inputs.oci-registry-username }}`);
-          const passwordByRegistry = normalizeCredentialMap(passwordInputName, `${{ inputs.oci-registry-password }}`);
+          const usernameByRole = normalizeRoleMapInput(['oci', 'registry', 'username'].join('-'), `${{ inputs.oci-registry-username }}`);
+          const passwordByRole = normalizeRoleMapInput(['oci', 'registry', 'password'].join('-'), `${{ inputs.oci-registry-password }}`);
 
           const registryLogins = registries.map(registry => {
-            const username = resolveCredential(usernameByRegistry, registry);
-            const password = resolveCredential(passwordByRegistry, registry);
+            const username = resolvePushCredential(usernameByRole);
+            const password = resolvePushCredential(passwordByRole);
 
             if ((username && !password) || (!username && password)) {
               throw new Error(`Credentials for registry "${registry}" must define both username and password`);
