@@ -216,7 +216,7 @@ jobs:
 
 ## Multiple registries
 
-The legacy single-registry format still works:
+The default single-registry format still works:
 
 ```yaml
 with:

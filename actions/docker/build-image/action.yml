@@ -14,7 +14,7 @@ inputs:
   oci-registry:
     description: |
       OCI registry configuration used to pull, push and cache images.
-      Accepts either a registry hostname string (legacy format) or a JSON object.
+      Accepts either a registry hostname string (default format) or a JSON object.
       JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
       JSON object keys:
       - `pull`: registry used to pull public or default base images
@@ -27,7 +27,7 @@ inputs:
   oci-registry-username:
     description: |
       Username configuration used to log against OCI registries.
-      Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
+      Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.
       JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
@@ -35,7 +35,7 @@ inputs:
   oci-registry-password:
     description: |
       Password or personal access token configuration used to log against OCI registries.
-      Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
+      Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
       JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
@@ -199,7 +199,7 @@ runs:
             }
 
             if (typeof parsedValue === 'string') {
-              return { legacy: normalizeString(parsedValue, inputName) };
+              return { scalar: normalizeString(parsedValue, inputName) };
             }
 
             return Object.entries(parsedValue).reduce((roleMap, [key, value]) => {
@@ -213,18 +213,18 @@ runs:
           }
 
           function resolveCredentialByRole(credentialMap, role, registry, pushRegistry) {
-            const legacyCredential = credentialMap.legacy ?? '';
+            const defaultCredential = credentialMap.scalar ?? '';
 
             if (role === 'push') {
-              return credentialMap.push ?? legacyCredential;
+              return credentialMap.push ?? defaultCredential;
             }
 
             if (role === 'cache') {
-              return credentialMap.cache ?? credentialMap.push ?? legacyCredential;
+              return credentialMap.cache ?? credentialMap.push ?? defaultCredential;
             }
 
             if (!isPullRole(role)) {
-              return legacyCredential;
+              return defaultCredential;
             }
 
             if (credentialMap[role] !== undefined) {
@@ -239,7 +239,7 @@ runs:
               return credentialMap.push;
             }
 
-            return legacyCredential;
+            return defaultCredential;
           }
 
           const registryInput = normalizeRoleMapInput('oci-registry', `${{ inputs.oci-registry }}`);
@@ -249,8 +249,8 @@ runs:
           let pullRegistryEntries = [];
           let pullRegistries = [];
 
-          if (registryInput.legacy) {
-            pushRegistry = registryInput.legacy;
+          if (registryInput.scalar) {
+            pushRegistry = registryInput.scalar;
             cacheRegistry = pushRegistry;
             pullRegistries = [pushRegistry];
           } else {

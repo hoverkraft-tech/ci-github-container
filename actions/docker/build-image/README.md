@@ -206,7 +206,7 @@ permissions:
 
 ## Multiple registries
 
-The legacy single-registry format still works:
+The default single-registry format still works:
 
 ```yaml
 oci-registry: ghcr.io
