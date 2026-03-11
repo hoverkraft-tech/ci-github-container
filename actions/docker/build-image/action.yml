@@ -15,19 +15,20 @@ inputs:
     description: |
       OCI registry configuration used to pull, push and cache images.
       Accepts either a registry hostname string (legacy format) or a JSON object.
-      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
+      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
       JSON object keys:
       - `pull`: registry used to pull public or default base images
       - `pull:<name>`: additional pull registry
       - `push`: registry used for published images
       - `cache`: registry used when `cache-type` is `registry`
+      If no `pull` key is provided, the `push` registry is also used for pulls.
     default: "ghcr.io"
     required: true
   oci-registry-username:
     description: |
       Username configuration used to log against OCI registries.
       Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}`
+      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
@@ -35,7 +36,7 @@ inputs:
     description: |
       Password or personal access token configuration used to log against OCI registries.
       Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}`
+      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
@@ -211,7 +212,7 @@ runs:
             }, {});
           }
 
-          function resolveCredential(credentialMap, role, registry, pushRegistry) {
+          function resolveCredentialByRole(credentialMap, role, registry, pushRegistry) {
             const legacyCredential = credentialMap.legacy ?? '';
 
             if (role === 'push') {
@@ -286,8 +287,8 @@ runs:
           const registryLoginsByRegistry = new Map();
           for (const registryEntry of registryEntries) {
             const { role, registry, required } = registryEntry;
-            const username = resolveCredential(usernameByRole, role, registry, pushRegistry);
-            const password = resolveCredential(passwordByRole, role, registry, pushRegistry);
+            const username = resolveCredentialByRole(usernameByRole, role, registry, pushRegistry);
+            const password = resolveCredentialByRole(passwordByRole, role, registry, pushRegistry);
 
             if ((username && !password) || (!username && password)) {
               throw new Error(`Credentials for "${role}" must define both username and password`);
@@ -301,8 +302,13 @@ runs:
                 throw new Error(`Conflicting credentials configured for registry "${registry}"`);
               }
 
-              existingRegistryLogin.username ||= username;
-              existingRegistryLogin.password ||= password;
+              if (!existingRegistryLogin.username && username) {
+                existingRegistryLogin.username = username;
+              }
+
+              if (!existingRegistryLogin.password && password) {
+                existingRegistryLogin.password = password;
+              }
               existingRegistryLogin.required ||= required;
               continue;
             }

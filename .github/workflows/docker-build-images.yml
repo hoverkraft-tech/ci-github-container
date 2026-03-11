@@ -18,12 +18,13 @@ on: # yamllint disable-line rule:truthy
         description: |
           OCI registry configuration used to pull, push and cache images.
           Accepts either a registry hostname string (legacy format) or a JSON object.
-          JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
+          JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
           JSON object keys:
           - `pull`: registry used to pull public or default base images
           - `pull:<name>`: additional pull registry
           - `push`: registry used for published images
           - `cache`: registry used when `cache-type` is `registry`
+          If no `pull` key is provided, the `push` registry is also used for pulls.
         type: string
         default: "ghcr.io"
         required: false
@@ -31,7 +32,7 @@ on: # yamllint disable-line rule:truthy
         description: |
           Username configuration used to log against OCI registries.
           Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
-          JSON example: `{"pull:private":"my-user","push":"my-user","cache":"my-user"}`
+          JSON example: `{"pull:private":"my-user","push":"my-user"}`
           See https://github.com/docker/login-action#usage.
         type: string
         default: ${{ github.repository_owner }}
@@ -115,7 +116,7 @@ on: # yamllint disable-line rule:truthy
         description: |
           Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries.
           Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
-          JSON example: `{"pull:private":"my-token","push":"my-token","cache":"my-token"}`
+          JSON example: `{"pull:private":"my-token","push":"my-token"}`
           See https://github.com/docker/login-action#usage.
         required: true
       build-secrets:

@@ -15,7 +15,7 @@ inputs:
     description: |
       OCI registry configuration used to pull, push and cache images.
       Accepts either a registry hostname string (legacy format) or a JSON object.
-      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
+      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
       JSON object keys:
       - `pull`: registry used to pull public or default base images
       - `pull:<name>`: additional pull registry
@@ -27,7 +27,7 @@ inputs:
     description: |
       Username configuration used to log against OCI registries.
       Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}`
+      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
@@ -35,7 +35,7 @@ inputs:
     description: |
       Password or personal access token configuration used to log against OCI registries.
       Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}`
+      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
@@ -210,8 +210,8 @@ runs:
             if (registryInput.legacy) {
               registries.push(registryInput.legacy);
             } else {
-              const pullRegistryEntry = Object.entries(registryInput).find(([key]) => isPullRole(key));
-              const pushRegistry = registryInput.push ?? registryInput.cache ?? pullRegistryEntry?.[1] ?? '';
+              const [, firstPullRegistryValue] = Object.entries(registryInput).find(([key]) => isPullRole(key)) ?? [];
+              const pushRegistry = registryInput.push ?? registryInput.cache ?? firstPullRegistryValue ?? '';
               if (!pushRegistry.length) {
                 throw new Error('Unable to resolve any OCI registry to authenticate against');
               }

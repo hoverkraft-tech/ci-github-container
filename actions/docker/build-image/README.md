@@ -52,7 +52,7 @@ permissions:
     # Accepts either a registry hostname string or a JSON object with
     # `pull`, `pull:<name>`, `push` and `cache` keys.
     # Example:
-    # `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
+    # `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
     # This input is required.
     # Default: `ghcr.io`
     oci-registry: ghcr.io
@@ -60,7 +60,7 @@ permissions:
     # Username configuration used to log against OCI registries.
     # Accepts either a single username string or a JSON object using the same keys as `oci-registry`.
     # Example:
-    # `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}`
+    # `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}`
     # See https://github.com/docker/login-action#usage.
     #
     # This input is required.
@@ -70,7 +70,7 @@ permissions:
     # Password or personal access token configuration used to log against OCI registries.
     # Accepts either a single password/token string or a JSON object using the same keys as `oci-registry`.
     # Example:
-    # `{"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}`
+    # `{"pull:private":"${{ github.token }}","push":"${{ github.token }}"}`
     # Can be passed in using `secrets.GITHUB_TOKEN`.
     # See https://github.com/docker/login-action#usage.
     #
@@ -218,15 +218,16 @@ To configure distinct pull, push and cache registries, pass JSON objects:
 
 ```yaml
 oci-registry: |
-  {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}
+  {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}
 oci-registry-username: |
-  {"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}
+  {"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}
 oci-registry-password: |
-  {"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}
+  {"pull:private":"${{ github.token }}","push":"${{ github.token }}"}
 ```
 
 Registry credentials are resolved by role using the same keys as `oci-registry`.
 `pull` is the default pull registry, while `pull:<name>` can be repeated for additional pull registries.
+When no pull registry is provided, the push registry is also used for pulls.
 Optional pull registries without credentials are skipped, which is useful for public registries such as Docker Hub.
 
 <!-- examples:start -->
