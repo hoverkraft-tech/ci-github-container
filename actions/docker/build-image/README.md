@@ -50,14 +50,17 @@ permissions:
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string or a JSON object with
-    # `default`, `pull`, `push` and `cache` keys.
+    # `pull`, `pull:<name>`, `push` and `cache` keys.
+    # Example:
+    # `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}`
     # This input is required.
     # Default: `ghcr.io`
     oci-registry: ghcr.io
 
     # Username configuration used to log against OCI registries.
-    # Accepts either a single username string or a JSON object keyed by registry hostname.
-    # JSON object can also define `default` as a fallback username.
+    # Accepts either a single username string or a JSON object using the same keys as `oci-registry`.
+    # Example:
+    # `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}`
     # See https://github.com/docker/login-action#usage.
     #
     # This input is required.
@@ -65,8 +68,9 @@ permissions:
     oci-registry-username: ${{ github.repository_owner }}
 
     # Password or personal access token configuration used to log against OCI registries.
-    # Accepts either a single password/token string or a JSON object keyed by registry hostname.
-    # JSON object can also define `default` as a fallback password/token.
+    # Accepts either a single password/token string or a JSON object using the same keys as `oci-registry`.
+    # Example:
+    # `{"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}`
     # Can be passed in using `secrets.GITHUB_TOKEN`.
     # See https://github.com/docker/login-action#usage.
     #
@@ -144,12 +148,12 @@ permissions:
 | **Input**                   | **Description**                                                                                          | **Required** | **Default**                      |
 | --------------------------- | -------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
 | **`oci-registry`**          | OCI registry configuration used to pull, push and cache images.                                          | **true**     | `ghcr.io`                        |
-|                             | Accepts a single registry hostname or a JSON object with `default`, `pull`, `push` and `cache` keys.     |              |                                  |
+|                             | Accepts a single registry hostname or a JSON object with `pull`, `pull:<name>`, `push` and `cache` keys. |              |                                  |
 | **`oci-registry-username`** | Username configuration used to log against OCI registries.                                               | **true**     | `${{ github.repository_owner }}` |
-|                             | Accepts a single username or a JSON object keyed by registry hostname, with optional `default`.          |              |                                  |
+|                             | Accepts a single username or a JSON object using the same keys as `oci-registry`.                        |              |                                  |
 |                             | See <https://github.com/docker/login-action#usage>.                                                      |              |                                  |
 | **`oci-registry-password`** | Password or personal access token configuration used to log against OCI registries.                      | **true**     | `${{ github.token }}`            |
-|                             | Accepts a single password/token or a JSON object keyed by registry hostname, with optional `default`.    |              |                                  |
+|                             | Accepts a single password/token or a JSON object using the same keys as `oci-registry`.                  |              |                                  |
 |                             | Can be passed in using `secrets.GITHUB_TOKEN`.                                                           |              |                                  |
 |                             | See <https://github.com/docker/login-action#usage>.                                                      |              |                                  |
 | **`repository`**            | Repository name.                                                                                         | **false**    | `${{ github.repository }}`       |
@@ -214,14 +218,15 @@ To configure distinct pull, push and cache registries, pass JSON objects:
 
 ```yaml
 oci-registry: |
-  {"pull":["docker.io","ghcr.io"],"push":"ghcr.io","cache":"ghcr.io"}
+  {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io","cache":"ghcr.io"}
 oci-registry-username: |
-  {"ghcr.io":"${{ github.repository_owner }}"}
+  {"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}","cache":"${{ github.repository_owner }}"}
 oci-registry-password: |
-  {"ghcr.io":"${{ github.token }}"}
+  {"pull:private":"${{ github.token }}","push":"${{ github.token }}","cache":"${{ github.token }}"}
 ```
 
-Registry credentials are resolved by hostname, then by the optional `default` entry when present.
+Registry credentials are resolved by role using the same keys as `oci-registry`.
+`pull` is the default pull registry, while `pull:<name>` can be repeated for additional pull registries.
 Optional pull registries without credentials are skipped, which is useful for public registries such as Docker Hub.
 
 <!-- examples:start -->

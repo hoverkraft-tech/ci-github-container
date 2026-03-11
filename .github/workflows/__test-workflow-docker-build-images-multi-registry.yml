@@ -18,15 +18,15 @@ jobs:
     uses: ./.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: |
-        {"ghcr.io":"${{ secrets.GITHUB_TOKEN }}"}
+        {"push":"${{ secrets.GITHUB_TOKEN }}","pull:private":"${{ secrets.GITHUB_TOKEN }}"}
       build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
     with:
       cache-type: "registry"
       sign: false
       oci-registry: |
-        {"pull":["docker.io","ghcr.io"],"push":"ghcr.io","cache":"ghcr.io"}
+        {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}
       oci-registry-username: |
-        {"ghcr.io":"${{ github.repository_owner }}"}
+        {"push":"${{ github.repository_owner }}","pull:private":"${{ github.repository_owner }}"}
       images: |
         [
           {
