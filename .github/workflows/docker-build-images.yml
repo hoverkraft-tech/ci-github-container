@@ -17,7 +17,7 @@ on: # yamllint disable-line rule:truthy
       oci-registry:
         description: |
           OCI registry configuration used to pull, push and cache images.
-          Accepts either a registry hostname string (legacy format) or a JSON object.
+          Accepts either a registry hostname string (default format) or a JSON object.
           JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
           JSON object keys:
           - `pull`: registry used to pull public or default base images
@@ -31,7 +31,7 @@ on: # yamllint disable-line rule:truthy
       oci-registry-username:
         description: |
           Username configuration used to log against OCI registries.
-          Accepts either a single username string (legacy format) or a JSON object using the same keys as `oci-registry`.
+          Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.
           JSON example: `{"pull:private":"my-user","push":"my-user"}`
           See https://github.com/docker/login-action#usage.
         type: string
@@ -115,7 +115,7 @@ on: # yamllint disable-line rule:truthy
       oci-registry-password:
         description: |
           Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries.
-          Accepts either a single password/token string (legacy format) or a JSON object using the same keys as `oci-registry`.
+          Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
           JSON example: `{"pull:private":"my-token","push":"my-token"}`
           See https://github.com/docker/login-action#usage.
         required: true
