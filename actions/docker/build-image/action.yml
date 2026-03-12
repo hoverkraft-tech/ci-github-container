@@ -152,8 +152,6 @@ runs:
         oci-registry: ${{ inputs.oci-registry }}
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
-        cache-type: ${{ inputs.cache-type }}
-        setup-docker: true
 
     - id: metadata
       uses: ./self-actions/docker/get-image-metadata

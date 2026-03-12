@@ -25,21 +25,10 @@ inputs:
       Password or personal access token configuration used to log against OCI registries.
       Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
     required: false
-  cache-type:
-    description: |
-      Cache type.
-      Used to determine whether a dedicated cache registry authentication is required.
-    default: "gha"
-    required: false
   built-images:
     description: |
       Optional built images payload used to resolve manifest publication registries.
       When provided, registry authentication targets are inferred from the built image data.
-    required: false
-  setup-docker:
-    description: |
-      Whether to ensure the Docker CLI/engine is available on the runner.
-    default: false
     required: false
   setup-buildx:
     description: |
@@ -71,7 +60,6 @@ runs:
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       env:
         BUILT_IMAGES_INPUT: ${{ inputs.built-images }}
-        CACHE_TYPE_INPUT: ${{ inputs.cache-type }}
         REGISTRY_INPUT: ${{ inputs.oci-registry }}
         REGISTRY_PASSWORD_INPUT: ${{ inputs.oci-registry-password }}
         REGISTRY_USERNAME_INPUT: ${{ inputs.oci-registry-username }}
@@ -288,6 +276,7 @@ runs:
 
           let pushRegistry = '';
           let cacheRegistry = '';
+          let hasExplicitCacheRegistry = false;
           let pullRegistryEntries = [];
           let pullRegistries = [];
 
@@ -297,6 +286,7 @@ runs:
             pullRegistries = [pushRegistry];
           } else {
             pushRegistry = registryInput.push ?? '';
+            hasExplicitCacheRegistry = typeof registryInput.cache === 'string';
             cacheRegistry = registryInput.cache ?? pushRegistry;
             pullRegistryEntries = Object.entries(registryInput)
               .filter(([key]) => isPullRole(key))
@@ -313,13 +303,12 @@ runs:
             pullRegistries = pullRegistryEntries.map(({ registry }) => registry);
           }
 
-          const cacheType = `${process.env.CACHE_TYPE_INPUT || ''}`.trim();
           const registryEntries = [
             { role: 'push', registry: pushRegistry, required: true },
             ...pullRegistryEntries.map(pullRegistryEntry => ({ ...pullRegistryEntry, required: false })),
           ];
 
-          if (cacheType === 'registry') {
+          if (hasExplicitCacheRegistry) {
             registryEntries.push({ role: 'cache', registry: cacheRegistry, required: true });
           }
 
@@ -368,14 +357,13 @@ runs:
           });
 
     - id: detect-docker
-      if: inputs.setup-docker == 'true'
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         script: |
           const dockerPath = await io.which('docker', false);
           core.setOutput('exists', dockerPath ? 'true' : 'false');
 
-    - if: inputs.setup-docker == 'true' && steps.detect-docker.outputs.exists != 'true'
+    - if: steps.detect-docker.outputs.exists != 'true'
       uses: docker/setup-docker-action@1a6edb0ba9ac496f6850236981f15d8f9a82254d # v5.0.0
 
     - if: inputs.setup-buildx != 'false'
