@@ -25,6 +25,16 @@ inputs:
       Password or personal access token configuration used to log against OCI registries.
       Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
     required: false
+  buildkitd-config-inline:
+    description: |
+      Inline BuildKit daemon configuration.
+      See https://github.com/docker/setup-buildx-action#inputs.
+      Example for insecure registry:
+        ```ini
+        [registry."my-registry.local:5000"]
+          http = true
+          insecure = true
+        ```
   built-images:
     description: |
       Optional built images payload used to resolve manifest publication registries.
@@ -387,6 +397,7 @@ runs:
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
           image=moby/buildkit:v0.27.0
+        buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
 
     - if: steps.resolve-oci-registries.outputs.has-registry-auth == 'true'
       uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
