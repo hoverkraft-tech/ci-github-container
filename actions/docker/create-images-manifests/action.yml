@@ -27,7 +27,7 @@ inputs:
     description: |
       Username configuration used to log against OCI registries.
       Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}`
+      JSON example: `{"pull:private":"$\{{ github.repository_owner }}","push":"$\{{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
@@ -35,7 +35,7 @@ inputs:
     description: |
       Password or personal access token configuration used to log against OCI registries.
       Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}"}`
+      JSON example: `{"pull:private":"$\{{ github.token }}","push":"$\{{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}

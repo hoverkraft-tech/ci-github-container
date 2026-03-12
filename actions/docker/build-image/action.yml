@@ -28,7 +28,8 @@ inputs:
     description: |
       Username configuration used to log against OCI registries.
       Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}`
+      JSON example:
+      `{"pull:private":"$\{{ github.repository_owner }}","push":"$\{{ github.repository_owner }}"}`
       See https://github.com/docker/login-action#usage.
     default: ${{ github.repository_owner }}
     required: true
@@ -36,7 +37,7 @@ inputs:
     description: |
       Password or personal access token configuration used to log against OCI registries.
       Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
-      JSON example: `{"pull:private":"${{ github.token }}","push":"${{ github.token }}"}`
+      JSON example: `{"pull:private":"$\{{ github.token }}","push":"$\{{ github.token }}"}`
       Can be passed in using `secrets.GITHUB_TOKEN`.
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
@@ -168,15 +169,24 @@ runs:
 
     - id: get-docker-config
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        CACHE_REGISTRY: ${{ steps.docker-setup.outputs.cache-registry }}
+        CACHE_TYPE_INPUT: ${{ inputs.cache-type }}
+        CONTEXT_INPUT: ${{ inputs.context }}
+        DOCKERFILE_INPUT: ${{ inputs.dockerfile }}
+        METADATA_IMAGE: ${{ steps.metadata.outputs.image }}
+        MULTI_PLATFORM_INPUT: ${{ inputs.multi-platform }}
+        PLATFORM_INPUT: ${{ inputs.platform }}
+        SLUGIFIED_PLATFORM: ${{ steps.slugify-platform.outputs.result }}
       with:
         script: |
           const fs = require('fs');
           const path = require('path');
 
           const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
-          const rawContext = `${{ inputs.context }}`.trim();
+          const rawContext = (process.env.CONTEXT_INPUT || '').trim();
           const contextPath = rawContext.length > 0 ? rawContext : '.';
-          const rawDockerfile = `${{ inputs.dockerfile }}`.trim();
+          const rawDockerfile = (process.env.DOCKERFILE_INPUT || '').trim();
           const dockerfileName = rawDockerfile.length > 0 ? rawDockerfile : 'Dockerfile';
 
           const dockerfilePath = path.resolve(workspace, contextPath, dockerfileName);
@@ -188,13 +198,16 @@ runs:
           const resolvedDockerfilePath = fs.realpathSync(dockerfilePath);
           core.setOutput('dockerfile-path', resolvedDockerfilePath);
 
-          const slugifiedPlatform = `${{ steps.slugify-platform.outputs.result }}`;
+          const slugifiedPlatform = process.env.SLUGIFIED_PLATFORM || '';
           const tagSuffix = `-${slugifiedPlatform}`;
           core.setOutput('cache-flavor', `suffix=${tagSuffix}`);
 
-          const cacheType = `${{ inputs.cache-type }}`.trim();
-          const metadataImage = `${{ steps.metadata.outputs.image }}`;
-          const cacheRegistry = `${{ steps.docker-setup.outputs.cache-registry }}`.trim();
+          const cacheType = (process.env.CACHE_TYPE_INPUT || '').trim();
+          const metadataImage = process.env.METADATA_IMAGE || '';
+          const cacheRegistry = (process.env.CACHE_REGISTRY || '').trim();
+          if (cacheType === 'registry' && !cacheRegistry.length) {
+            return core.setFailed('Cache registry is required when cache-type is set to "registry".');
+          }
           const metadataImageWithoutRegistry = metadataImage.replace(/^[^\/]+\//, '');
           const cacheBaseImage = cacheRegistry.length ? `${cacheRegistry}/${metadataImageWithoutRegistry}` : metadataImage;
           const cacheImage = cacheType === 'registry' ? `${cacheBaseImage}/cache` : metadataImage;
@@ -207,14 +220,14 @@ runs:
             // docker not available on runner
           }
 
-          const multiplatformInput = `${{ inputs.multi-platform }}`.trim().toLowerCase();
+          const multiplatformInput = (process.env.MULTI_PLATFORM_INPUT || '').trim().toLowerCase();
           const isMultiplatform = !(multiplatformInput.length === 0 || multiplatformInput === 'false');
           if (isMultiplatform) {
             core.debug('Multi-platform build is enabled.');
             core.setOutput('multi-platform', true);
           }
 
-          const platform = `${{ inputs.platform }}`.trim();
+          const platform = (process.env.PLATFORM_INPUT || '').trim();
           if (platform.length === 0) {
             return core.setFailed('Input "platform" is required.');
           }

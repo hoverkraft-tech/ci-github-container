@@ -46,9 +46,6 @@ outputs:
   pull-registries:
     description: "JSON array of registries used to pull base images."
     value: ${{ steps.resolve-oci-registries.outputs.pull-registries }}
-  registry-auth:
-    description: "JSON object suitable for docker/login-action registry-auth."
-    value: ${{ steps.resolve-oci-registries.outputs.registry-auth }}
   buildx-name:
     description: "Docker Buildx builder name."
     value: ${{ steps.setup-buildx.outputs.name }}
@@ -180,8 +177,8 @@ runs:
             return '';
           }
 
-          function createRegistryAuthMap(registryLogins) {
-            return registryLogins.reduce((registryAuth, registryLogin) => {
+          function createRegistryAuthList(registryLogins) {
+            return registryLogins.reduce((registryAuthList, registryLogin) => {
               const { registry, username, password, required } = registryLogin;
 
               if ((username && !password) || (!username && password)) {
@@ -194,24 +191,39 @@ runs:
                 }
 
                 core.info(`Skipping Docker login for optional registry "${registry}" because no credentials were provided.`);
-                return registryAuth;
+                return registryAuthList;
               }
 
-              registryAuth[registry] = {
+              registryAuthList.push({
+                registry,
                 username,
                 password,
-              };
+              });
 
-              return registryAuth;
-            }, {});
+              return registryAuthList;
+            }, []);
           }
 
-          function setOutputs({ pushRegistry = '', cacheRegistry = '', pullRegistries = [], registryAuth = {} }) {
+          function toRegistryAuthYaml(registryAuthList) {
+            return registryAuthList
+              .map(registryAuth => {
+                const lines = [
+                  `- registry: ${JSON.stringify(registryAuth.registry)}`,
+                  `  username: ${JSON.stringify(registryAuth.username)}`,
+                  `  password: ${JSON.stringify(registryAuth.password)}`,
+                ];
+
+                return lines.join('\n');
+              })
+              .join('\n');
+          }
+
+          function setOutputs({ pushRegistry = '', cacheRegistry = '', pullRegistries = [], registryAuth = [] }) {
             core.setOutput('push-registry', pushRegistry);
             core.setOutput('cache-registry', cacheRegistry);
             core.setOutput('pull-registries', JSON.stringify(pullRegistries));
-            core.setOutput('registry-auth', JSON.stringify(registryAuth));
-            core.setOutput('has-registry-auth', Object.keys(registryAuth).length ? 'true' : 'false');
+            core.setOutput('registry-auth', toRegistryAuthYaml(registryAuth));
+            core.setOutput('has-registry-auth', registryAuth.length ? 'true' : 'false');
           }
 
           const registryInputName = ['oci', 'registry'].join('-');
@@ -255,7 +267,7 @@ runs:
             const username = resolvePushCredential(usernameByRole);
             const password = resolvePushCredential(passwordByRole);
 
-            const registryAuth = createRegistryAuthMap(
+            const registryAuth = createRegistryAuthList(
               registries.map(registry => ({
                 registry,
                 username,
@@ -348,7 +360,7 @@ runs:
             });
           }
 
-          const registryAuth = createRegistryAuthMap([...registryLoginsByRegistry.values()]);
+          const registryAuth = createRegistryAuthList([...registryLoginsByRegistry.values()]);
           setOutputs({
             pushRegistry,
             cacheRegistry,
