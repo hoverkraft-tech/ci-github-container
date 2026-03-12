@@ -146,205 +146,19 @@ runs:
       with:
         value: ${{ inputs.platform }}
 
-    - id: resolve-oci-registries
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+    - id: docker-setup
+      uses: ./self-actions/docker/setup
       with:
-        script: |
-          function parseJsonObjectInput(inputName, rawValue) {
-            const value = `${rawValue}`.trim();
-            if (!value.length) {
-              return null;
-            }
-
-            if (!value.startsWith('{')) {
-              return value;
-            }
-
-            let parsedValue;
-            try {
-              parsedValue = JSON.parse(value);
-            } catch (error) {
-              throw new Error(`"${inputName}" input is not a valid JSON object: ${error}`);
-            }
-
-            if (parsedValue === null || Array.isArray(parsedValue) || typeof parsedValue !== 'object') {
-              throw new Error(`"${inputName}" input must be a string or a JSON object`);
-            }
-
-            return parsedValue;
-          }
-
-          function normalizeString(value, fieldName) {
-            if (typeof value !== 'string') {
-              throw new Error(`"${fieldName}" must be a string`);
-            }
-
-            const trimmedValue = value.trim();
-            if (!trimmedValue.length) {
-              throw new Error(`"${fieldName}" must not be empty`);
-            }
-
-            return trimmedValue;
-          }
-
-          function isPullRole(role) {
-            return role === 'pull' || role.startsWith('pull:');
-          }
-
-          function normalizeRoleMapInput(inputName, rawValue) {
-            const parsedValue = parseJsonObjectInput(inputName, rawValue);
-
-            if (parsedValue === null) {
-              return {};
-            }
-
-            if (typeof parsedValue === 'string') {
-              return { scalar: normalizeString(parsedValue, inputName) };
-            }
-
-            return Object.entries(parsedValue).reduce((roleMap, [key, value]) => {
-              if (key !== 'push' && key !== 'cache' && !isPullRole(key)) {
-                throw new Error(`"${inputName}.${key}" is not supported`);
-              }
-
-              roleMap[key] = normalizeString(value, `${inputName}.${key}`);
-              return roleMap;
-            }, {});
-          }
-
-          function resolveCredentialByRole(credentialMap, role, registry, pushRegistry) {
-            const defaultCredential = credentialMap.scalar ?? '';
-
-            if (role === 'push') {
-              return credentialMap.push ?? defaultCredential;
-            }
-
-            if (role === 'cache') {
-              return credentialMap.cache ?? credentialMap.push ?? defaultCredential;
-            }
-
-            if (!isPullRole(role)) {
-              return defaultCredential;
-            }
-
-            if (credentialMap[role] !== undefined) {
-              return credentialMap[role];
-            }
-
-            if (credentialMap.pull !== undefined) {
-              return credentialMap.pull;
-            }
-
-            if (registry === pushRegistry && credentialMap.push !== undefined) {
-              return credentialMap.push;
-            }
-
-            return defaultCredential;
-          }
-
-          const registryInput = normalizeRoleMapInput('oci-registry', `${{ inputs.oci-registry }}`);
-
-          let pushRegistry = '';
-          let cacheRegistry = '';
-          let pullRegistryEntries = [];
-          let pullRegistries = [];
-
-          if (registryInput.scalar) {
-            pushRegistry = registryInput.scalar;
-            cacheRegistry = pushRegistry;
-            pullRegistries = [pushRegistry];
-          } else {
-            pushRegistry = registryInput.push ?? '';
-            cacheRegistry = registryInput.cache ?? pushRegistry;
-            pullRegistryEntries = Object.entries(registryInput)
-              .filter(([key]) => isPullRole(key))
-              .map(([role, registry]) => ({ role, registry }));
-
-            if (!pushRegistry.length) {
-              throw new Error(`"oci-registry.push" is required when "oci-registry" uses the JSON object format`);
-            }
-
-            if (!pullRegistryEntries.length) {
-              pullRegistryEntries = [{ role: 'pull', registry: pushRegistry }];
-            }
-
-            pullRegistries = pullRegistryEntries.map(({ registry }) => registry);
-          }
-
-          const cacheType = `${{ inputs.cache-type }}`.trim();
-          const registryEntries = [
-            { role: 'push', registry: pushRegistry, required: true },
-            ...pullRegistryEntries.map(pullRegistryEntry => ({ ...pullRegistryEntry, required: false })),
-          ];
-
-          if (cacheType === 'registry') {
-            registryEntries.push({ role: 'cache', registry: cacheRegistry, required: true });
-          }
-
-          const usernameByRole = normalizeRoleMapInput('oci-registry-username', `${{ inputs.oci-registry-username }}`);
-          const passwordByRole = normalizeRoleMapInput('oci-registry-password', `${{ inputs.oci-registry-password }}`);
-
-          const registryLoginsByRegistry = new Map();
-          for (const registryEntry of registryEntries) {
-            const { role, registry, required } = registryEntry;
-            const username = resolveCredentialByRole(usernameByRole, role, registry, pushRegistry);
-            const password = resolveCredentialByRole(passwordByRole, role, registry, pushRegistry);
-
-            if ((username && !password) || (!username && password)) {
-              throw new Error(`Credentials for "${role}" must define both username and password`);
-            }
-
-            const existingRegistryLogin = registryLoginsByRegistry.get(registry);
-            if (existingRegistryLogin) {
-              const hasDifferentUsername = existingRegistryLogin.username && username && existingRegistryLogin.username !== username;
-              const hasDifferentPassword = existingRegistryLogin.password && password && existingRegistryLogin.password !== password;
-              if (hasDifferentUsername || hasDifferentPassword) {
-                throw new Error(`Conflicting credentials configured for registry "${registry}"`);
-              }
-
-              if (!existingRegistryLogin.username && username) {
-                existingRegistryLogin.username = username;
-              }
-
-              if (!existingRegistryLogin.password && password) {
-                existingRegistryLogin.password = password;
-              }
-              existingRegistryLogin.required ||= required;
-              continue;
-            }
-
-            registryLoginsByRegistry.set(registry, {
-              registry,
-              username,
-              password,
-              required,
-            });
-          }
-
-          const registryLogins = [...registryLoginsByRegistry.values()].map(registryLogin => {
-            if (registryLogin.required && (!registryLogin.username || !registryLogin.password)) {
-              throw new Error(`Credentials for registry "${registryLogin.registry}" are required`);
-            }
-
-            return registryLogin;
-          });
-
-          const registryOutputNames = {
-            push: ['push', 'registry'].join('-'),
-            cache: ['cache', 'registry'].join('-'),
-            pull: ['pull', 'registries'].join('-'),
-            logins: ['registry', 'logins'].join('-'),
-          };
-
-          core.setOutput(registryOutputNames.push, pushRegistry);
-          core.setOutput(registryOutputNames.cache, cacheRegistry);
-          core.setOutput(registryOutputNames.pull, JSON.stringify(pullRegistries));
-          core.setOutput(registryOutputNames.logins, JSON.stringify(registryLogins));
+        oci-registry: ${{ inputs.oci-registry }}
+        oci-registry-username: ${{ inputs.oci-registry-username }}
+        oci-registry-password: ${{ inputs.oci-registry-password }}
+        cache-type: ${{ inputs.cache-type }}
+        setup-docker: true
 
     - id: metadata
       uses: ./self-actions/docker/get-image-metadata
       with:
-        oci-registry: ${{ steps.resolve-oci-registries.outputs.push-registry }}
+        oci-registry: ${{ steps.docker-setup.outputs.push-registry }}
         repository: ${{ inputs.repository }}
         image: ${{ inputs.image }}
         tag: ${{ inputs.tag }}
@@ -382,7 +196,7 @@ runs:
 
           const cacheType = `${{ inputs.cache-type }}`.trim();
           const metadataImage = `${{ steps.metadata.outputs.image }}`;
-          const cacheRegistry = `${{ steps.resolve-oci-registries.outputs.cache-registry }}`.trim();
+          const cacheRegistry = `${{ steps.docker-setup.outputs.cache-registry }}`.trim();
           const metadataImageWithoutRegistry = metadataImage.replace(/^[^\/]+\//, '');
           const cacheBaseImage = cacheRegistry.length ? `${cacheRegistry}/${metadataImageWithoutRegistry}` : metadataImage;
           const cacheImage = cacheType === 'registry' ? `${cacheBaseImage}/cache` : metadataImage;
@@ -443,22 +257,10 @@ runs:
             }
           }
 
-    - if: steps.get-docker-config.outputs.docker-exists != 'true'
-      uses: docker/setup-docker-action@1a6edb0ba9ac496f6850236981f15d8f9a82254d # v5.0.0
-
     - if: steps.get-docker-config.outputs.platform-exists != 'true'
       uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
       with:
         platforms: ${{ inputs.platform }}
-
-    - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-      id: setup-buildx
-      with:
-        # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.31.1
-        # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
-        driver-opts: |
-          image=moby/buildkit:v0.27.0
 
     # Caching setup
     - id: cache-arguments
@@ -479,46 +281,10 @@ runs:
     - name: Restore Docker cache mounts
       uses: reproducible-containers/buildkit-cache-dance@1b8ab18fbda5ad3646e3fcc9ed9dd41ce2f297b4 # v3.3.2
       with:
-        builder: ${{ steps.setup-buildx.outputs.name }}
+        builder: ${{ steps.docker-setup.outputs.buildx-name }}
         cache-dir: cache-mount
         dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         skip-extraction: ${{ steps.cache.outputs.cache-hit }}
-
-    - id: login-oci-registries
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      with:
-        script: |
-          const registryLoginsInput = `${{ steps.resolve-oci-registries.outputs.registry-logins }}`;
-          let registryLogins = [];
-          try {
-            registryLogins = JSON.parse(registryLoginsInput);
-          } catch (error) {
-            throw new Error(`Resolved registry logins are not a valid JSON array: ${error}`);
-          }
-
-          for (const registryLogin of registryLogins) {
-            const { registry, username, password, required } = registryLogin;
-
-            if (!username && !password) {
-              if (required) {
-                throw new Error(`Credentials for registry "${registry}" are required`);
-              }
-
-              core.info(`Skipping Docker login for optional registry "${registry}" because no credentials were provided.`);
-              continue;
-            }
-
-            await exec.exec(
-              'docker',
-              ['login', registry, '--username', username, '--password-stdin'],
-              {
-                input: `${password}\n`,
-                silent: true,
-              },
-            );
-
-            core.info(`Logged in to "${registry}".`);
-          }
     # jscpd:ignore-end
     - id: build
       uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0

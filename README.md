@@ -34,6 +34,8 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 #### - [Prune pull requests image tags](actions/docker/prune-pull-requests-image-tags/README.md)
 
+#### - [Setup](actions/docker/setup/README.md)
+
 #### - [Sign images](actions/docker/sign-images/README.md)
 
 ### Helm
