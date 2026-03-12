@@ -96,176 +96,21 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
+
+    - id: docker-setup
+      uses: ./self-actions/docker/setup
       with:
-        # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.31.1
-        # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
-        driver-opts: |
-          image=moby/buildkit:v0.27.0
+        oci-registry: ${{ inputs.oci-registry }}
+        oci-registry-username: ${{ inputs.oci-registry-username }}
+        oci-registry-password: ${{ inputs.oci-registry-password }}
+        built-images: ${{ inputs.built-images }}
 
-    - id: resolve-oci-registries
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      with:
-        script: |
-          function parseJsonObjectInput(inputName, rawValue) {
-            const value = `${rawValue}`.trim();
-            if (!value.length) {
-              return null;
-            }
-
-            if (!value.startsWith('{')) {
-              return value;
-            }
-
-            let parsedValue;
-            try {
-              parsedValue = JSON.parse(value);
-            } catch (error) {
-              throw new Error(`"${inputName}" input is not a valid JSON object: ${error}`);
-            }
-
-            if (parsedValue === null || Array.isArray(parsedValue) || typeof parsedValue !== 'object') {
-              throw new Error(`"${inputName}" input must be a string or a JSON object`);
-            }
-
-            return parsedValue;
-          }
-
-          function normalizeString(value, fieldName) {
-            if (typeof value !== 'string') {
-              throw new Error(`"${fieldName}" must be a string`);
-            }
-
-            const trimmedValue = value.trim();
-            if (!trimmedValue.length) {
-              throw new Error(`"${fieldName}" must not be empty`);
-            }
-
-            return trimmedValue;
-          }
-
-          function isPullRole(role) {
-            return role === 'pull' || role.startsWith('pull:');
-          }
-
-          function normalizeRoleMapInput(inputName, rawValue) {
-            const parsedValue = parseJsonObjectInput(inputName, rawValue);
-
-            if (parsedValue === null) {
-              return {};
-            }
-
-            if (typeof parsedValue === 'string') {
-              return { scalar: normalizeString(parsedValue, inputName) };
-            }
-
-            return Object.entries(parsedValue).reduce((roleMap, [key, value]) => {
-              if (key !== 'push' && key !== 'cache' && !isPullRole(key)) {
-                throw new Error(`"${inputName}.${key}" is not supported`);
-              }
-
-              roleMap[key] = normalizeString(value, `${inputName}.${key}`);
-              return roleMap;
-            }, {});
-          }
-
-          function resolvePushCredential(credentialMap) {
-            return credentialMap.push ?? credentialMap.scalar ?? '';
-          }
-
-          const builtImagesInput = `${{ inputs.built-images }}`;
-          let builtImages = null;
-          try {
-            builtImages = JSON.parse(builtImagesInput);
-          } catch (error) {
-            throw new Error(`"built-images" input is not a valid JSON: ${error}`);
-          }
-
-          const registries = [
-            ...new Set(
-              Object.values(builtImages)
-                .map(builtImage => {
-                  if (builtImage?.registry) {
-                    return normalizeString(builtImage.registry, `built-images.${builtImage.name || 'unknown'}.registry`);
-                  }
-
-                  const imageReference = builtImage?.images?.[0];
-                  if (typeof imageReference === 'string') {
-                    const match = imageReference.trim().match(/^([^\/]+)\//);
-                    if (match) {
-                      return match[1];
-                    }
-                  }
-
-                  return '';
-                })
-                .filter(Boolean)
-            ),
-          ];
-
-          if (!registries.length) {
-            const registryInputName = ['oci', 'registry'].join('-');
-            const registryInput = normalizeRoleMapInput(registryInputName, `${{ inputs.oci-registry }}`);
-            if (registryInput.scalar) {
-              registries.push(registryInput.scalar);
-            } else {
-              const [, firstPullRegistryValue] = Object.entries(registryInput).find(([key]) => isPullRole(key)) ?? [];
-              const pushRegistry = registryInput.push ?? registryInput.cache ?? firstPullRegistryValue ?? '';
-              if (!pushRegistry.length) {
-                throw new Error('Unable to resolve any OCI registry to authenticate against');
-              }
-
-              registries.push(pushRegistry);
-            }
-          }
-
-          const usernameByRole = normalizeRoleMapInput(['oci', 'registry', 'username'].join('-'), `${{ inputs.oci-registry-username }}`);
-          const passwordByRole = normalizeRoleMapInput(['oci', 'registry', 'password'].join('-'), `${{ inputs.oci-registry-password }}`);
-
-          const registryLogins = registries.map(registry => {
-            const username = resolvePushCredential(usernameByRole);
-            const password = resolvePushCredential(passwordByRole);
-
-            if ((username && !password) || (!username && password)) {
-              throw new Error(`Credentials for registry "${registry}" must define both username and password`);
-            }
-
-            if (!username || !password) {
-              throw new Error(`Credentials for registry "${registry}" are required`);
-            }
-
-            return { registry, username, password };
-          });
-
-          core.setOutput(['registry', 'logins'].join('-'), JSON.stringify(registryLogins));
-
-    - id: login-oci-registries
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      with:
-        script: |
-          const registryLoginsInput = `${{ steps.resolve-oci-registries.outputs.registry-logins }}`;
-          let registryLogins = [];
-          try {
-            registryLogins = JSON.parse(registryLoginsInput);
-          } catch (error) {
-            throw new Error(`Resolved registry logins are not a valid JSON array: ${error}`);
-          }
-
-          for (const registryLogin of registryLogins) {
-            const { registry, username, password } = registryLogin;
-
-            await exec.exec(
-              'docker',
-              ['login', registry, '--username', username, '--password-stdin'],
-              {
-                input: `${password}\n`,
-                silent: true,
-              },
-            );
-
-            core.info(`Logged in to "${registry}".`);
-          }
+    - shell: bash
+      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
+      run: rm -fr ./self-actions
 
     - id: create-images-manifests
       name: Create images manifests and push

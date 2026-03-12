@@ -1,0 +1,394 @@
+---
+name: "Docker - Setup"
+description: |
+  Shared action to configure Docker tooling and OCI registry authentication.
+author: hoverkraft
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  oci-registry:
+    description: |
+      OCI registry configuration used to pull, push and cache images.
+      Accepts either a registry hostname string (default format) or a JSON object.
+      JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`
+    default: "ghcr.io"
+    required: true
+  oci-registry-username:
+    description: |
+      Username configuration used to log against OCI registries.
+      Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.
+    required: false
+  oci-registry-password:
+    description: |
+      Password or personal access token configuration used to log against OCI registries.
+      Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
+    required: false
+  cache-type:
+    description: |
+      Cache type.
+      Used to determine whether a dedicated cache registry authentication is required.
+    default: "gha"
+    required: false
+  built-images:
+    description: |
+      Optional built images payload used to resolve manifest publication registries.
+      When provided, registry authentication targets are inferred from the built image data.
+    required: false
+  setup-docker:
+    description: |
+      Whether to ensure the Docker CLI/engine is available on the runner.
+    default: false
+    required: false
+  setup-buildx:
+    description: |
+      Whether to install and configure Docker Buildx.
+    default: true
+    required: false
+
+outputs:
+  push-registry:
+    description: "Registry used for published images/manifests."
+    value: ${{ steps.resolve-oci-registries.outputs.push-registry }}
+  cache-registry:
+    description: "Registry used for registry-backed build cache."
+    value: ${{ steps.resolve-oci-registries.outputs.cache-registry }}
+  pull-registries:
+    description: "JSON array of registries used to pull base images."
+    value: ${{ steps.resolve-oci-registries.outputs.pull-registries }}
+  registry-auth:
+    description: "JSON object suitable for docker/login-action registry-auth."
+    value: ${{ steps.resolve-oci-registries.outputs.registry-auth }}
+  buildx-name:
+    description: "Docker Buildx builder name."
+    value: ${{ steps.setup-buildx.outputs.name }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: resolve-oci-registries
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        BUILT_IMAGES_INPUT: ${{ inputs.built-images }}
+        CACHE_TYPE_INPUT: ${{ inputs.cache-type }}
+        REGISTRY_INPUT: ${{ inputs.oci-registry }}
+        REGISTRY_PASSWORD_INPUT: ${{ inputs.oci-registry-password }}
+        REGISTRY_USERNAME_INPUT: ${{ inputs.oci-registry-username }}
+      with:
+        script: |
+          function parseJsonObjectInput(inputName, rawValue) {
+            const value = `${rawValue}`.trim();
+            if (!value.length) {
+              return null;
+            }
+
+            if (!value.startsWith('{')) {
+              return value;
+            }
+
+            let parsedValue;
+            try {
+              parsedValue = JSON.parse(value);
+            } catch (error) {
+              throw new Error(`"${inputName}" input is not a valid JSON object: ${error}`);
+            }
+
+            if (parsedValue === null || Array.isArray(parsedValue) || typeof parsedValue !== 'object') {
+              throw new Error(`"${inputName}" input must be a string or a JSON object`);
+            }
+
+            return parsedValue;
+          }
+
+          function normalizeString(value, fieldName) {
+            if (typeof value !== 'string') {
+              throw new Error(`"${fieldName}" must be a string`);
+            }
+
+            const trimmedValue = value.trim();
+            if (!trimmedValue.length) {
+              throw new Error(`"${fieldName}" must not be empty`);
+            }
+
+            return trimmedValue;
+          }
+
+          function isPullRole(role) {
+            return role === 'pull' || role.startsWith('pull:');
+          }
+
+          function normalizeRoleMapInput(inputName, rawValue) {
+            const parsedValue = parseJsonObjectInput(inputName, rawValue);
+
+            if (parsedValue === null) {
+              return {};
+            }
+
+            if (typeof parsedValue === 'string') {
+              return { scalar: normalizeString(parsedValue, inputName) };
+            }
+
+            return Object.entries(parsedValue).reduce((roleMap, [key, value]) => {
+              if (key !== 'push' && key !== 'cache' && !isPullRole(key)) {
+                throw new Error(`"${inputName}.${key}" is not supported`);
+              }
+
+              roleMap[key] = normalizeString(value, `${inputName}.${key}`);
+              return roleMap;
+            }, {});
+          }
+
+          function resolveCredentialByRole(credentialMap, role, registry, pushRegistry) {
+            const defaultCredential = credentialMap.scalar ?? '';
+
+            if (role === 'push') {
+              return credentialMap.push ?? defaultCredential;
+            }
+
+            if (role === 'cache') {
+              return credentialMap.cache ?? credentialMap.push ?? defaultCredential;
+            }
+
+            if (!isPullRole(role)) {
+              return defaultCredential;
+            }
+
+            if (credentialMap[role] !== undefined) {
+              return credentialMap[role];
+            }
+
+            if (credentialMap.pull !== undefined) {
+              return credentialMap.pull;
+            }
+
+            if (registry === pushRegistry && credentialMap.push !== undefined) {
+              return credentialMap.push;
+            }
+
+            return defaultCredential;
+          }
+
+          function resolvePushCredential(credentialMap) {
+            return credentialMap.push ?? credentialMap.scalar ?? '';
+          }
+
+          function extractRegistryFromBuiltImage(builtImage) {
+            if (builtImage?.registry) {
+              return normalizeString(
+                builtImage.registry,
+                `built-images.${builtImage.name || 'unknown'}.registry`,
+              );
+            }
+
+            const imageReference = builtImage?.images?.[0];
+            if (typeof imageReference === 'string') {
+              const match = imageReference.trim().match(/^([^\/]+)\//);
+              if (match) {
+                return match[1];
+              }
+            }
+
+            return '';
+          }
+
+          function createRegistryAuthMap(registryLogins) {
+            return registryLogins.reduce((registryAuth, registryLogin) => {
+              const { registry, username, password, required } = registryLogin;
+
+              if ((username && !password) || (!username && password)) {
+                throw new Error(`Credentials for registry "${registry}" must define both username and password`);
+              }
+
+              if (!username && !password) {
+                if (required) {
+                  throw new Error(`Credentials for registry "${registry}" are required`);
+                }
+
+                core.info(`Skipping Docker login for optional registry "${registry}" because no credentials were provided.`);
+                return registryAuth;
+              }
+
+              registryAuth[registry] = {
+                username,
+                password,
+              };
+
+              return registryAuth;
+            }, {});
+          }
+
+          function setOutputs({ pushRegistry = '', cacheRegistry = '', pullRegistries = [], registryAuth = {} }) {
+            core.setOutput('push-registry', pushRegistry);
+            core.setOutput('cache-registry', cacheRegistry);
+            core.setOutput('pull-registries', JSON.stringify(pullRegistries));
+            core.setOutput('registry-auth', JSON.stringify(registryAuth));
+            core.setOutput('has-registry-auth', Object.keys(registryAuth).length ? 'true' : 'false');
+          }
+
+          const registryInputName = ['oci', 'registry'].join('-');
+          const registryUsernameInputName = [registryInputName, 'username'].join('-');
+          const registryPasswordInputName = [registryInputName, 'password'].join('-');
+
+          const builtImagesInput = `${process.env.BUILT_IMAGES_INPUT || ''}`.trim();
+          if (builtImagesInput.length) {
+            let builtImages;
+            try {
+              builtImages = JSON.parse(builtImagesInput);
+            } catch (error) {
+              throw new Error(`"built-images" input is not a valid JSON: ${error}`);
+            }
+
+            const registries = [
+              ...new Set(
+                Object.values(builtImages)
+                  .map(extractRegistryFromBuiltImage)
+                  .filter(Boolean),
+              ),
+            ];
+
+            if (!registries.length) {
+              const registryInput = normalizeRoleMapInput(registryInputName, `${process.env.REGISTRY_INPUT || ''}`);
+              if (registryInput.scalar) {
+                registries.push(registryInput.scalar);
+              } else {
+                const [, firstPullRegistryValue] = Object.entries(registryInput).find(([key]) => isPullRole(key)) ?? [];
+                const pushRegistry = registryInput.push ?? registryInput.cache ?? firstPullRegistryValue ?? '';
+                if (!pushRegistry.length) {
+                  throw new Error('Unable to resolve any OCI registry to authenticate against');
+                }
+
+                registries.push(pushRegistry);
+              }
+            }
+
+            const usernameByRole = normalizeRoleMapInput(registryUsernameInputName, `${process.env.REGISTRY_USERNAME_INPUT || ''}`);
+            const passwordByRole = normalizeRoleMapInput(registryPasswordInputName, `${process.env.REGISTRY_PASSWORD_INPUT || ''}`);
+            const username = resolvePushCredential(usernameByRole);
+            const password = resolvePushCredential(passwordByRole);
+
+            const registryAuth = createRegistryAuthMap(
+              registries.map(registry => ({
+                registry,
+                username,
+                password,
+                required: true,
+              })),
+            );
+
+            setOutputs({
+              pushRegistry: registries[0] ?? '',
+              cacheRegistry: registries[0] ?? '',
+              registryAuth,
+            });
+            return;
+          }
+
+          const registryInput = normalizeRoleMapInput(registryInputName, `${process.env.REGISTRY_INPUT || ''}`);
+
+          let pushRegistry = '';
+          let cacheRegistry = '';
+          let pullRegistryEntries = [];
+          let pullRegistries = [];
+
+          if (registryInput.scalar) {
+            pushRegistry = registryInput.scalar;
+            cacheRegistry = pushRegistry;
+            pullRegistries = [pushRegistry];
+          } else {
+            pushRegistry = registryInput.push ?? '';
+            cacheRegistry = registryInput.cache ?? pushRegistry;
+            pullRegistryEntries = Object.entries(registryInput)
+              .filter(([key]) => isPullRole(key))
+              .map(([role, registry]) => ({ role, registry }));
+
+            if (!pushRegistry.length) {
+              throw new Error(`"oci-registry.push" is required when "oci-registry" uses the JSON object format`);
+            }
+
+            if (!pullRegistryEntries.length) {
+              pullRegistryEntries = [{ role: 'pull', registry: pushRegistry }];
+            }
+
+            pullRegistries = pullRegistryEntries.map(({ registry }) => registry);
+          }
+
+          const cacheType = `${process.env.CACHE_TYPE_INPUT || ''}`.trim();
+          const registryEntries = [
+            { role: 'push', registry: pushRegistry, required: true },
+            ...pullRegistryEntries.map(pullRegistryEntry => ({ ...pullRegistryEntry, required: false })),
+          ];
+
+          if (cacheType === 'registry') {
+            registryEntries.push({ role: 'cache', registry: cacheRegistry, required: true });
+          }
+
+          const usernameByRole = normalizeRoleMapInput(registryUsernameInputName, `${process.env.REGISTRY_USERNAME_INPUT || ''}`);
+          const passwordByRole = normalizeRoleMapInput(registryPasswordInputName, `${process.env.REGISTRY_PASSWORD_INPUT || ''}`);
+
+          const registryLoginsByRegistry = new Map();
+          for (const registryEntry of registryEntries) {
+            const { role, registry, required } = registryEntry;
+            const username = resolveCredentialByRole(usernameByRole, role, registry, pushRegistry);
+            const password = resolveCredentialByRole(passwordByRole, role, registry, pushRegistry);
+
+            const existingRegistryLogin = registryLoginsByRegistry.get(registry);
+            if (existingRegistryLogin) {
+              const hasDifferentUsername = existingRegistryLogin.username && username && existingRegistryLogin.username !== username;
+              const hasDifferentPassword = existingRegistryLogin.password && password && existingRegistryLogin.password !== password;
+              if (hasDifferentUsername || hasDifferentPassword) {
+                throw new Error(`Conflicting credentials configured for registry "${registry}"`);
+              }
+
+              if (!existingRegistryLogin.username && username) {
+                existingRegistryLogin.username = username;
+              }
+
+              if (!existingRegistryLogin.password && password) {
+                existingRegistryLogin.password = password;
+              }
+              existingRegistryLogin.required ||= required;
+              continue;
+            }
+
+            registryLoginsByRegistry.set(registry, {
+              registry,
+              username,
+              password,
+              required,
+            });
+          }
+
+          const registryAuth = createRegistryAuthMap([...registryLoginsByRegistry.values()]);
+          setOutputs({
+            pushRegistry,
+            cacheRegistry,
+            pullRegistries,
+            registryAuth,
+          });
+
+    - id: detect-docker
+      if: inputs.setup-docker == 'true'
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      with:
+        script: |
+          const dockerPath = await io.which('docker', false);
+          core.setOutput('exists', dockerPath ? 'true' : 'false');
+
+    - if: inputs.setup-docker == 'true' && steps.detect-docker.outputs.exists != 'true'
+      uses: docker/setup-docker-action@1a6edb0ba9ac496f6850236981f15d8f9a82254d # v5.0.0
+
+    - if: inputs.setup-buildx != 'false'
+      uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      id: setup-buildx
+      with:
+        # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
+        version: v0.31.1
+        # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
+        driver-opts: |
+          image=moby/buildkit:v0.27.0
+
+    - if: steps.resolve-oci-registries.outputs.has-registry-auth == 'true'
+      uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+      with:
+        registry-auth: ${{ steps.resolve-oci-registries.outputs.registry-auth }}
