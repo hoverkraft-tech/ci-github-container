@@ -32,7 +32,7 @@ on: # yamllint disable-line rule:truthy
         description: |
           Username configuration used to log against OCI registries.
           Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.
-          JSON example: `{"pull:private":"my-user","push":"my-user"}`
+          JSON example: `{"pull:private":"$\{{ github.repository_owner }}","push":"$\{{ github.repository_owner }}"}`
           See https://github.com/docker/login-action#usage.
         type: string
         default: ${{ github.repository_owner }}
@@ -116,7 +116,7 @@ on: # yamllint disable-line rule:truthy
         description: |
           Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries.
           Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
-          JSON example: `{"pull:private":"my-token","push":"my-token"}`
+          JSON example: `{"pull:private":"$\{{ github.token }}","push":"$\{{ github.token }}"}`
           See https://github.com/docker/login-action#usage.
         required: true
       build-secrets:
