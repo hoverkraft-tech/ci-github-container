@@ -250,4 +250,98 @@ jobs:
             exit 1
           fi
 
+  tests-with-buildkitd-config-inline:
+    name: Test for "docker/build-image" action with BuildKit daemon config
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Arrange - Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Arrange - Ensure token is set
+        run: |
+          if [ -z "${{ github.token }}" ]; then
+            echo "GitHub token is not set"
+            exit 1
+          fi
+
+      - name: Act - Build image
+        id: build-image
+        uses: ./actions/docker/build-image
+        with:
+          oci-registry: ghcr.io
+          oci-registry-password: ${{ github.token }}
+          context: "."
+          dockerfile: "./tests/application/Dockerfile"
+          target: "prod"
+          platform: "linux/amd64"
+          image: application-test
+          buildkitd-config-inline: |
+            debug = true
+            [worker.oci]
+              max-parallelism = 2
+
+      - name: Assert - Check BuildKit daemon config
+        run: |
+          BUILDKIT_CONTAINER=$(docker ps --filter 'name=buildx_buildkit_' --format '{{.Names}}' | head -n 1)
+          if [ -z "$BUILDKIT_CONTAINER" ]; then
+            echo "Failed to find BuildKit container"
+            docker ps -a
+            exit 1
+          fi
+
+          BUILDKIT_CONFIG=$(docker exec "$BUILDKIT_CONTAINER" cat /etc/buildkit/buildkitd.toml)
+          printf '%s\n' "$BUILDKIT_CONFIG"
+
+          echo "$BUILDKIT_CONFIG" | grep -F 'debug = true'
+          echo "$BUILDKIT_CONFIG" | grep -F '[worker.oci]'
+          echo "$BUILDKIT_CONFIG" | grep -F 'max-parallelism = 2'
+
+      - name: Assert - Check built image output
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const assert = require("assert");
+
+            const builtImageOutput = ${{ toJSON(steps.build-image.outputs.built-image) }};
+            assert(builtImageOutput, `"built-image" output is empty`);
+
+            let builtImage;
+            try {
+              builtImage = JSON.parse(builtImageOutput);
+            } catch (error) {
+              assert.fail(`Failed to parse built image output: ${error}`);
+            }
+
+            assert(builtImage, `"built-image" output is empty`);
+            assert.equal(builtImage.name, "application-test", `"name" output is not valid`);
+            assert.match(
+              builtImage.digest,
+              /^sha256:[a-f0-9]{64}$/,
+              `"digest" output is not valid`
+            );
+
+      - uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Assert - Check docker image
+        run: |
+          IMAGE=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.image')
+          if ! docker pull "$IMAGE"; then
+            echo "Failed to pull $IMAGE"
+            exit 1
+          fi
+
+          if ! docker manifest inspect "$IMAGE"; then
+            echo "Failed to inspect $IMAGE"
+            exit 1
+          fi
+
 # jscpd:ignore-end
