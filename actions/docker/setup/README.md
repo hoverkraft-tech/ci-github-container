@@ -30,7 +30,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/setup@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
+- uses: hoverkraft-tech/ci-github-container/actions/docker/setup@c84014f56f57f8abe320ffa48adccbb997681550 # feat/docker-upgrade-buildkit-buildx
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string (default format) or a JSON object.
@@ -73,30 +73,54 @@ Shared action to configure Docker tooling and OCI registry authentication.
 
 ## Inputs
 
-| **Input**                     | **Description**                                                                                                        | **Required** | **Default** |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------ | ----------- |
-| **`oci-registry`**            | OCI registry configuration used to pull, push and cache images.                                                        | **true**     | `ghcr.io`   |
-|                               | Accepts either a registry hostname string (default format) or a JSON object.                                           |              |             |
-|                               | JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`                                         |              |             |
-| **`oci-registry-username`**   | Username configuration used to log against OCI registries.                                                             | **false**    | -           |
-|                               | Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.       |              |             |
-| **`oci-registry-password`**   | Password or personal access token configuration used to log against OCI registries.                                    | **false**    | -           |
-|                               | Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`. |              |             |
-| **`buildkitd-config-inline`** | Inline BuildKit daemon configuration.                                                                                  | **false**    | -           |
-|                               | See <https://github.com/docker/setup-buildx-action#inputs>.                                                            |              |             |
-|                               | Example for insecure registry:                                                                                         |              |             |
-|                               | ```ini
-  [registry."my-registry.local:5000"]
-    http = true
-    insecure = true
-  ```                                 |              |             |
-| **`built-images`**            | Optional built images payload used to resolve manifest publication registries.                                         | **false**    | -           |
-|                               | When provided, registry authentication targets are inferred from the built image data.                                 |              |             |
-| **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                        | **false**    | `true`      |
+| **Input**                     | **Description**                                                                                                                                  | **Required** | **Default** |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ----------- |
+| **`oci-registry`**            | OCI registry configuration used to pull, push and cache images.                                                                                  | **true**     | `ghcr.io`   |
+|                               | Accepts either a registry hostname string (default format) or a JSON object.                                                                     |              |             |
+|                               | JSON example: `{"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}`                                                                   |              |             |
+| **`oci-registry-username`**   | Username configuration used to log against OCI registries.                                                                                       | **false**    | -           |
+|                               | Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.                                 |              |             |
+| **`oci-registry-password`**   | Password or personal access token configuration used to log against OCI registries.                                                              | **false**    | -           |
+|                               | Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.                           |              |             |
+| **`buildkitd-config-inline`** | Inline BuildKit daemon configuration.                                                                                                            | **false**    | -           |
+|                               | See <https://github.com/docker/setup-buildx-action#inputs>.                                                                                      |              |             |
+|                               | Example for insecure registry:                                                                                                                   |              |             |
+|                               | <!-- textlint-disable --><pre lang="ini">[registry."my-registry.local:5000"]&#13; http = true&#13; insecure = true</pre><!-- textlint-enable --> |              |             |
+| **`built-images`**            | Optional built images payload used to resolve manifest publication registries.                                                                   | **false**    | -           |
+|                               | When provided, registry authentication targets are inferred from the built image data.                                                           |              |             |
+| **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`      |
 
 <!-- inputs:end -->
+
+### Multiple registries
+
+The default single-registry format still works:
+
+```yaml
+oci-registry: ghcr.io
+oci-registry-username: ${{ github.repository_owner }}
+oci-registry-password: ${{ github.token }}
+```
+
+To configure distinct pull, push and cache registries, pass JSON objects:
+
+```yaml
+oci-registry: |
+  {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}
+oci-registry-username: |
+  {"pull:private":"${{ github.repository_owner }}","push":"${{ github.repository_owner }}"}
+oci-registry-password: |
+  {"pull:private":"${{ github.token }}","push":"${{ github.token }}"}
+```
+
+Registry credentials are resolved by role using the same keys as `oci-registry`.
+`pull` is the default pull registry, while `pull:<name>` can be repeated for additional pull registries.
+When no pull registry is provided, the push registry is also used for pulls.
+Optional pull registries without credentials are skipped, which is useful for public registries such as Docker Hub.
+
 <!-- secrets:start -->
 <!-- secrets:end -->
+
 <!-- outputs:start -->
 
 ## Outputs

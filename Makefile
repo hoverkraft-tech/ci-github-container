@@ -33,7 +33,7 @@ npm-audit-fix: ## Execute npm audit fix
 
 ci: ## Execute CI tasks
 	$(MAKE) npm-audit-fix
-	$(MAKE) lint
+	$(MAKE) lint-fix
 
 test-build-application: ## Build the test application image
 	@docker buildx build \
