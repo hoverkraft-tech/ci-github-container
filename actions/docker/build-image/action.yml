@@ -106,11 +106,11 @@ inputs:
       Inline BuildKit daemon configuration.
       See https://github.com/docker/setup-buildx-action#inputs.
       Example for insecure registry:
-        ```ini
-        [registry."my-registry.local:5000"]
-          http = true
-          insecure = true
-        ```
+      ```ini
+      [registry."my-registry.local:5000"]
+        http = true
+        insecure = true
+      ```
     required: false
   multi-platform:
     description: |
