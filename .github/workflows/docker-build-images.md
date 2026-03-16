@@ -157,6 +157,16 @@ jobs:
       # Default: `gha`
       cache-type: gha
 
+      # Inline BuildKit daemon configuration.
+      # See https://github.com/docker/setup-buildx-action#inputs.
+      # Example for insecure registry:
+      # ```ini
+      # [registry."my-registry.local:5000"]
+      # http = true
+      # insecure = true
+      # ```
+      buildkitd-config-inline: ""
+
       # Sign built images.
       # See [sign-images](../../actions/docker/sign-images/README.md).
       #
@@ -207,6 +217,14 @@ jobs:
 |                                         | See <https://github.com/actions/create-github-app-token>.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |              |             |                                  |
 | **`cache-type`**                        | Cache type.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **false**    | **string**  | `gha`                            |
 |                                         | See <https://docs.docker.com/build/cache/backends>.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |              |             |                                  |
+| **`buildkitd-config-inline`**           | Inline BuildKit daemon configuration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **false**    | **string**  | -                                |
+|                                         | See <https://github.com/docker/setup-buildx-action#inputs>.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |              |             |                                  |
+|                                         | Example for insecure registry:                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |              |             |                                  |
+|                                         | ```ini
+  [registry."my-registry.local:5000"]
+    http = true
+    insecure = true
+  ```                                                                                                                                                                                                                                                                                                                                                                                                                      |              |             |                                  |
 | **`sign`**                              | Sign built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | **false**    | **boolean** | `true`                           |
 |                                         | See [sign-images](../../actions/docker/sign-images/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                              |              |             |                                  |
 
