@@ -76,7 +76,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@f5847cb398fe65d53794e6aba98ebdfa0801f691 # 0.32.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@4b53189212d5810f710bed89711002626977215b # 0.33.0
 
     - id: chart-values-updates
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -182,7 +182,7 @@ runs:
 
           core.setOutput('yq-command', yqCommands.join('\n'));
 
-    - uses: mikefarah/yq@5a7e72a743649b1b3a47d1a1d8214f3453173c51 # v4.52.4
+    - uses: mikefarah/yq@0f4fb8d35ec1a939d78dd6862f494d19ec589f19 # v4.52.5
       with:
         cmd: |
           ${{ steps.chart-values-updates.outputs.yq-command }}
@@ -297,7 +297,7 @@ runs:
           // Update Chart.lock file
           fs.writeFileSync(chartLockFile, updatedChartLockFileContent, 'utf8');
 
-    - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+    - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
 
     - shell: bash
       run: |
