@@ -393,10 +393,10 @@ runs:
       id: setup-buildx
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.32.1
+        version: v0.33.0
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
-          image=moby/buildkit:v0.28.0
+          image=moby/buildkit:v0.29.0
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
 
     - if: steps.resolve-oci-registries.outputs.has-registry-auth == 'true'
