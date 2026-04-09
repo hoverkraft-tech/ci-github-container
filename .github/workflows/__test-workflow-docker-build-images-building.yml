@@ -55,11 +55,13 @@ jobs:
     steps:
       - name: Check built images ouput
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          BUILT_IMAGES_OUTPUT: ${{ needs.act-build-images-args-secrets.outputs.built-images }}
         with:
           script: |
             const assert = require("assert");
 
-            const builtImagesOutput = `${{ needs.act-build-images-args-secrets.outputs.built-images }}`;
+            const builtImagesOutput = process.env.BUILT_IMAGES_OUTPUT;
             assert(builtImagesOutput.length, `"built-images" output is empty`);
 
             // Check if is valid Json

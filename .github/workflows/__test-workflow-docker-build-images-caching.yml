@@ -141,28 +141,31 @@ jobs:
         env:
           BUILT_IMAGES: ${{ needs[matrix.cache-type == 'registry' && 'act-build-images-registry' || 'act-build-images-gha' ].outputs.built-images }}
           EXPECTED_IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.image-name }}
+          IMAGE_NAME: ${{ matrix.image-name }}
         with:
           script: |
             const assert = require("assert");
+            const pullRequestNumber = context.payload.pull_request?.number;
+            const refName = process.env.GITHUB_REF_NAME;
 
             let expectedTag;
 
-            const isPullRequest = `${{ github.event_name }}` === "pull_request";
+            const isPullRequest = context.eventName === "pull_request";
             if (isPullRequest) {
-              const shortSha = `${{ github.sha }}`.substring(0, 7);
-              expectedTag = `pr-${{ github.event.pull_request.number }}-${shortSha}`;
+              const shortSha = context.sha.substring(0, 7);
+              expectedTag = `pr-${pullRequestNumber}-${shortSha}`;
             } else {
-              expectedTag = `${{ github.ref_name }}`;
+              expectedTag = refName;
             }
 
             const builtImages = JSON.parse(process.env.BUILT_IMAGES);
 
-            const imageName = `${{ matrix.image-name }}`;
+            const imageName = process.env.IMAGE_NAME;
             assert(builtImages[imageName], `"built-images" output does not contain "${imageName}" image`);
 
             const digest = builtImages[imageName].digest;
-            assert(digest.length, `"built-images" output does not contain digest for "${{ matrix.image-name }}" image`);
-            assert.match(digest, /^sha256:[0-9a-f]{64}$/, `"built-images" output does not contain valid digest for "${{ matrix.image-name }}" image`);
+            assert(digest.length, `"built-images" output does not contain digest for "${imageName}" image`);
+            assert.match(digest, /^sha256:[0-9a-f]{64}$/, `"built-images" output does not contain valid digest for "${imageName}" image`);
 
             const expectedImage = process.env.EXPECTED_IMAGE;
             const expectedImageTag = `${expectedImage}:${expectedTag}@${digest}`;
@@ -182,6 +185,14 @@ jobs:
           EXPECTED_CACHE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
         with:
           script: |
+            const shouldAssertCache = context.eventName === 'pull_request'
+              || (context.eventName === 'push' && !context.ref.startsWith('refs/tags/'));
+
+            if (!shouldAssertCache) {
+              core.info(`Skipping cache assertion for ${context.eventName} on ${context.ref}.`);
+              return;
+            }
+
             const expectedCacheImage = `${process.env.EXPECTED_IMAGE}/cache:${process.env.EXPECTED_CACHE_TAG}`;
             const expectedPlatforms = JSON.parse(process.env.EXPECTED_PLATFORMS);
             const expectedCacheImages = expectedPlatforms.map(platform => `${expectedCacheImage}-${platform.replace('/', '-')}`);

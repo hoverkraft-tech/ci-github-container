@@ -26,13 +26,16 @@ jobs:
 
       - name: Check get image name ouputs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name }}
+          FULL_IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name-with-registry }}
         with:
           script: |
             /* jscpd:ignore-start */
             const assert = require("assert");
 
-            const imageNameOutput = `${{ steps.get-image-name.outputs.image-name }}`;
-            const fullImageNameOutput = `${{ steps.get-image-name.outputs.image-name-with-registry }}`;
+            const imageNameOutput = process.env.IMAGE_NAME_OUTPUT;
+            const fullImageNameOutput = process.env.FULL_IMAGE_NAME_OUTPUT;
 
             assert(imageNameOutput.length, `"image-name" output is empty`);
             assert.equal(
@@ -68,13 +71,16 @@ jobs:
 
       - name: Check get image name ouput
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name }}
+          FULL_IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name-with-registry }}
         with:
           script: |
             /* jscpd:ignore-start */
             const assert = require("assert");
 
-            const imageNameOutput = `${{ steps.get-image-name.outputs.image-name }}`;
-            const fullImageNameOutput = `${{ steps.get-image-name.outputs.image-name-with-registry }}`;
+            const imageNameOutput = process.env.IMAGE_NAME_OUTPUT;
+            const fullImageNameOutput = process.env.FULL_IMAGE_NAME_OUTPUT;
 
             assert(imageNameOutput.length, `"image-name" output is empty`);
             assert.equal(

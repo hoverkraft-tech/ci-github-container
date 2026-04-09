@@ -144,7 +144,7 @@ jobs:
               {
                 package_type: "container",
                 package_name: `ci-github-container/${process.env.IMAGE_NAME}`,
-                org: `${{ github.repository_owner }}`,
+                org: context.repo.owner,
                 per_page: 100
               }
             );
