@@ -149,35 +149,39 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
-      run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
+      with:
+        source-path: ${{ github.action_path }}/../..
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@4b53189212d5810f710bed89711002626977215b # 0.33.0
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
       with:
         value: ${{ inputs.platform }}
 
     - id: docker-setup
-      uses: ./self-actions/docker/setup
+      uses: ./../self-actions/docker/setup
       with:
         oci-registry: ${{ inputs.oci-registry }}
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
+        buildx-cleanup: false
+
+    - name: Register Buildx cleanup
+      # FIXME: Workaround for GitHub Actions post-step ordering behavior with composite actions.
+      # The built-in Buildx cleanup can run before later post steps that still need the builder.
+      # See: https://github.com/actions/runner/issues/1657
+      uses: ./../self-actions/docker/cleanup-builder
+      with:
+        builder: ${{ steps.docker-setup.outputs.buildx-name }}
 
     - id: metadata
-      uses: ./self-actions/docker/get-image-metadata
+      uses: ./../self-actions/docker/get-image-metadata
       with:
         oci-registry: ${{ steps.docker-setup.outputs.push-registry }}
         repository: ${{ inputs.repository }}
         image: ${{ inputs.image }}
         tag: ${{ inputs.tag }}
-
-    - shell: bash
-      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
-      run: |
-        rm -fr ./self-actions
 
     - id: get-docker-config
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -190,8 +194,10 @@ runs:
         MULTI_PLATFORM_INPUT: ${{ inputs.multi-platform }}
         PLATFORM_INPUT: ${{ inputs.platform }}
         SLUGIFIED_PLATFORM: ${{ steps.slugify-platform.outputs.result }}
+        TARGET_INPUT: ${{ inputs.target }}
       with:
         script: |
+          const { createHash } = require('crypto');
           const fs = require('fs');
           const path = require('path');
 
@@ -209,6 +215,16 @@ runs:
 
           const resolvedDockerfilePath = fs.realpathSync(dockerfilePath);
           core.setOutput('dockerfile-path', resolvedDockerfilePath);
+
+          const cacheMountScope = JSON.stringify({
+            image: process.env.METADATA_IMAGE || '',
+            platform: process.env.PLATFORM_INPUT || '',
+            target: process.env.TARGET_INPUT || '',
+          });
+          const cacheMountScopeHash = createHash('sha256')
+            .update(cacheMountScope)
+            .digest('hex');
+          core.setOutput('cache-mount-scope', cacheMountScopeHash);
 
           const slugifiedPlatform = process.env.SLUGIFIED_PLATFORM || '';
           const tagSuffix = `-${slugifiedPlatform}`;
@@ -299,7 +315,9 @@ runs:
       id: cache
       with:
         path: cache-mount
-        key: cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}
+        key: cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-${{ steps.get-docker-config.outputs.cache-mount-scope }}
+        restore-keys: |
+          cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-
 
     - name: Restore Docker cache mounts
       uses: reproducible-containers/buildkit-cache-dance@1b8ab18fbda5ad3646e3fcc9ed9dd41ce2f297b4 # v3.3.2

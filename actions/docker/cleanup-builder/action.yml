@@ -1,0 +1,22 @@
+name: "Docker - Cleanup builder"
+description: |
+  Register a post-job step that removes a Docker Buildx builder after later post steps have finished.
+author: hoverkraft
+branding:
+  icon: trash-2
+  color: blue
+
+inputs:
+  builder:
+    description: "Docker Buildx builder name to remove during post-job cleanup."
+    required: false
+  enabled:
+    description: "Whether cleanup should run during the post-job phase."
+    default: true
+    required: false
+
+runs:
+  using: "node24"
+  main: "index.js"
+  post: "post.js"
+  post-if: "always()"

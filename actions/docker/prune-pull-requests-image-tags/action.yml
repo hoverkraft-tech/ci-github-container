@@ -39,17 +39,17 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
-      run: mkdir -p ./self-actions/ && cp -r $GITHUB_ACTION_PATH/../../* ./self-actions/
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
+      with:
+        source-path: ${{ github.action_path }}/../..
 
     - id: image-name
-      uses: ./self-actions/docker/get-image-name
+      uses: ./../self-actions/docker/get-image-name
       with:
         image: ${{ inputs.image }}
 
     - id: is-organization-or-user
-      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@4b53189212d5810f710bed89711002626977215b # 0.33.0
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
 
     - id: get-tags-to-delete
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -104,14 +104,9 @@ runs:
           core.info(`Tags to delete: ${tagsString}`);
 
     - id: clean-images
-      uses: ./self-actions/docker/clean-images
+      uses: ./../self-actions/docker/clean-images
       if: steps.get-tags-to-delete.outputs.tags-to-delete
       with:
         github-token: ${{ inputs.github-token }}
         package: ${{ steps.image-name.outputs.image-name }}
         tags: ${{ steps.get-tags-to-delete.outputs.tags-to-delete }}
-
-    - shell: bash
-      # FIXME: workaround until will be merged: https://github.com/actions/runner/pull/1684
-      run: |
-        rm -fr ./self-actions

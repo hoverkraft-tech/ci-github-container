@@ -107,7 +107,7 @@ jobs:
       id-token: write # Needed for getting local workflow actions
     steps:
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@4b53189212d5810f710bed89711002626977215b # 0.33.0
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
         with:
           actions-path: actions
 
@@ -118,7 +118,7 @@ jobs:
           pull-request-tag-filter: ${{ inputs.pull-request-tag-filter }}
           preserve-tags-filter: ${{ inputs.preserve-tags-filter }}
 
-      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@4b53189212d5810f710bed89711002626977215b # 0.33.0
+      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
         if: always() && steps.local-workflow-actions.outputs.repository
         with:
           actions-path: actions

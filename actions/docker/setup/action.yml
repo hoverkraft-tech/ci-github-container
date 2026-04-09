@@ -45,6 +45,11 @@ inputs:
       Whether to install and configure Docker Buildx.
     default: true
     required: false
+  buildx-cleanup:
+    description: |
+      Whether the Buildx builder should be removed during post-job cleanup.
+    default: true
+    required: false
 
 outputs:
   push-registry:
@@ -398,6 +403,7 @@ runs:
         driver-opts: |
           image=moby/buildkit:v0.29.0
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
+        cleanup: ${{ inputs.buildx-cleanup }}
 
     - if: steps.resolve-oci-registries.outputs.has-registry-auth == 'true'
       uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0

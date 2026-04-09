@@ -62,6 +62,11 @@ Shared action to configure Docker tooling and OCI registry authentication.
     # When provided, registry authentication targets are inferred from the built image data.
     built-images: ""
 
+    # Whether the Buildx builder should be removed during post-job cleanup.
+    #
+    # Default: `true`
+    buildx-cleanup: true
+
     # Whether to install and configure Docker Buildx.
     #
     # Default: `true`
@@ -88,6 +93,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
 |                               | <!-- textlint-disable --><pre lang="ini">[registry."my-registry.local:5000"]&#13; http = true&#13; insecure = true</pre><!-- textlint-enable --> |              |             |
 | **`built-images`**            | Optional built images payload used to resolve manifest publication registries.                                                                   | **false**    | -           |
 |                               | When provided, registry authentication targets are inferred from the built image data.                                                           |              |             |
+| **`buildx-cleanup`**          | Whether the Buildx builder should be removed during post-job cleanup.                                                                            | **false**    | `true`      |
 | **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`      |
 
 <!-- inputs:end -->
