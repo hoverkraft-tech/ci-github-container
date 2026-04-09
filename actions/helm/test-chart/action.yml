@@ -72,7 +72,7 @@ runs:
         echo "::error ::At least one of 'enable-lint' or 'enable-install' input must be true"
         exit 1
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@4b53189212d5810f710bed89711002626977215b # 0.33.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
       with:
         fetch-depth: 0
 
