@@ -48,7 +48,7 @@ on:
 permissions: {}
 jobs:
   prune-pull-requests-images-tags:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prune-pull-requests-images-tags.yml@bcbbcaff24e053e38ebab02dd0e41442df196719 # 0.32.0
     permissions: {}
     with:
       # JSON array of runner(s) to use.
