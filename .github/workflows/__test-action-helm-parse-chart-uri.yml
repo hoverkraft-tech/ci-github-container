@@ -26,15 +26,19 @@ jobs:
 
       - name: Assert - Check parse chart URI ouputs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          REPOSITORY_OUTPUT: ${{ steps.parse-chart-uri.outputs.repository }}
+          NAME_OUTPUT: ${{ steps.parse-chart-uri.outputs.name }}
+          VERSION_OUTPUT: ${{ steps.parse-chart-uri.outputs.version }}
         with:
           script: |
             const assert = require("assert");
 
-            const repositoryOutput = `${{ steps.parse-chart-uri.outputs.repository }}`;
+            const repositoryOutput = process.env.REPOSITORY_OUTPUT;
             assert.equal(repositoryOutput,"ghcr.io/my-org/my-repo/charts/application", `"repository" output is not valid`);
 
-            const nameOutput = `${{ steps.parse-chart-uri.outputs.name }}`;
+            const nameOutput = process.env.NAME_OUTPUT;
             assert.equal(nameOutput,"my-repo", `"name" output is not valid`);
 
-            const versionOutput = `${{ steps.parse-chart-uri.outputs.version }}`;
+            const versionOutput = process.env.VERSION_OUTPUT;
             assert.equal(versionOutput,"0.1.0", `"version" output is not valid`);

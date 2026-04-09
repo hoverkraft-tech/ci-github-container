@@ -114,7 +114,7 @@ jobs:
               const packagePayload = {
                 package_type: 'container',
                 package_name: packageName,
-                org: process.env.GITHUB_REPOSITORY_OWNER,
+                org: context.repo.owner,
               };
 
               // Ensure that package exists
@@ -192,7 +192,7 @@ jobs:
               const packagePayload = {
                 package_type: 'container',
                 package_name: packageName,
-                org: process.env.GITHUB_REPOSITORY_OWNER,
+                org: context.repo.owner,
               };
 
               // Ensure that package still exists
@@ -267,6 +267,6 @@ jobs:
               return github.rest.packages.deletePackageForOrg({
                 package_type: 'container',
                 package_name: packageName,
-                org: process.env.GITHUB_REPOSITORY_OWNER,
+                org: context.repo.owner,
               });
             }));

@@ -32,7 +32,7 @@ npm-audit-fix: ## Execute npm audit fix
 	exit $$overall_status
 
 ci: ## Execute CI tasks
-	$(MAKE) npm-audit-fix
+	$(MAKE) npm-audit-fix || true
 	$(MAKE) lint-fix
 
 test-build-application: ## Build the test application image

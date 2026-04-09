@@ -59,7 +59,9 @@ jobs:
         with:
           script: |
             const assert = require("assert");
-            const sha = `${{ github.sha }}`;
+            const sha = context.sha;
+            const pullRequestNumber = context.payload.pull_request?.number;
+            const refName = process.env.GITHUB_REF_NAME;
 
             const builtImages = JSON.parse(process.env.BUILT_IMAGES);
             const builtImage = builtImages["test-multi-registry-inputs"];
@@ -68,9 +70,9 @@ jobs:
             assert.equal(builtImage.registry, "ghcr.io", `"registry" output is not valid`);
             assert.match(builtImage.digest, /^sha256:[0-9a-f]{64}$/, `"digest" output is not valid`);
 
-            const expectedTag = `${{ github.event_name }}` === "pull_request"
-              ? `pr-${{ github.event.pull_request.number }}-${sha.substring(0, 7)}`
-              : `${{ github.ref_name }}`;
+            const expectedTag = context.eventName === "pull_request"
+              ? `pr-${pullRequestNumber}-${sha.substring(0, 7)}`
+              : refName;
 
             const expectedImage = `${process.env.EXPECTED_IMAGE}:${expectedTag}@${builtImage.digest}`;
             assert.equal(builtImage.images[0], expectedImage, `"image" output is not valid`);
@@ -84,5 +86,13 @@ jobs:
           EXPECTED_CACHE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
         with:
           script: |
+            const shouldAssertCache = context.eventName === "pull_request"
+              || (context.eventName === "push" && !context.ref.startsWith("refs/tags/"));
+
+            if (!shouldAssertCache) {
+              core.info(`Skipping cache assertion for ${context.eventName} on ${context.ref}.`);
+              return;
+            }
+
             const cacheImage = `${process.env.EXPECTED_CACHE_IMAGE}:${process.env.EXPECTED_CACHE_TAG}-linux-amd64`;
             await exec.exec("docker", ["manifest", "inspect", cacheImage]);

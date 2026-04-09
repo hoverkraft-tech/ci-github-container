@@ -179,14 +179,18 @@ jobs:
     steps:
       - id: validate-inputs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          OCI_REGISTRY_PASSWORD: ${{ secrets.oci-registry-password }}
+          RUNS_ON_INPUT: ${{ inputs.runs-on }}
+          IMAGES_INPUT: ${{ inputs.images }}
         with:
           script: |
-            const ociRegistryPassword = `${{ secrets.oci-registry-password }}`;
+            const ociRegistryPassword = process.env.OCI_REGISTRY_PASSWORD;
             if (!ociRegistryPassword) {
               throw new Error(`"oci-registry-password" secret is missing`);
             }
 
-            const runsOnInput = `${{ inputs.runs-on }}`;
+            const runsOnInput = process.env.RUNS_ON_INPUT;
             let runsOn = null;
             try {
               runsOn = JSON.parse(runsOnInput);
@@ -195,7 +199,7 @@ jobs:
             }
 
             // jscpd:ignore-start
-            const imagesInput = `${{ inputs.images }}`;
+            const imagesInput = process.env.IMAGES_INPUT;
 
             // Check if is valid Json
             let images = null;
@@ -251,7 +255,7 @@ jobs:
 
               // Set default repository
               if (!image['repository']) {
-                image['repository'] = `${{ github.repository }}`;
+                image['repository'] = `${context.repo.owner}/${context.repo.repo}`;
               }
             }
 
@@ -391,12 +395,16 @@ jobs:
 
       - id: prepare-secret-envs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SECRET_ENVS: ${{ matrix.image.secret-envs }}
+          GITHUB_APP_TOKEN: ${{ steps.generate-token.outputs.token }}
+          BUILD_SECRET_GITHUB_APP_TOKEN_ENV: ${{ inputs.build-secret-github-app-token-env }}
         with:
           script: |
             const githubAppTokenEnvName = 'GITHUB_APP_TOKEN';
 
-            let secretEnvs = `${{ matrix.image.secret-envs }}`;
-            const githubAppToken = `${{ steps.generate-token.outputs.token }}`;
+            let secretEnvs = process.env.SECRET_ENVS || '';
+            const githubAppToken = process.env.GITHUB_APP_TOKEN || '';
 
             if (!githubAppToken) {
               if (secretEnvs) {
@@ -407,7 +415,7 @@ jobs:
 
             core.exportVariable(githubAppTokenEnvName, githubAppToken);
 
-            const buildSecretGithubAppTokenEnv = `${{ inputs.build-secret-github-app-token-env }}`.trim();
+            const buildSecretGithubAppTokenEnv = (process.env.BUILD_SECRET_GITHUB_APP_TOKEN_ENV || '').trim();
             if (!buildSecretGithubAppTokenEnv.length) {
               throw new Error(`"build-secret-github-app-token-env" input is empty`);
             }
@@ -474,9 +482,11 @@ jobs:
 
       - id: built-images
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          BUILT_IMAGES_INPUT: ${{ steps.get-matrix-outputs.outputs.result }}
         with:
           script: |
-            const builtImagesInput = `${{ steps.get-matrix-outputs.outputs.result }}`;
+            const builtImagesInput = process.env.BUILT_IMAGES_INPUT;
             let builtImages = null;
             try {
               builtImages = JSON.parse(builtImagesInput);
@@ -519,9 +529,11 @@ jobs:
       - id: get-images-to-sign
         if: inputs.sign
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          BUILT_IMAGES_INPUT: ${{ steps.create-images-manifests.outputs.built-images }}
         with:
           script: |
-            const builtImagesInput = `${{ steps.create-images-manifests.outputs.built-images }}`;
+            const builtImagesInput = process.env.BUILT_IMAGES_INPUT;
             let builtImages = null;
             try {
               builtImages = JSON.parse(builtImagesInput);
