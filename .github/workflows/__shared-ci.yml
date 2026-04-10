@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@a236f015b7dda4712d2ba4d327b8bf27be4c3d3a # 0.34.0
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@03a5a2a3626b03434b19b79cdd2e141bea410bae # 0.34.1
 
   test-action-docker-build-image:
     needs: linter
