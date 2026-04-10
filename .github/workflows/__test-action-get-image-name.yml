@@ -25,7 +25,7 @@ jobs:
           image: application-test
 
       - name: Check get image name ouputs
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name }}
           FULL_IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name-with-registry }}
@@ -70,7 +70,7 @@ jobs:
           repository: hoverkraft-tech/other-repository
 
       - name: Check get image name ouput
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name }}
           FULL_IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name-with-registry }}

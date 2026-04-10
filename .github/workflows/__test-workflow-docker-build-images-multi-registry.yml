@@ -52,7 +52,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Assert built image output and pullability
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BUILT_IMAGES: ${{ needs.act-build-images-multi-registry.outputs.built-images }}
           EXPECTED_IMAGE: ghcr.io/${{ github.repository }}/test-multi-registry-inputs
@@ -80,7 +80,7 @@ jobs:
             await exec.exec("docker", ["pull", expectedImage]);
 
       - name: Assert registry cache usage with structured inputs
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           EXPECTED_CACHE_IMAGE: ghcr.io/${{ github.repository }}/test-multi-registry-inputs/cache
           EXPECTED_CACHE_TAG: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}

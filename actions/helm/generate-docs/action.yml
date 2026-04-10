@@ -41,7 +41,7 @@ runs:
   using: "composite"
   steps:
     - id: prepare-variables
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const { existsSync, realpathSync, writeFileSync } = require('node:fs');
@@ -154,7 +154,7 @@ runs:
         key: ${{ runner.os }}-textlint-${{ hashFiles(steps.prepare-variables.outputs.textlint-config-path) }}
 
     - name: Text lint and fix files
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         NODE_PATH: ${{ github.action_path }}/node_modules
         WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
@@ -174,7 +174,7 @@ runs:
           });
 
     - name: Lint Fix markdown files
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         NODE_PATH: ${{ github.action_path }}/node_modules
         WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
@@ -200,7 +200,7 @@ runs:
         key: ${{ runner.os }}-prettier
 
     - name: Prettify markdown and values file
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         NODE_PATH: ${{ github.action_path }}/node_modules
         WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}

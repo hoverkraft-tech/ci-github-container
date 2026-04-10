@@ -180,7 +180,7 @@ runs:
         rm -fr ./self-actions
 
     - id: get-docker-config
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         CACHE_REGISTRY: ${{ steps.docker-setup.outputs.cache-registry }}
         CACHE_TYPE_INPUT: ${{ inputs.cache-type }}
@@ -330,7 +330,7 @@ runs:
         sbom: false # Disable sbom to avoid unknown/unknown arch
 
     - id: get-built-image
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const builtMetadata = ${{ steps.build.outputs.metadata }};
