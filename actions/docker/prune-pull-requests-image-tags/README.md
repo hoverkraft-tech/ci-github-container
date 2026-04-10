@@ -44,7 +44,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@a0bab9151cc074af9f6c8204ab42a48d2d570379 # 0.30.6
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@bcbbcaff24e053e38ebab02dd0e41442df196719 # 0.32.0
   with:
     # Image name
     image: ""

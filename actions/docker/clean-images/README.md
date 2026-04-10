@@ -45,7 +45,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@bcbbcaff24e053e38ebab02dd0e41442df196719 # 0.32.0
   with:
     # Comma-separated list of packages to cleanup.
     # Example: "application-1,application-2"
@@ -72,14 +72,14 @@ permissions:
 
 ## Inputs
 
-| **Input**          | **Description**                                                                                                                                            | **Required** | **Default**             |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------- |
-| **`package`**      | Comma-separated list of packages to cleanup.                                                                                                               | **true**     | -                       |
-|                    | Example: "application-1,application-2"                                                                                                                     |              |                         |
-| **`tags`**         | Comma-separated list of tags to delete (supports wildcard syntax).                                                                                         | **true**     | -                       |
-|                    | Example: `pr-*,dev`                                                                                                                                        |              |                         |
-| **`github-token`** | GitHub token with the packages:write and packages:delete scopes.                                                                                           | **false**    | `$\{\{ github.token }}` |
-|                    | See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>. |              |                         |
+| **Input**          | **Description**                                                                                                                                            | **Required** | **Default**           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------- |
+| **`package`**      | Comma-separated list of packages to cleanup.                                                                                                               | **true**     | -                     |
+|                    | Example: "application-1,application-2"                                                                                                                     |              |                       |
+| **`tags`**         | Comma-separated list of tags to delete (supports wildcard syntax).                                                                                         | **true**     | -                     |
+|                    | Example: `pr-*,dev`                                                                                                                                        |              |                       |
+| **`github-token`** | GitHub token with the packages:write and packages:delete scopes.                                                                                           | **false**    | `${{ github.token }}` |
+|                    | See <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries>. |              |                       |
 
 <!-- inputs:end -->
 
@@ -109,7 +109,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@bcbbcaff24e053e38ebab02dd0e41442df196719 # 0.32.0
         with:
           package: my-app
           delete-tags: pr-${{ github.event.pull_request.number }}-*
@@ -131,7 +131,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@bcbbcaff24e053e38ebab02dd0e41442df196719 # 0.32.0
         with:
           package: my-app
           delete-untagged: true
@@ -162,7 +162,7 @@ This project is licensed under the MIT License.
 
 SPDX-License-Identifier: MIT
 
-Copyright © 2025 hoverkraft
+Copyright © 2026 hoverkraft
 
 For more details, see the [license](http://choosealicense.com/licenses/mit/).
 
