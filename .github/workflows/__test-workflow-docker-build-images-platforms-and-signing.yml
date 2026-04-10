@@ -27,7 +27,7 @@ jobs:
           fi
 
       - id: define-matrix
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           result-encoding: json
           script: |
@@ -131,7 +131,7 @@ jobs:
           docker pull ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}"
 
       - name: Verify package has correct number of versions
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME: ${{ matrix.image-name }}
           SIGN: ${{ matrix.sign }}
@@ -182,7 +182,7 @@ jobs:
             );
 
       - name: Verify image manifest and platforms
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME: "${{ matrix.image-name }}:${{ matrix.tag }}"
           EXPECTED_PLATFORMS: ${{ matrix.platforms }}
@@ -278,7 +278,7 @@ jobs:
       packages: write
     steps:
       - name: Delete test packages
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME: ${{ matrix.image-name }}
         with:

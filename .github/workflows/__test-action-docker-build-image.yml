@@ -41,7 +41,7 @@ jobs:
           image: application-test
 
       - name: Assert - Check built image output
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BUILT_IMAGE_OUTPUT: ${{ steps.build-image.outputs.built-image }}
         with:
@@ -206,7 +206,7 @@ jobs:
           tag: "0.1.0"
 
       - name: Assert - Check built image output
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BUILT_IMAGE_OUTPUT: ${{ steps.build-image.outputs.built-image }}
         with:
@@ -309,7 +309,7 @@ jobs:
           echo "$BUILDKIT_CONFIG" | grep -F 'max-parallelism = 2'
 
       - name: Assert - Check built image output
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BUILT_IMAGE_OUTPUT: ${{ steps.build-image.outputs.built-image }}
         with:
