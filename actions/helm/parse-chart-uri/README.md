@@ -40,7 +40,7 @@ The output will be:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/parse-chart-uri@4f29319e02dd65152386c436e8c3136f380a0e71 # 0.28.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/parse-chart-uri@bcbbcaff24e053e38ebab02dd0e41442df196719 # 0.32.0
   with:
     # Chart URI to parse.
     # This input is required.
@@ -100,7 +100,7 @@ This project is licensed under the MIT License.
 
 SPDX-License-Identifier: MIT
 
-Copyright © 2025 hoverkraft
+Copyright © 2026 hoverkraft
 
 For more details, see the [license](http://choosealicense.com/licenses/mit/).
 
