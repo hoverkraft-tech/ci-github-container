@@ -149,12 +149,12 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@03a5a2a3626b03434b19b79cdd2e141bea410bae # 0.34.1
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
       with:
         source-path: ${{ github.action_path }}/../..
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@03a5a2a3626b03434b19b79cdd2e141bea410bae # 0.34.1
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
       with:
         value: ${{ inputs.platform }}
 
@@ -311,7 +311,7 @@ runs:
         cache-type: ${{ inputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
-    - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+    - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: cache
       with:
         path: cache-mount
