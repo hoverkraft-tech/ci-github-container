@@ -129,7 +129,7 @@ runs:
           }
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@03a5a2a3626b03434b19b79cdd2e141bea410bae # 0.34.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
 
     - uses: losisin/helm-docs-github-action@2ccf3e77eb70dc80d62f8cc26f15d0a96b75fef4 # v1.8.0
       with:
@@ -142,13 +142,13 @@ runs:
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@775ce0902c528062cc94141dd7d13261083b752a # 0.22.0
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@9d465a03741b287db18b242e0ec46990888cc6a3 # 0.23.0
       with:
         working-directory: ${{ github.action_path }}
 
     - name: Cache textlint
       id: cache-textlint
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ steps.prepare-variables.outputs.textlint-cache-path }}
         key: ${{ runner.os }}-textlint-${{ hashFiles(steps.prepare-variables.outputs.textlint-config-path) }}
@@ -194,7 +194,7 @@ runs:
 
     - name: Cache prettier
       id: cache-prettier
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ steps.prepare-variables.outputs.prettier-cache-path }}
         key: ${{ runner.os }}-prettier
@@ -224,14 +224,14 @@ runs:
             cwd: process.env.WORKING_DIRECTORY,
           });
 
-    - uses: actions/create-github-app-token@7bd03711494f032dfa3be3558f7dc8787b0be333 # v3.1.0
+    - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
       if: inputs.github-app-id
       id: generate-token
       with:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@03a5a2a3626b03434b19b79cdd2e141bea410bae # 0.34.1
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}
