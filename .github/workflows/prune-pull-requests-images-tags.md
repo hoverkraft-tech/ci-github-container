@@ -29,7 +29,6 @@ See [prune-pull-requests-image-tags](../../actions/docker/prune-pull-requests-im
 ### Permissions
 
 - **`contents`**: `read`
-- **`id-token`**: `write`
 - **`packages`**: `write`
 - **`pull-requests`**: `read`
 
