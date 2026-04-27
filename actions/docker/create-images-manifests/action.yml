@@ -96,7 +96,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@03a5a2a3626b03434b19b79cdd2e141bea410bae # 0.34.1
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
       with:
         source-path: ${{ github.action_path }}/../..
 
