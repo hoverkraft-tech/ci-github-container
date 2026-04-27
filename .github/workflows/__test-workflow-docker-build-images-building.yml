@@ -43,7 +43,7 @@ jobs:
             }
           }
         ]
-      build-secret-github-app-id: ${{ vars.CI_BOT_APP_ID }}
+      build-secret-github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
       build-secret-github-app-token-env: |
         SECRET_ENV_GITHUB_APP_TOKEN_1
         SECRET_ENV_GITHUB_APP_TOKEN_2
