@@ -391,7 +391,7 @@ runs:
           core.setOutput('exists', dockerPath ? 'true' : 'false');
 
     - if: steps.detect-docker.outputs.exists != 'true'
-      uses: docker/setup-docker-action@1a6edb0ba9ac496f6850236981f15d8f9a82254d # v5.0.0
+      uses: docker/setup-docker-action@b2189fbf2a6592b51fee7cdd93ee2bfaeba733db # v5.1.0
 
     - if: inputs.setup-buildx != 'false'
       uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
