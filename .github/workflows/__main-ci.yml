@@ -77,29 +77,29 @@ jobs:
       - uses: ./actions/helm/generate-docs
         with:
           working-directory: ./tests/charts
-          github-app-id: ${{ vars.CI_BOT_APP_ID }}
+          github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
           github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
 
   release:
     needs: ci
     if: github.event_name != 'schedule'
-    uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@b56be562f38e0e3e712f09691a8fe930aae9db1b # 0.22.0
+    uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@48e0c54489152b98d9e18f0454ccce120e9d0fd1 # 0.23.0
     permissions:
       contents: read
     with:
       update-all: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
-      github-app-id: ${{ vars.CI_BOT_APP_ID }}
+      github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
     secrets:
       github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
 
   sync-docs:
     needs: release
     if: github.event_name != 'schedule' && github.ref_name == github.event.repository.default_branch && needs.release.outputs.artifact-id
-    uses: hoverkraft-tech/public-docs/.github/workflows/sync-docs-dispatcher.yml@c40c17f7d6a8090950b3ef4bfc70502707a6bb9f # 0.3.0
+    uses: hoverkraft-tech/public-docs/.github/workflows/sync-docs-dispatcher.yml@f3c9291760d927e6214e8d5f0a376af2d537c369 # 0.4.0
     permissions:
       contents: read
     with:
       artifact-id: ${{ needs.release.outputs.artifact-id }}
-      github-app-id: ${{ vars.CI_BOT_APP_ID }}
+      github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
     secrets:
       github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
