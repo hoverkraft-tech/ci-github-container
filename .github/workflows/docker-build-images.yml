@@ -370,9 +370,8 @@ jobs:
       pull-requests: read
       issues: read
       packages: write
-      id-token: write # Needed for getting local workflow actions
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -381,7 +380,7 @@ jobs:
         run: git lfs pull
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
         with:
           actions-path: actions
 
@@ -431,7 +430,7 @@ jobs:
             core.setOutput('secret-envs', secretEnvs.trim());
 
       - id: build
-        uses: ./self-workflow/actions/docker/build-image
+        uses: ./../self-workflow/actions/docker/build-image
         with:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -452,31 +451,24 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
-
-      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
-        if: always() && steps.local-workflow-actions.outputs.repository
-        with:
-          actions-path: actions
-          repository: ${{ steps.local-workflow-actions.outputs.repository }}
-          ref: ${{ steps.local-workflow-actions.outputs.ref }}
 
   publish-manifests:
     name: Publish images manifests
     permissions:
       contents: read
       packages: write
-      id-token: write # Needed for getting local workflow actions
+      id-token: write # Needed for signing images
     needs: [prepare-variables, build-images]
     runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
@@ -514,12 +506,12 @@ jobs:
             core.setOutput('built-images', JSON.stringify(images));
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
         with:
           actions-path: actions
 
       - id: create-images-manifests
-        uses: ./self-workflow/actions/docker/create-images-manifests
+        uses: ./../self-workflow/actions/docker/create-images-manifests
         with:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -545,15 +537,8 @@ jobs:
             const imagesToSign = Object.values(builtImages).map(image => image.images).flat();
             core.setOutput('images-to-sign', JSON.stringify(imagesToSign));
 
-      - uses: ./self-workflow/actions/docker/sign-images
+      - uses: ./../self-workflow/actions/docker/sign-images
         if: steps.get-images-to-sign.outputs.images-to-sign
         with:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
-        if: always() && steps.local-workflow-actions.outputs.repository
-        with:
-          actions-path: actions
-          repository: ${{ steps.local-workflow-actions.outputs.repository }}
-          ref: ${{ steps.local-workflow-actions.outputs.ref }}

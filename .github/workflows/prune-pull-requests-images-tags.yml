@@ -104,23 +104,15 @@ jobs:
       contents: read
       pull-requests: read
       packages: write
-      id-token: write # Needed for getting local workflow actions
     steps:
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
         with:
           actions-path: actions
 
       - id: build
-        uses: ./self-workflow/actions/docker/prune-pull-requests-image-tags
+        uses: ./../self-workflow/actions/docker/prune-pull-requests-image-tags
         with:
           image: ${{ matrix.image }}
           pull-request-tag-filter: ${{ inputs.pull-request-tag-filter }}
           preserve-tags-filter: ${{ inputs.preserve-tags-filter }}
-
-      - uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@71b85947453f32b5d147ff3ab37351439a92d840 # 0.34.2
-        if: always() && steps.local-workflow-actions.outputs.repository
-        with:
-          actions-path: actions
-          repository: ${{ steps.local-workflow-actions.outputs.repository }}
-          ref: ${{ steps.local-workflow-actions.outputs.ref }}
