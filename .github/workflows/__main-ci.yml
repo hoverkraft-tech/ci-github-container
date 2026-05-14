@@ -23,12 +23,12 @@ jobs:
     permissions:
       actions: read
       contents: read
+      id-token: write
       issues: read
       packages: write
       pull-requests: read
       security-events: write
       statuses: write
-      id-token: write
     secrets: inherit
 
   clean:

@@ -5,17 +5,18 @@ run-name: Test for "docker-build-images" workflow - Multi registry inputs
 on: # yamllint disable-line rule:truthy
   workflow_call:
 
-permissions:
-  contents: read
-  issues: read
-  packages: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 jobs:
   act-build-images-multi-registry:
     name: Act - Build images with structured registry inputs
     uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
     secrets:
       oci-registry-password: |
         {"push":"${{ secrets.GITHUB_TOKEN }}","pull:private":"${{ secrets.GITHUB_TOKEN }}"}
@@ -43,6 +44,8 @@ jobs:
     name: Assert - Build images with structured registry inputs
     needs: act-build-images-multi-registry
     runs-on: ubuntu-latest
+    permissions:
+      packages: read
     steps:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
