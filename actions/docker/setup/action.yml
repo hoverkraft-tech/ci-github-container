@@ -398,7 +398,7 @@ runs:
       id: setup-buildx
       with:
         # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
-        version: v0.33.0
+        version: v0.34.0
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
           image=moby/buildkit:v0.29.0
