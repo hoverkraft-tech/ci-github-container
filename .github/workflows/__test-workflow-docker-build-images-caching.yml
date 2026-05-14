@@ -5,12 +5,7 @@ run-name: Test for "docker-build-images" workflow - Caching
 on: # yamllint disable-line rule:truthy
   workflow_call:
 
-permissions:
-  contents: read
-  issues: read
-  packages: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 # jscpd:ignore-start
 jobs:
@@ -65,6 +60,12 @@ jobs:
     name: Act - Build images - registry cache
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
       build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
@@ -95,6 +96,12 @@ jobs:
     name: Act - Build images - gha cache
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
       build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
@@ -128,6 +135,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
+    permissions:
+      packages: read
     steps:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0

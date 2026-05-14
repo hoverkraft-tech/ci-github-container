@@ -5,12 +5,7 @@ run-name: Test for "docker/prune-pull-requests-image-tags" action
 on: # yamllint disable-line rule:truthy
   workflow_call:
 
-permissions:
-  contents: read
-  issues: read
-  packages: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 env:
   IMAGE_NAME: "test-prune-${{ github.run_number }}"
@@ -73,6 +68,12 @@ jobs:
     name: Arrange - Build images
     needs: arrange-prepare-variables
     uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
     with:

@@ -5,18 +5,19 @@ run-name: Test for "docker-build-images" workflow - Building
 on: # yamllint disable-line rule:truthy
   workflow_call:
 
-permissions:
-  contents: read
-  issues: read
-  packages: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 # jscpd:ignore-start
 jobs:
   act-build-images-args-secrets:
     name: Arrange - Build with args, secrets
     uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
       build-secrets: |
@@ -82,9 +83,5 @@ jobs:
             for (const image of expectedCreatedImages) {
               assert(builtImages[image], `"built-images" output does not contain "${image}" image`);
             }
-      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ github.token }}
+
 # jscpd:ignore-end
