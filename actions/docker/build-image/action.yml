@@ -303,7 +303,7 @@ runs:
 
     # Caching setup
     - id: cache-arguments
-      uses: int128/docker-build-cache-config-action@8bda1b303afec3d9f81c0c359096a47870ca1bf0 # v1.55.0
+      uses: int128/docker-build-cache-config-action@600f417a89b22227409391339c1c425ba46b5e07 # v1.56.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -320,7 +320,7 @@ runs:
           cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-
 
     - name: Restore Docker cache mounts
-      uses: reproducible-containers/buildkit-cache-dance@1b8ab18fbda5ad3646e3fcc9ed9dd41ce2f297b4 # v3.3.2
+      uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
       with:
         builder: ${{ steps.docker-setup.outputs.buildx-name }}
         cache-dir: cache-mount

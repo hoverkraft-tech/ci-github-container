@@ -188,7 +188,7 @@ runs:
           ${{ steps.chart-values-updates.outputs.yq-command }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@47891dc49a31209a88949e081d97a010f8cd20c4 # 0.23.2
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@a10d5e32daef8e060c49fe617833fb0d53476f22 # 0.24.0
       with:
         working-directory: ${{ github.action_path }}
 
