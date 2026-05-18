@@ -28,3 +28,4 @@ dependencies:
   - name: mysql
     version: 14.0.3
     repository: https://charts.bitnami.com/bitnami
+    condition: mysql.enabled

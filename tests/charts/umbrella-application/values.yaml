@@ -14,6 +14,27 @@ app:
 database:
   enabled: true
   fullnameOverride: database
+  namespaceOverride: app-system
   auth:
     database: test-umbrella-application
     username: test-umbrella-application
+  image:
+    repository: bitnamilegacy/mysql
+    digest: sha256:ec13e229247a737f7149b7f255d8f2d9c72da861f8bf263b22091bf131540da3
+    pullPolicy: Always
+  primary:
+    podSecurityContext:
+      enabled: true
+      fsGroup: 10001
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
