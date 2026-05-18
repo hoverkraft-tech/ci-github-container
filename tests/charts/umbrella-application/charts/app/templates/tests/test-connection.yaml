@@ -13,7 +13,13 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "app.labels" . | nindent 8 }}
+        # Distinct labels so the chart's NetworkPolicy podSelector does not
+        # match this hook pod (a dedicated NetworkPolicy is defined below).
+        app.kubernetes.io/name: {{ include "app.name" . }}-test-connection
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: test
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        helm.sh/chart: {{ include "app.chart" . }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -53,3 +59,37 @@ spec:
                 - NET_RAW
                 - ALL
       restartPolicy: Never
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: "{{ include "app.fullname" . }}-test-connection"
+  namespace: {{ .Values.namespace | default "app-system" }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "app.name" . }}-test-connection
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: test
+  policyTypes:
+    - Egress
+  egress:
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "app.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+{{- end }}
