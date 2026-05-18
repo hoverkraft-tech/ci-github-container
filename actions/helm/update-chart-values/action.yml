@@ -1,0 +1,97 @@
+name: "Update chart values"
+description: |
+  Updates Helm chart values files before release.
+author: hoverkraft
+branding:
+  icon: edit
+  color: blue
+
+inputs:
+  path:
+    description: "Path to the chart to update"
+    required: true
+  values:
+    description: |
+      Define charts values to be filled.
+      See https://mikefarah.gitbook.io/yq/.
+      Format: `[{ file, path, value }]`.
+
+      Example:
+
+      ```json
+      [
+        {
+          "file": "charts/application/charts/api/values.yaml",
+          "path": ".image.registry", "value": "ghcr.io"
+        }
+      ]
+      ```
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - id: chart-values-updates
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_VALUES: ${{ inputs.values }}
+      with:
+        script: |
+          const yqUpdates = {};
+          const basePath = process.env.INPUT_PATH;
+          if (!basePath) {
+            throw new Error(`"path" input is missing`);
+          }
+
+          // values.yaml files
+          const chartValuesInput = process.env.INPUT_VALUES;
+          if (chartValuesInput) {
+            let chartValues = null;
+            try {
+              chartValues = JSON.parse(chartValuesInput);
+            } catch (error) {
+              throw new Error(`"values" input is not a valid JSON: ${error}`);
+            }
+
+            if (!Array.isArray(chartValues)) {
+              throw new Error(`"values" input is not an array`);
+            }
+
+            if (chartValues.length) {
+              const defaultValuesPath = 'values.yaml';
+
+              for (const key in chartValues) {
+                const chartValue = chartValues[key];
+                if (typeof chartValue !== 'object' || chartValue === null) {
+                  throw new Error(`"values[${key}]" input is not an object`);
+                }
+
+                for (const property of ['path', 'value']) {
+                  if (!Object.prototype.hasOwnProperty.call(chartValue, property)) {
+                    throw new Error(`"values[${key}].${property}" input is missing`);
+                  }
+                }
+
+                const valueFilePath = chartValue.file ? chartValue.file : defaultValuesPath;
+                const filePath = `${basePath}/${valueFilePath}`;
+
+                if (!yqUpdates[filePath]) {
+                  yqUpdates[filePath] = [];
+                }
+
+                yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
+              }
+            }
+          }
+
+          const yqCommands = Object.entries(yqUpdates).map(([filePath, updates]) => {
+            return `yq -i '${updates.join(' | ')}' ${filePath}`;
+          });
+
+          core.setOutput('yq-command', yqCommands.join('\n'));
+
+    - if: ${{ steps.chart-values-updates.outputs.yq-command != '' }}
+      uses: mikefarah/yq@751d8ad57b84f1794661bc70c0afb92a22ad7b3c # v4.53.2
+      with:
+        cmd: |
+          ${{ steps.chart-values-updates.outputs.yq-command }}

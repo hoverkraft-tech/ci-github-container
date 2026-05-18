@@ -78,18 +78,18 @@ runs:
   steps:
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
 
-    - id: chart-values-updates
+    - id: chart-tag-updates
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUT_PATH: ${{ inputs.path }}
         INPUT_TAG: ${{ inputs.tag }}
         INPUT_UPDATE_TAG_PATHS: ${{ inputs.update-tag-paths }}
+        INPUT_VALUES: ${{ inputs.values }}
         REPOSITORY_NAME: ${{ github.event.repository.name }}
       with:
         script: |
           const path = require('node:path');
 
-          const yqUpdates = {};
           const basePath = process.env.INPUT_PATH;
           if (!basePath) {
             throw new Error(`"path" input is missing`);
@@ -100,153 +100,111 @@ runs:
             throw new Error(`"tag" input is missing`);
           }
 
-          const updateTagPaths = process.env.INPUT_UPDATE_TAG_PATHS.trim().split(',').map(p => p.trim()).filter(p => p);
-
-          // Chart.yml files
-          const globber = await glob.create(`${basePath}/**/Chart.yaml`, {followSymbolicLinks: false})
-          for await (const chartFile of globber.globGenerator()) {
-            const filePath = path.relative(process.env.GITHUB_WORKSPACE, chartFile);
-            if (!yqUpdates[filePath]) {
-              yqUpdates[filePath] = [];
-            }
-
-            const isRootChart = filePath === path.join(basePath, "Chart.yaml");
-            if (isRootChart) {
-              // Update name for root chart
-              yqUpdates[filePath].push(`.name = "${process.env.REPOSITORY_NAME}"`);
-
-              // Update dependencies version where repository starts with file://
-              if (updateTagPaths.includes('.version')) {
-                yqUpdates[filePath].push(
-                  `(. as $doc | (select(has("dependencies")) | (.dependencies[] | select(.repository == "file://*")).version = "${tag}") // $doc)`
-                );
-              }
-            }
-
-            // Update tag fields
-            for (const path of updateTagPaths) {
-              yqUpdates[filePath].push(`${path} = "${tag}"`);
-            }
-          }
-
-          // values.yml files
-          const chartValuesInput = `${{ inputs.values }}`;
-          if (chartValuesInput) {
-
-            // Check if is valid Json
-            let chartValues = null;
+          const inputValues = process.env.INPUT_VALUES;
+          let chartValues = [];
+          if (inputValues) {
             try {
-              chartValues = JSON.parse(chartValuesInput);
+              chartValues = JSON.parse(inputValues);
             } catch (error) {
               throw new Error(`"values" input is not a valid JSON: ${error}`);
             }
 
-            // Check if is an array
             if (!Array.isArray(chartValues)) {
               throw new Error(`"values" input is not an array`);
             }
+          }
 
-            if (chartValues.length) {
-              const defaultValuesPath = "values.yaml";
+          const updateTagPaths = process.env.INPUT_UPDATE_TAG_PATHS.trim().split(',').map(p => p.trim()).filter(p => p);
+          const chartRootPath = path.resolve(process.env.GITHUB_WORKSPACE ?? '.', basePath);
+          const generatedValues = [];
 
-              // Check each item
-              for (const key in chartValues) {
-                const chartValue = chartValues[key];
-                if (typeof chartValue !== 'object') {
-                  throw new Error(`"values[${key}]" input is not an object`);
-                }
+          const globber = await glob.create(`${basePath}/**/Chart.yaml`, { followSymbolicLinks: false });
+          for await (const chartFile of globber.globGenerator()) {
+            const filePath = path.relative(chartRootPath, chartFile);
 
-                // Check mandatory properties
-                for (const property of ['path', 'value']) {
-                  if (!chartValue.hasOwnProperty(property)) {
-                    throw new Error(`"values[${key}].${property}" input is missing`);
-                  }
-                }
+            const isRootChart = filePath === 'Chart.yaml';
+            if (isRootChart) {
+              generatedValues.push({
+                file: filePath,
+                path: '.name',
+                value: process.env.REPOSITORY_NAME,
+              });
 
-                const valueFilePath = chartValue['file'] ? chartValue['file'] : defaultValuesPath;
-                const filePath = `${basePath}/${valueFilePath}`;
-
-                if (!yqUpdates[filePath]) {
-                  yqUpdates[filePath] = [];
-                }
-
-                yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
+              if (updateTagPaths.includes('.version')) {
+                generatedValues.push({
+                  file: filePath,
+                  path: '(.dependencies[]? | select(.repository | test("^file://")).version)',
+                  value: tag,
+                });
               }
+            }
+
+            for (const path of updateTagPaths) {
+              generatedValues.push({
+                file: filePath,
+                path,
+                value: tag,
+              });
             }
           }
 
-          // Build yq commands
-          const yqCommands = Object.entries(yqUpdates).map(([filePath, updates]) => {
-            return `yq -i '${updates.join(' | ')}' ${filePath}`;
-          });
+          core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
 
-          core.setOutput('yq-command', yqCommands.join('\n'));
-
-    - uses: mikefarah/yq@751d8ad57b84f1794661bc70c0afb92a22ad7b3c # v4.53.2
+    - uses: ./actions/helm/update-chart-values
       with:
-        cmd: |
-          ${{ steps.chart-values-updates.outputs.yq-command }}
+        path: ${{ inputs.path }}
+        values: ${{ steps.chart-tag-updates.outputs.values }}
 
     - name: Setup Node.js
       uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@a10d5e32daef8e060c49fe617833fb0d53476f22 # 0.24.0
       with:
         working-directory: ${{ github.action_path }}
 
-    - name: Rewrite the Chart.lock to match with updated ombrella dependencies if any
+    - name: Rewrite the Chart.lock to match with updated umbrella dependencies if any
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_TAG: ${{ inputs.tag }}
         NODE_PATH: ${{ github.action_path }}/node_modules
       with:
         script: |
           const fs = require('node:fs');
-          const path = require('node:path');
           const crypto = require('node:crypto');
-          const yaml = require("yaml");
+          const yaml = require('yaml');
 
-          const rootChartFile = `${{ inputs.path }}/Chart.yaml`;
+          const rootChartFile = process.env.INPUT_PATH + '/Chart.yaml';
           const rootChartFileContent = yaml.parse(fs.readFileSync(rootChartFile, 'utf8'));
 
-          // Check if the root chart has dependencies
           if (!rootChartFileContent.dependencies || rootChartFileContent.dependencies.length === 0) {
             return;
           }
 
-          const chartLockFile = `${{ inputs.path }}/Chart.lock`;
+          const chartLockFile = process.env.INPUT_PATH + '/Chart.lock';
           if (!fs.existsSync(chartLockFile)) {
             return core.setFailed(`Chart.lock file not found: ${chartLockFile}`);
           }
 
           const chartLockFileContent = yaml.parse(fs.readFileSync(chartLockFile, 'utf8'));
 
-          // Update ombrella dependencies versions
           let hasLocalDependencies = false;
           const dependencies = chartLockFileContent.dependencies;
 
-          // Check if dependencies are empt
           for (const dependency of dependencies) {
-            const isLocalDependency = dependency.repository.startsWith("file://") && dependency.version === "0.0.0";
+            const isLocalDependency = dependency.repository.startsWith('file://') && dependency.version === '0.0.0';
 
-            // Check if the dependency is a local file
             if (isLocalDependency) {
-              // Update the version to the tag
-              dependency.version = `${{ inputs.tag }}`;
+              dependency.version = process.env.INPUT_TAG;
               hasLocalDependencies = true;
             }
           }
 
-          // If no local dependencies, exit
           if (!hasLocalDependencies) {
             return;
           }
 
-          // Update generated
           chartLockFileContent.generated = new Date().toISOString();
 
-          // Update global digest.
-
-          // See Helm hashReq function: https://github.com/helm/helm/blob/99c065789ef8c45bade24d4bc2d33432595de956/internal/resolver/resolver.go#L214
           function hashReq(req, lock) {
-            // Sort the dependencies
             req = req.map(sortDependencyFields);
             lock = lock.map(sortDependencyFields);
 
@@ -261,8 +219,6 @@ runs:
             return hash.digest('hex');
           }
 
-          // Should respect the Helm struct order
-          // See https://github.com/helm/helm/blob/99c065789ef8c45bade24d4bc2d33432595de956/pkg/chart/v2/dependency.go#L24
           function sortDependencyFields(dependency) {
             const fieldOrder = [
               'name',
@@ -274,10 +230,9 @@ runs:
               'import-values',
               'alias',
             ];
-            // Sort the dependency fields
             const sortedDependency = {};
             for (const field of fieldOrder) {
-              if (dependency.hasOwnProperty(field)) {
+              if (Object.prototype.hasOwnProperty.call(dependency, field)) {
                 sortedDependency[field] = dependency[field];
               }
             }
@@ -288,21 +243,21 @@ runs:
           const req = rootChartFileContent.dependencies;
           const lock = dependencies;
 
-          const hash = hashReq(req, lock);
-          chartLockFileContent.digest = hash;
+          chartLockFileContent.digest = hashReq(req, lock);
 
           const updatedChartLockFileContent = yaml.stringify(chartLockFileContent);
           core.debug(`Updated Chart.lock file content:\n${updatedChartLockFileContent}`);
 
-          // Update Chart.lock file
           fs.writeFileSync(chartLockFile, updatedChartLockFileContent, 'utf8');
 
     - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
 
     - shell: bash
+      env:
+        INPUT_HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
       run: |
         # For each line in the input, add the Helm repository
-        echo "${{ inputs.helm-repositories }}" | while read -r line; do
+        printf '%s\n' "$INPUT_HELM_REPOSITORIES" | while IFS= read -r line; do
           if [ -z "$line" ]; then
             continue
           fi
@@ -312,10 +267,12 @@ runs:
         done
 
     - shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
       run: |
         echo "Building charts dependencies"
 
-        CHART_ROOT_DIR="$(pwd)/${{ inputs.path }}"
+        CHART_ROOT_DIR="$(pwd)/$INPUT_PATH"
         CHART_FILES=$(find "$CHART_ROOT_DIR" -name "Chart.yaml")
 
         # If no files found, exit
