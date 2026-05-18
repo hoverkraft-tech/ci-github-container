@@ -26,7 +26,7 @@ A Helm chart for Kubernetes
 | autoscaling.minReplicas                    | int    | `1`                                                                         |             |
 | autoscaling.targetCPUUtilizationPercentage | int    | `80`                                                                        |             |
 | fullnameOverride                           | string | `""`                                                                        |             |
-| image.digest                               | string | `"sha256:0000000000000000000000000000000000000000000000000000000000000000"` |             |
+| image.digest                               | string | `"sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"` |             |
 | image.pullPolicy                           | string | `"Always"`                                                                  |             |
 | image.registry                             | string | `"ghcr.io"`                                                                 |             |
 | image.repository                           | string | `"hoverkraft-tech/ci-github-container/application-test"`                    |             |
@@ -49,9 +49,16 @@ A Helm chart for Kubernetes
 | mysql.metrics.image.repository             | string | `"bitnamilegacy/mysqld-exporter"`                                           |             |
 | mysql.volumePermissions.image.repository   | string | `"bitnamilegacy/os-shell"`                                                  |             |
 | nameOverride                               | string | `""`                                                                        |             |
+| namespace                                  | string | `"app-system"`                                                              |             |
+| networkPolicy.egress                       | list   | `[]`                                                                        |             |
+| networkPolicy.enabled                      | bool   | `true`                                                                      |             |
+| networkPolicy.ingress                      | list   | `[]`                                                                        |             |
 | nodeSelector                               | object | `{}`                                                                        |             |
 | podAnnotations                             | object | `{}`                                                                        |             |
-| podSecurityContext                         | object | `{}`                                                                        |             |
+| podSecurityContext.fsGroup                 | int    | `10001`                                                                     |             |
+| podSecurityContext.runAsGroup              | int    | `10001`                                                                     |             |
+| podSecurityContext.runAsNonRoot            | bool   | `true`                                                                      |             |
+| podSecurityContext.runAsUser               | int    | `10001`                                                                     |             |
 | replicaCount                               | int    | `1`                                                                         |             |
 | resources.limits.cpu                       | string | `"100m"`                                                                    |             |
 | resources.limits.memory                    | string | `"128Mi"`                                                                   |             |

@@ -13,15 +13,29 @@ An umbrella Helm chart for Kubernetes
 
 ## Values
 
-| Key                       | Type   | Default                       | Description |
-| ------------------------- | ------ | ----------------------------- | ----------- |
-| app.enabled               | bool   | `true`                        |             |
-| database.auth.database    | string | `"test-umbrella-application"` |             |
-| database.auth.username    | string | `"test-umbrella-application"` |             |
-| database.enabled          | bool   | `true`                        |             |
-| database.fullnameOverride | string | `"database"`                  |             |
-| global.fullnameOverride   | string | `""`                          |             |
-| global.nameOverride       | string | `""`                          |             |
+| Key                                                                | Type   | Default                                                                     | Description |
+| ------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------- | ----------- |
+| app.enabled                                                        | bool   | `true`                                                                      |             |
+| database.auth.database                                             | string | `"test-umbrella-application"`                                               |             |
+| database.auth.username                                             | string | `"test-umbrella-application"`                                               |             |
+| database.enabled                                                   | bool   | `true`                                                                      |             |
+| database.fullnameOverride                                          | string | `"database"`                                                                |             |
+| database.image.digest                                              | string | `"sha256:ec13e229247a737f7149b7f255d8f2d9c72da861f8bf263b22091bf131540da3"` |             |
+| database.image.pullPolicy                                          | string | `"Always"`                                                                  |             |
+| database.image.repository                                          | string | `"bitnamilegacy/mysql"`                                                     |             |
+| database.namespaceOverride                                         | string | `"app-system"`                                                              |             |
+| database.primary.containerSecurityContext.allowPrivilegeEscalation | bool   | `false`                                                                     |             |
+| database.primary.containerSecurityContext.capabilities.drop[0]     | string | `"ALL"`                                                                     |             |
+| database.primary.containerSecurityContext.enabled                  | bool   | `true`                                                                      |             |
+| database.primary.containerSecurityContext.readOnlyRootFilesystem   | bool   | `true`                                                                      |             |
+| database.primary.containerSecurityContext.runAsGroup               | int    | `10001`                                                                     |             |
+| database.primary.containerSecurityContext.runAsNonRoot             | bool   | `true`                                                                      |             |
+| database.primary.containerSecurityContext.runAsUser                | int    | `10001`                                                                     |             |
+| database.primary.containerSecurityContext.seccompProfile.type      | string | `"RuntimeDefault"`                                                          |             |
+| database.primary.podSecurityContext.enabled                        | bool   | `true`                                                                      |             |
+| database.primary.podSecurityContext.fsGroup                        | int    | `10001`                                                                     |             |
+| global.fullnameOverride                                            | string | `""`                                                                        |             |
+| global.nameOverride                                                | string | `""`                                                                        |             |
 
 ---
 
