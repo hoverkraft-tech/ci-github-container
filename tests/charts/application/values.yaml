@@ -3,6 +3,8 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 ---
+namespace: "app-system"
+
 application:
   dbConnection: mysql
   dbHost: "mysql"
@@ -19,7 +21,7 @@ image:
   registry: "ghcr.io"
   repository: "hoverkraft-tech/ci-github-container/application-test"
   tag: ""
-  digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  digest: "sha256:da3b65f32ea75f8041079d220b72da4f605738996256a7dc32715424cc117271"
 
 imagePullSecrets: []
 
@@ -38,8 +40,10 @@ serviceAccount:
 podAnnotations: {}
 
 podSecurityContext:
-  {}
-  # fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
 
 securityContext:
   capabilities:
@@ -97,6 +101,11 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+networkPolicy:
+  enabled: true
+  ingress: []
+  egress: []
 
 # chart dependencies
 mysql:

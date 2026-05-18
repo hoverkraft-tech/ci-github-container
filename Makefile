@@ -42,7 +42,11 @@ test-build-application: ## Build the test application image
 		-t ghcr.io/hoverkraft-tech/ci-github-container/application-test:0.1.0 ./tests/application
 
 test-ct-install: ## Run ct install to install the test application
-	@ct install --config ct.yaml --helm-extra-set-args '--set=image.tag=0.1.0'
+	@namespace="test-chart-$$(uuidgen | tr '[:upper:]' '[:lower:]')"; \
+	cleanup() { kubectl delete namespace "$$namespace" --ignore-not-found >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT; \
+	kubectl create namespace "$$namespace" >/dev/null; \
+	ct install --config ct.yaml --namespace "$$namespace" --helm-extra-set-args "--set=namespace=$$namespace,image.tag=0.1.0,image.digest="
 
 define run_linter
 	DEFAULT_WORKSPACE="$(CURDIR)"; \

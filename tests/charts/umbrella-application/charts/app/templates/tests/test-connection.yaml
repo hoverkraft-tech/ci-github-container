@@ -1,71 +1,55 @@
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: "{{ include "app.fullname" . }}-test-connection"
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Values.namespace | default "app-system" }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test
 spec:
-  automountServiceAccountToken: false
-  securityContext:
-    seccompProfile:
-      type: RuntimeDefault
-    readOnlyRootFilesystem: true
-    runAsUser: 10001
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop:
-        - NET_RAW
-        - ALL
-  containers:
-    - name: wget
-      image: busybox@sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87b2b85a32def253c7
-      command: ['wget']
-      args: ['{{ include "app.fullname" . }}:{{ .Values.service.port }}']
-      readinessProbe:
-        exec:
-          command:
-            - wget
-            - -O
-            - /dev/null
-            - -q
-            - "{{ include "app.fullname" . }}:{{ .Values.service.port }}"
-        initialDelaySeconds: 5
-        periodSeconds: 5
-        timeoutSeconds: 1
-        successThreshold: 1
-        failureThreshold: 3
-      livenessProbe:
-        exec:
-          command:
-            - wget
-            - -O
-            - /dev/null
-            - -q
-            - "{{ include "app.fullname" . }}:{{ .Values.service.port }}"
-        initialDelaySeconds: 5
-        periodSeconds: 5
-        timeoutSeconds: 1
-        successThreshold: 1
-        failureThreshold: 3
-      resources:
-        limits:
-          cpu: "100m"
-          memory: "128Mi"
-        requests:
-          cpu: "100m"
-          memory: "128Mi"
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "app.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault
-        readOnlyRootFilesystem: true
         runAsUser: 10001
-        allowPrivilegeEscalation: false
-        capabilities:
-          drop:
-            - NET_RAW
-            - ALL
-  restartPolicy: Never
+        runAsNonRoot: true
+      containers:
+        - name: wget
+          image: busybox@sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87b2b85a32def253c7
+          command: ['sh', '-ec']
+          args:
+            - |
+              attempts=0
+              until wget -T 5 -O /dev/null -q 'http://{{ include "app.fullname" . }}:{{ .Values.service.port }}/health/check/'; do
+                attempts=$((attempts + 1))
+                if [ "$attempts" -ge 30 ]; then
+                  exit 1
+                fi
+                sleep 5
+              done
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - NET_RAW
+                - ALL
+      restartPolicy: Never

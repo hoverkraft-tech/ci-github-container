@@ -18,6 +18,7 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: {{ $fullName }}
+  namespace: {{ .Values.namespace | default "app-system" }}
   labels:
     {{- include "test-application.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
