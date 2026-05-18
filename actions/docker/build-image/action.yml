@@ -303,7 +303,7 @@ runs:
 
     # Caching setup
     - id: cache-arguments
-      uses: int128/docker-build-cache-config-action@600f417a89b22227409391339c1c425ba46b5e07 # v1.56.0
+      uses: int128/docker-build-cache-config-action@1bdbbd61b3eea23c7e7a121eb15dd9b0a9ec7d97 # v1.57.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
