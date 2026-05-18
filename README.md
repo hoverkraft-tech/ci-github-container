@@ -48,6 +48,8 @@ _Actions dedicated to packaging, validating, and publishing Helm charts for Kube
 
 #### - [Parse chart URI](actions/helm/parse-chart-uri/README.md)
 
+#### - [Update chart values](actions/helm/update-chart-values/README.md)
+
 #### - [Release chart](actions/helm/release-chart/README.md)
 
 #### - [Test chart](actions/helm/test-chart/README.md)

@@ -1,0 +1,100 @@
+---
+name: Test for "helm/update-chart-values" action
+run-name: Test for "actions/helm/update-chart-values" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  test-simple-chart:
+    name: Test for "helm/update-chart-values" action with simple chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Act
+        uses: ./actions/helm/update-chart-values
+        with:
+          path: tests/charts/application
+          values: |
+            [
+              { "path": ".image.registry", "value": "ghcr.io" },
+              {
+                "path": ".image.repository",
+                "value": "hoverkraft-tech/ci-github-container/application"
+              },
+              { "path": ".image.tag", "value": "0.2.0" }
+            ]
+
+      - name: Assert - Check updated chart files
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert');
+            const fs = require('node:fs');
+
+            const chartContent = fs.readFileSync('tests/charts/application/Chart.yaml', 'utf8');
+            assert.match(chartContent, /name:\s+"test-application"/, 'root chart name should stay unchanged');
+            assert.match(chartContent, /version:\s+0\.0\.0/, 'root chart version should stay unchanged');
+            assert.match(chartContent, /appVersion:\s+"0\.0\.0"/, 'root chart appVersion should stay unchanged');
+
+            const valuesContent = fs.readFileSync('tests/charts/application/values.yaml', 'utf8');
+            assert.match(valuesContent, /registry:\s+"ghcr\.io"/, 'image registry should be updated');
+            assert.match(valuesContent, /repository:\s+"hoverkraft-tech\/ci-github-container\/application"/, 'image repository should be updated');
+            assert.match(valuesContent, /tag:\s+"0\.2\.0"/, 'image tag should be updated');
+
+  test-umbrella-chart:
+    name: Test for "helm/update-chart-values" action with umbrella chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Act
+        uses: ./actions/helm/update-chart-values
+        with:
+          path: tests/charts/umbrella-application
+          values: |
+            [
+              { "file": "charts/app/values.yaml", "path": ".image.registry", "value": "ghcr.io" },
+              {
+                "file": "charts/app/values.yaml",
+                "path": ".image.repository",
+                "value": "hoverkraft-tech/ci-github-container/umbrella-application"
+              },
+              { "file": "charts/app/values.yaml", "path": ".image.tag", "value": "0.2.0" }
+            ]
+
+      - name: Assert - Check updated umbrella chart files
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert');
+            const fs = require('node:fs');
+
+            const rootChartContent = fs.readFileSync('tests/charts/umbrella-application/Chart.yaml', 'utf8');
+            assert.match(rootChartContent, /name:\s+test-umbrella-application/, 'root chart name should stay unchanged');
+            assert.match(rootChartContent, /version:\s+0\.1\.0/, 'root chart version should stay unchanged');
+            assert.match(rootChartContent, /appVersion:\s+"0\.1\.0"/, 'root chart appVersion should stay unchanged');
+            assert.match(rootChartContent, /version:\s+0\.0\.0\s+condition:\s+app\.enabled/s, 'local dependency version in Chart.yaml should stay unchanged');
+
+            const childChartContent = fs.readFileSync('tests/charts/umbrella-application/charts/app/Chart.yaml', 'utf8');
+            assert.match(childChartContent, /version:\s+0\.0\.0/, 'child chart version should stay unchanged');
+            assert.match(childChartContent, /appVersion:\s+"0\.0\.0"/, 'child chart appVersion should stay unchanged');
+
+            const childValuesContent = fs.readFileSync('tests/charts/umbrella-application/charts/app/values.yaml', 'utf8');
+            assert.match(childValuesContent, /registry:\s+"ghcr\.io"/, 'child image registry should be updated');
+            assert.match(childValuesContent, /repository:\s+"hoverkraft-tech\/ci-github-container\/umbrella-application"/, 'child image repository should be updated');
+            assert.match(childValuesContent, /tag:\s+"0\.2\.0"/, 'child image tag should be updated');
+
+            const chartLockContent = fs.readFileSync('tests/charts/umbrella-application/Chart.lock', 'utf8');
+            assert.match(chartLockContent, /version:\s+0\.0\.0/, 'local dependency version in Chart.lock should stay unchanged');

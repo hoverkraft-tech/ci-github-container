@@ -51,6 +51,12 @@ jobs:
     permissions:
       contents: read
 
+  test-action-helm-update-chart-values:
+    needs: linter
+    uses: ./.github/workflows/__test-action-helm-update-chart-values.yml
+    permissions:
+      contents: read
+
   test-action-helm-release-chart:
     needs: linter
     uses: ./.github/workflows/__test-action-helm-release-chart.yml
