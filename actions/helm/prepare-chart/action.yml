@@ -1,0 +1,84 @@
+---
+name: "Prepare Helm Chart"
+description: |
+  Add Helm repositories and build chart dependencies
+  for all charts found under a path.
+author: hoverkraft
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  path:
+    description: "Path containing the chart(s) to prepare"
+    required: true
+  helm-repositories:
+    description: |
+      List of Helm repositories to add before building chart dependencies.
+      See https://helm.sh/docs/helm/helm_repo_add/.
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Add Helm repositories
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
+      with:
+        script: |
+          const repositories = (process.env.INPUT_HELM_REPOSITORIES ?? '')
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
+
+          for (const repository of repositories) {
+            await exec.exec('helm', [
+              'repo',
+              'add',
+              ...repository.split(/\s+/),
+            ]);
+          }
+
+    - name: Build chart dependencies
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+      with:
+        script: |
+          const path = require('node:path');
+
+          const chartPath = process.env.INPUT_PATH;
+          if (!chartPath) {
+            core.setFailed('"path" input is missing');
+            return;
+          }
+
+          core.info('Building charts dependencies');
+
+          const chartRootDir = path.resolve(
+            process.env.GITHUB_WORKSPACE ?? '.',
+            chartPath,
+          );
+          const chartFiles = [];
+          const globber = await glob.create(
+            `${chartPath}/**/Chart.yaml`,
+            { followSymbolicLinks: false },
+          );
+
+          for await (const chartFile of globber.globGenerator()) {
+            chartFiles.push(chartFile);
+          }
+
+          if (chartFiles.length === 0) {
+            core.info(`No charts found in ${chartRootDir}`);
+            return;
+          }
+
+          chartFiles.sort();
+
+          for (const chartFile of chartFiles) {
+            const chartDir = path.dirname(chartFile);
+            core.info(`Building dependencies for ${chartDir}`);
+            await exec.exec('helm', ['dependency', 'build', chartDir]);
+          }

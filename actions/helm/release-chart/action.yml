@@ -252,45 +252,12 @@ runs:
 
     - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
 
-    - shell: bash
-      env:
-        INPUT_HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
-      run: |
-        # For each line in the input, add the Helm repository
-        printf '%s\n' "$INPUT_HELM_REPOSITORIES" | while IFS= read -r line; do
-          if [ -z "$line" ]; then
-            continue
-          fi
-
-          # shellcheck disable=SC2086
-          helm repo add $line
-        done
-
-    - shell: bash
-      env:
-        INPUT_PATH: ${{ inputs.path }}
-      run: |
-        echo "Building charts dependencies"
-
-        CHART_ROOT_DIR="$(pwd)/$INPUT_PATH"
-        CHART_FILES=$(find "$CHART_ROOT_DIR" -name "Chart.yaml")
-
-        # If no files found, exit
-        if [ -z "$CHART_FILES" ]; then
-          echo "No charts found in $CHART_ROOT_DIR"
-          exit 0
-        fi
-
-        # For each chart, build dependencies
-        for chart in $CHART_FILES; do
-          if [ ! -f "$chart" ]; then
-            continue
-          fi
-
-          CHART_DIR=$(dirname "$chart")
-          echo "Building dependencies for $CHART_DIR"
-          helm dependency build "$CHART_DIR"
-        done
+    - name: Prepare chart dependencies
+      uses: ./actions/helm/prepare-chart
+      with:
+        path: ${{ inputs.path }}
+        helm-repositories: >-
+          ${{ inputs.helm-repositories }}
 
     - id: chart-releaser
       uses: appany/helm-oci-chart-releaser@d94988c92bed2e09c6113981f15f8bb495d10943 # v0.5.0
