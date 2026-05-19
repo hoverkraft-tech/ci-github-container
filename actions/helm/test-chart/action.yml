@@ -66,11 +66,15 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
+    - name: Validate inputs
       if: ${{ inputs.enable-lint != 'true' && inputs.enable-install != 'true' }}
-      run: |
-        echo "::error ::At least one of 'enable-lint' or 'enable-install' input must be true"
-        exit 1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      with:
+        script: |
+          core.setFailed(
+            "At least one of 'enable-lint' or 'enable-install' " +
+            'input must be true',
+          );
 
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
       with:
@@ -78,14 +82,27 @@ runs:
 
     - name: Check for .tools-version file
       id: check-tools-version
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        if [[ -f .tools-version ]]; then
-          echo "tools-version-exists=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "tools-version-exists=false" >> "$GITHUB_OUTPUT"
-        fi
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      with:
+        script: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const workingDirectory = path.resolve(
+            process.env.GITHUB_WORKSPACE ?? '.',
+            process.env.WORKING_DIRECTORY ?? '.',
+          );
+          const toolsVersionPath = path.join(
+            workingDirectory,
+            '.tools-version',
+          );
+
+          core.setOutput(
+            'tools-version-exists',
+            fs.existsSync(toolsVersionPath) ? 'true' : 'false',
+          );
 
     - name: Install tools with asdf
       if: ${{ steps.check-tools-version.outputs.tools-version-exists == 'true' }}
@@ -93,63 +110,92 @@ runs:
 
     - name: Check for ct.yaml file
       id: check-ct-yaml
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        if [[ -f ct.yaml ]]; then
-          echo "path=ct.yaml" >> "$GITHUB_OUTPUT"
-        fi
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      with:
+        script: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const workingDirectory = path.resolve(
+            process.env.GITHUB_WORKSPACE ?? '.',
+            process.env.WORKING_DIRECTORY ?? '.',
+          );
+          const ctConfigPath = path.join(workingDirectory, 'ct.yaml');
+
+          if (fs.existsSync(ctConfigPath)) {
+            core.setOutput('path', 'ct.yaml');
+          }
 
     - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
     - name: Set up chart-testing
       uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
 
-    - shell: bash
-      run: |
-        # For each line in the input, add the Helm repository
-        echo "${{ inputs.helm-repositories }}" | while read -r line; do
-          if [ -z "$line" ]; then
-            continue
-          fi
-
-          # shellcheck disable=SC2086
-          helm repo add $line
-        done
+    - name: Prepare chart dependencies
+      uses: ./actions/helm/prepare-chart
+      with:
+        path: ${{ inputs.working-directory }}
+        helm-repositories: >-
+          ${{ inputs.helm-repositories }}
 
     - name: Prepare ct variables
       id: prepare-ct-variables
-      shell: bash
-      run: |
-        if [ "${{ inputs.check-diff-only }}" == "true" ]; then
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
-          else
-            TARGET_BRANCH="${{ github.event.repository.default_branch }}"
-          fi
-          CT_ARGS="--target-branch $TARGET_BRANCH"
-        fi
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_CHECK_DIFF_ONLY: ${{ inputs.check-diff-only }}
+        CT_CONFIG_PATH: ${{ steps.check-ct-yaml.outputs.path }}
+      with:
+        script: |
+          const { randomUUID } = require('node:crypto');
 
-        if [ -n "${{ steps.check-ct-yaml.outputs.path }}" ]; then
-          CT_ARGS="$CT_ARGS --config ${{ steps.check-ct-yaml.outputs.path }}"
-        fi
+          const args = [];
 
-        if [ -z "$CT_ARGS" ]; then
-          CT_ARGS="--all"
-        fi
+          if (process.env.INPUT_CHECK_DIFF_ONLY === 'true') {
+            const targetBranch = context.eventName === 'pull_request'
+              ? context.payload.pull_request?.base?.ref
+              : context.payload.repository?.default_branch;
 
-        echo "args=$CT_ARGS" >> "$GITHUB_OUTPUT"
+            if (targetBranch) {
+              args.push('--target-branch', targetBranch);
+            }
+          }
 
-        # Namespace for the test cluster
-        NAMESPACE="test-chart-${{ github.run_id}}-$(uuidgen)"
-        echo "namespace=$NAMESPACE" >> "$GITHUB_OUTPUT"
+          if (process.env.CT_CONFIG_PATH) {
+            args.push('--config', process.env.CT_CONFIG_PATH);
+          }
+
+          if (args.length === 0) {
+            args.push('--all');
+          }
+
+          core.setOutput('args', args.join(' '));
+          core.setOutput('args-json', JSON.stringify(args));
+          core.setOutput(
+            'namespace',
+            `test-chart-${process.env.GITHUB_RUN_ID}-${randomUUID()}`,
+          );
 
     - name: Run chart-testing (lint)
       if: ${{ inputs.enable-lint == 'true' }}
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        ct lint ${{ steps.prepare-ct-variables.outputs.args }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        CT_ARGS_JSON: ${{ steps.prepare-ct-variables.outputs.args-json }}
+      with:
+        script: |
+          const path = require('node:path');
+
+          const workingDirectory = path.resolve(
+            process.env.GITHUB_WORKSPACE ?? '.',
+            process.env.WORKING_DIRECTORY ?? '.',
+          );
+          const ctArgs = JSON.parse(process.env.CT_ARGS_JSON ?? '[]');
+
+          await exec.exec('ct', ['lint', ...ctArgs], {
+            cwd: workingDirectory,
+          });
 
     - name: Create kind cluster
       if: ${{ inputs.enable-install == 'true' }}
@@ -158,72 +204,85 @@ runs:
     - name: Install default OCI registry secrets
       id: oci-registry-secret
       if: ${{ inputs.enable-install == 'true' && inputs.oci-registry != '' && inputs.oci-registry-username != '' && inputs.oci-registry-password != '' }}
-      shell: bash
-      run: |
-        SECRET_NAME="regcred"
-        echo "oci-registry-secret=$SECRET_NAME" >> "$GITHUB_OUTPUT"
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        NAMESPACE: ${{ steps.prepare-ct-variables.outputs.namespace }}
+        INPUT_OCI_REGISTRY: ${{ inputs.oci-registry }}
+        INPUT_OCI_REGISTRY_USERNAME: ${{ inputs.oci-registry-username }}
+        INPUT_OCI_REGISTRY_PASSWORD: ${{ inputs.oci-registry-password }}
+      with:
+        script: |
+          const secretName = 'regcred';
+          const namespace = process.env.NAMESPACE;
 
-        # See https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-        NAMESPACE="${{ steps.prepare-ct-variables.outputs.namespace }}"
-        kubectl create namespace "$NAMESPACE"
+          core.setOutput('name', secretName);
 
-        SECRET_NAME="regcred"
-        DOCKER_REGISTRY="${{ inputs.oci-registry }}"
-        DOCKER_USERNAME="${{ inputs.oci-registry-username }}"
-        DOCKER_PASSWORD="${{ inputs.oci-registry-password }}"
-
-        kubectl --context kind-chart-testing create secret docker-registry "$SECRET_NAME" \
-          --namespace="$NAMESPACE" \
-          --docker-server=$DOCKER_REGISTRY \
-          --docker-username=$DOCKER_USERNAME \
-          --docker-password=$DOCKER_PASSWORD
+          await exec.exec('kubectl', ['create', 'namespace', namespace]);
+          await exec.exec('kubectl', [
+            '--context',
+            'kind-chart-testing',
+            'create',
+            'secret',
+            'docker-registry',
+            secretName,
+            `--namespace=${namespace}`,
+            `--docker-server=${process.env.INPUT_OCI_REGISTRY}`,
+            `--docker-username=${process.env.INPUT_OCI_REGISTRY_USERNAME}`,
+            `--docker-password=${process.env.INPUT_OCI_REGISTRY_PASSWORD}`,
+          ]);
 
     - name: Run chart-testing (install)
       if: ${{ inputs.enable-install == 'true' }}
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
       env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        CT_ARGS_JSON: ${{ steps.prepare-ct-variables.outputs.args-json }}
+        NAMESPACE: ${{ steps.prepare-ct-variables.outputs.namespace }}
+        INPUT_HELM_SET: ${{ inputs.helm-set }}
+        OCI_REGISTRY_SECRET: ${{ steps.oci-registry-secret.outputs.name }}
         HELM_EXPERIMENTAL_OCI: true
-      run: |
-        NAMESPACE="${{ steps.prepare-ct-variables.outputs.namespace }}"
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      with:
+        script: |
+          const path = require('node:path');
 
-        HELM_SET="namespace=$NAMESPACE
-        ${{ inputs.helm-set }}"
+          const workingDirectory = path.resolve(
+            process.env.GITHUB_WORKSPACE ?? '.',
+            process.env.WORKING_DIRECTORY ?? '.',
+          );
+          const namespace = process.env.NAMESPACE;
+          const ctArgs = JSON.parse(process.env.CT_ARGS_JSON ?? '[]');
+          const helmSetLines = [
+            `namespace=${namespace}`,
+            ...(process.env.INPUT_HELM_SET ?? '').split(/\r?\n/),
+          ]
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .map((line) => line.replaceAll(',', '\\,'));
 
-        OCI_REGISTRY_SECRET="${{ steps.oci-registry-secret.outputs.oci-registry-secret }}"
-        if [ -n "$OCI_REGISTRY_SECRET" ]; then
-          # Ensure secret exists
-          kubectl get secret "$OCI_REGISTRY_SECRET" --output=yaml --namespace=$NAMESPACE
+          const ociRegistrySecret = process.env.OCI_REGISTRY_SECRET ?? '';
+          if (ociRegistrySecret) {
+            await exec.exec('kubectl', [
+              'get',
+              'secret',
+              ociRegistrySecret,
+              '--output=yaml',
+              `--namespace=${namespace}`,
+            ]);
 
-          HELM_SET="$HELM_SET
-          imagePullSecrets[0].name=${OCI_REGISTRY_SECRET}"
-        fi
+            helmSetLines.push(
+              `imagePullSecrets[0].name=${ociRegistrySecret}`,
+            );
+          }
 
-        HELM_EXTRA_SET_ARGS=""
-        if [ -n "$HELM_SET" ]; then
-          IFS=$'\n' read -r -d '' -a lines <<< "$HELM_SET" || true
-          for line in "${lines[@]}"; do
-            if [ -z "$line" ]; then
-              continue
-            fi
-            # Remove leading and trailing whitespace
-            line=$(echo "$line" | xargs) || true
+          const helmExtraSetArgs = `--set=${helmSetLines.join(',')}`;
 
-            # Escape commas in the line
-            line=$(echo "$line" | sed 's/,/\\,/g') || true
-
-            if [ -n "$HELM_EXTRA_SET_ARGS" ]; then
-              HELM_EXTRA_SET_ARGS="${HELM_EXTRA_SET_ARGS},"
-            fi
-
-            HELM_EXTRA_SET_ARGS="${HELM_EXTRA_SET_ARGS}${line}"
-          done
-        fi
-
-        HELM_EXTRA_SET_ARGS="--set=${HELM_EXTRA_SET_ARGS}"
-
-        COMMAND="ct install ${{ steps.prepare-ct-variables.outputs.args }} --namespace $NAMESPACE --helm-extra-set-args='${HELM_EXTRA_SET_ARGS}'"
-        echo "::debug ::$COMMAND"
-
-        # shellcheck disable=SC2086
-        eval $COMMAND
+          await exec.exec('ct', [
+            'install',
+            ...ctArgs,
+            '--namespace',
+            namespace,
+            '--helm-extra-set-args',
+            helmExtraSetArgs,
+          ], {
+            cwd: workingDirectory,
+          });
