@@ -76,7 +76,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
 
     - id: chart-tag-updates
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -150,7 +150,12 @@ runs:
 
           core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
 
-    - uses: ./actions/helm/update-chart-values
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
+      with:
+        source-path: ${{ github.action_path }}/../..
+        destination-directory-name: self-actions-update-chart-values
+
+    - uses: ./../self-actions-update-chart-values/helm/update-chart-values
       with:
         path: ${{ inputs.path }}
         values: ${{ steps.chart-tag-updates.outputs.values }}
@@ -253,7 +258,7 @@ runs:
     - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
 
     - name: Prepare chart dependencies
-      uses: ./actions/helm/prepare-chart
+      uses: ./../self-actions-update-chart-values/helm/prepare-chart
       with:
         path: ${{ inputs.path }}
         helm-repositories: >-

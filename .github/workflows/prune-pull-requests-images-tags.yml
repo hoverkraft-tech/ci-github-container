@@ -106,7 +106,7 @@ jobs:
       packages: write
     steps:
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
         with:
           actions-path: actions
 
