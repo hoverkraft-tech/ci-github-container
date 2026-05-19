@@ -371,7 +371,7 @@ jobs:
       issues: read
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -380,7 +380,7 @@ jobs:
         run: git lfs pull
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
         with:
           actions-path: actions
 
@@ -451,7 +451,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
@@ -468,7 +468,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
@@ -506,7 +506,7 @@ jobs:
             core.setOutput('built-images', JSON.stringify(images));
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
         with:
           actions-path: actions
 

@@ -76,7 +76,7 @@ runs:
             'input must be true',
           );
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
       with:
         fetch-depth: 0
 
@@ -133,8 +133,13 @@ runs:
     - name: Set up chart-testing
       uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
 
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
+      with:
+        source-path: ${{ github.action_path }}/../..
+        destination-directory-name: self-actions-test-chart
+
     - name: Prepare chart dependencies
-      uses: ./actions/helm/prepare-chart
+      uses: ./../self-actions-test-chart/helm/prepare-chart
       with:
         path: ${{ inputs.working-directory }}
         helm-repositories: >-
