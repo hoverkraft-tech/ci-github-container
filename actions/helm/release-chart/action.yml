@@ -76,7 +76,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@4c9d51717dc04d823dac2dc9ac2857e7b3069454 # 0.35.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@ff815105ba418bd0203868c8b52e0e02fea3f1a4 # 0.35.2
 
     - id: chart-tag-updates
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -156,7 +156,7 @@ runs:
         values: ${{ steps.chart-tag-updates.outputs.values }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@a10d5e32daef8e060c49fe617833fb0d53476f22 # 0.24.0
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@6b74a8f070140f5c120f78026d58e4c00d1b1e37 # 0.24.2
       with:
         working-directory: ${{ github.action_path }}
 
