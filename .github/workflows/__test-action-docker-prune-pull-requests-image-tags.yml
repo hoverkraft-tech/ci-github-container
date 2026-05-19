@@ -57,11 +57,9 @@ jobs:
             // Define expected packages
             const packages = [
               `ci-github-container/${process.env.IMAGE_NAME}`,
+              `ci-github-container/${process.env.IMAGE_NAME}/cache`,
             ];
 
-            if (github.event_name === 'workflow_dispatch' || (github.event_name === 'push' && github.ref_name !== github.event.repository.default_branch)) {
-              packages.push(`ci-github-container/${process.env.IMAGE_NAME}/cache`);
-            }
             core.setOutput("packages", packages.join("\n"));
 
   arrange-build-images:
