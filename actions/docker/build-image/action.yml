@@ -149,12 +149,12 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
       with:
         source-path: ${{ github.action_path }}/../..
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
       with:
         value: ${{ inputs.platform }}
 
