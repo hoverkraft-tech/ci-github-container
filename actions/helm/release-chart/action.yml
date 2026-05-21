@@ -65,6 +65,11 @@ inputs:
       Comma separated list of paths.
     required: false
     default: ".version,.appVersion"
+  ref:
+    description: |
+      The git ref to checkout before releasing the chart.
+      Can be a branch, tag or commit SHA.
+    required: false
 
 outputs:
   image:
@@ -76,7 +81,9 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
+      with:
+        ref: ${{ inputs.ref }}
 
     - id: chart-tag-updates
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -150,7 +157,7 @@ runs:
 
           core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@cacc6123a32780d507db04733e5a8c167917581d # 0.35.3
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
       with:
         source-path: ${{ github.action_path }}/../..
         destination-directory-name: self-actions-update-chart-values
