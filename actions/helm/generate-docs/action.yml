@@ -14,6 +14,13 @@ inputs:
     description: "Working directory"
     required: false
     default: "${{ github.workspace }}"
+  checkout-ref:
+    description: |
+      The Git ref to checkout before generating documentation.
+      Can be a branch, tag or commit SHA.
+      Set to an empty string to skip checkout.
+    required: false
+    default: ${{ github.ref }}
   values-file:
     description: |
       Path to the values file to use for generating the documentation.
@@ -129,7 +136,10 @@ runs:
           }
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
+    - if: ${{ inputs.checkout-ref != '' }}
+      uses: hoverkraft-tech/ci-github-common/actions/checkout@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
+      with:
+        ref: ${{ inputs.checkout-ref }}
 
     - uses: losisin/helm-docs-github-action@3a4528e97c49a5e83de6b78c50c61c8ee5c9f944 # v2.0.0
       with:
