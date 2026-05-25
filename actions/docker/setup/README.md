@@ -30,7 +30,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/setup@2b647ed6f11d50cb6beb6d56333e68ba2c804826 # 0.33.1
+- uses: hoverkraft-tech/ci-github-container/actions/docker/setup@260358ba1fd405c57bc669823d89c625971a3431 # 0.34.2
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string (default format) or a JSON object.
