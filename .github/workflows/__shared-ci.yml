@@ -22,7 +22,7 @@ jobs:
       contents: read
       packages: write
 
-  test-action-docker-prune-pull-requests-package-version:
+  test-action-docker-prune-pull-requests-image-tags:
     needs: linter
     # yamllint disable-line rule:line-length
     uses: ./.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
