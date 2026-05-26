@@ -86,7 +86,7 @@ runs:
           core.setOutput('packages', packages.join(','));
 
     - id: cleanup
-      uses: dataaxiom/ghcr-cleanup-action@374e2028c8fb93b7219f3771cd405fab95d3dec4 # v1.2.0
+      uses: dataaxiom/ghcr-cleanup-action@f092b48ba3b604b2a83690dc4b2bbb3392e1045f # v1.2.1
       with:
         owner: ${{ steps.prepare.outputs.owner }}
         repository: ${{ steps.prepare.outputs.repository }}
