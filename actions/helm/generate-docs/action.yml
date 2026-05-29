@@ -44,6 +44,11 @@ inputs:
       See https://github.com/actions/create-github-app-token.
     required: false
 
+outputs:
+  merged-sha:
+    description: "The SHA of the commit that was merged to the base branch. Will be empty if no pull request was created or merged."
+    value: ${{ steps.create-and-merge-pull-request.outputs.merged-sha }}
+
 runs:
   using: "composite"
   steps:
@@ -242,6 +247,7 @@ runs:
         private-key: ${{ inputs.github-app-key }}
 
     - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
+      id: create-and-merge-pull-request
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}
