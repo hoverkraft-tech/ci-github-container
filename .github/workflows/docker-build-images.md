@@ -16,6 +16,7 @@
 [![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
 [![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+[![codecov](https://codecov.io/gh/hoverkraft-tech/compose-action/graph/badge.svg?token=90JXB7EIMA)](https://codecov.io/gh/hoverkraft-tech/compose-action)
 
 <!-- badges:end -->
 
@@ -50,7 +51,7 @@ on:
 permissions: {}
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@676925b78f1970281b3f087bc3829eb1c6a9f4dc # 0.34.1
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
     permissions:
       contents: read
       id-token: write

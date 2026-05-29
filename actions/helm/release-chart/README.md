@@ -17,6 +17,7 @@
 [![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
 [![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+[![codecov](https://codecov.io/gh/hoverkraft-tech/compose-action/graph/badge.svg?token=90JXB7EIMA)](https://codecov.io/gh/hoverkraft-tech/compose-action)
 
 <!-- badges:end -->
 
@@ -42,7 +43,7 @@ This action requires the following permissions on the repository:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@676925b78f1970281b3f087bc3829eb1c6a9f4dc # 0.34.1
+- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
   with:
     # OCI registry where to push chart.
     # See https://github.com/appany/helm-oci-chart-releaser#usage.
@@ -102,6 +103,10 @@ This action requires the following permissions on the repository:
     #
     # Default: `.version,.appVersion`
     update-tag-paths: .version,.appVersion
+
+    # The git ref to checkout before releasing the chart.
+    # Can be a branch, tag or commit SHA.
+    ref: ""
 ````
 
 <!-- usage:end -->
@@ -132,6 +137,8 @@ This action requires the following permissions on the repository:
 | **`tag`**                   | The release tag to set to chart                                                                                                                                                                            | **true**     | -                                |
 | **`update-tag-paths`**      | List of YAML paths to update with the tag.                                                                                                                                                                 | **false**    | `.version,.appVersion`           |
 |                             | Comma separated list of paths.                                                                                                                                                                             |              |                                  |
+| **`ref`**                   | The git ref to checkout before releasing the chart.                                                                                                                                                        | **false**    | -                                |
+|                             | Can be a branch, tag or commit SHA.                                                                                                                                                                        |              |                                  |
 
 <!-- inputs:end -->
 

@@ -17,6 +17,7 @@
 [![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
 [![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+[![codecov](https://codecov.io/gh/hoverkraft-tech/compose-action/graph/badge.svg?token=90JXB7EIMA)](https://codecov.io/gh/hoverkraft-tech/compose-action)
 
 <!-- badges:end -->
 
@@ -45,7 +46,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@260358ba1fd405c57bc669823d89c625971a3431 # 0.34.2
+- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
   with:
     # Comma-separated list of packages to cleanup.
     # Example: "application-1,application-2"
@@ -109,7 +110,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@260358ba1fd405c57bc669823d89c625971a3431 # 0.34.2
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
         with:
           package: my-app
           delete-tags: pr-${{ github.event.pull_request.number }}-*
@@ -131,7 +132,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@260358ba1fd405c57bc669823d89c625971a3431 # 0.34.2
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
         with:
           package: my-app
           delete-untagged: true
