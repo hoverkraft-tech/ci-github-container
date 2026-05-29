@@ -401,7 +401,7 @@ runs:
         version: v0.34.1
         # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
         driver-opts: |
-          image=moby/buildkit:v0.29.0
+          image=moby/buildkit:v0.30.0
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
         cleanup: ${{ inputs.buildx-cleanup }}
 
