@@ -1,6 +1,6 @@
 <!-- header:start -->
 
-# ![Icon](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItZWRpdCIgY29sb3I9ImJsdWUiPjxwYXRoIGQ9Ik0xMSA0SDRhMiAyIDAgMCAwLTIgMnYxNGEyIDIgMCAwIDAgMiAyaDE0YTIgMiAwIDAgMCAyLTJ2LTciPjwvcGF0aD48cGF0aCBkPSJNMTguNSAyLjVhMi4xMjEgMi4xMjEgMCAwIDEgMyAzTDEyIDE1bC00IDEgMS00IDEwLjUtMTAuNXoiPjwvcGF0aD48L3N2Zz4=) GitHub Action: Update chart values
+# ![Icon](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItZWRpdCIgY29sb3I9ImJsdWUiPjxwYXRoIGQ9Ik0xMSA0SDRhMiAyIDAgMCAwLTIgMnYxNGEyIDIgMCAwIDAgMiAyaDE0YTIgMiAwIDAgMCAyLTJ2LTciPjwvcGF0aD48cGF0aCBkPSJNMTguNSAyLjVhMi4xMjEgMi4xMjEgMCAwIDEgMyAzTDEyIDE1bC00IDEgMS00IDkuNS05LjV6Ij48L3BhdGg+PC9zdmc+) GitHub Action: Update chart values
 
 <div align="center">
   <img src="../../../.github/logo.svg" width="60px" align="center" alt="Update chart values" />
@@ -17,6 +17,7 @@
 [![License](https://img.shields.io/github/license/hoverkraft-tech/ci-github-container)](http://choosealicense.com/licenses/mit/)
 [![Stars](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)](https://img.shields.io/github/stars/hoverkraft-tech/ci-github-container?style=social)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md)
+[![codecov](https://codecov.io/gh/hoverkraft-tech/compose-action/graph/badge.svg?token=90JXB7EIMA)](https://codecov.io/gh/hoverkraft-tech/compose-action)
 
 <!-- badges:end -->
 
@@ -33,7 +34,7 @@ Updates Helm chart values files before release.
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/update-chart-values@2b647ed6f11d50cb6beb6d56333e68ba2c804826 # 0.33.1
+- uses: hoverkraft-tech/ci-github-container/actions/helm/update-chart-values@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
   with:
     # Path to the chart to update
     # This input is required.
@@ -47,10 +48,10 @@ Updates Helm chart values files before release.
     #
     # ```json
     # [
-    #   {
-    #     "file": "charts/application/charts/api/values.yaml",
-    #     "path": ".image.registry", "value": "ghcr.io"
-    #   }
+    # {
+    # "file": "charts/application/charts/api/values.yaml",
+    # "path": ".image.registry", "value": "ghcr.io"
+    # }
     # ]
     # ```
     values: ""
