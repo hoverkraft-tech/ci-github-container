@@ -43,7 +43,7 @@ This action requires the following permissions on the repository:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@6931f4886bf8af8570acbace09db06a639cbae6f # 0.36.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@77f98ab8773b824eca7ed3f94e3e9c8b8af5875c # 0.36.1
   with:
     # OCI registry where to push chart.
     # See https://github.com/appany/helm-oci-chart-releaser#usage.
@@ -137,7 +137,7 @@ This action requires the following permissions on the repository:
 | **`tag`**                   | The release tag to set to chart                                                                                                                                                                            | **true**     | -                                |
 | **`update-tag-paths`**      | List of YAML paths to update with the tag.                                                                                                                                                                 | **false**    | `.version,.appVersion`           |
 |                             | Comma separated list of paths.                                                                                                                                                                             |              |                                  |
-| **`ref`**                   | The Git ref to checkout before releasing the chart.                                                                                                                                                        | **false**    | -                                |
+| **`ref`**                   | The git ref to checkout before releasing the chart.                                                                                                                                                        | **false**    | -                                |
 |                             | Can be a branch, tag or commit SHA.                                                                                                                                                                        |              |                                  |
 
 <!-- inputs:end -->
