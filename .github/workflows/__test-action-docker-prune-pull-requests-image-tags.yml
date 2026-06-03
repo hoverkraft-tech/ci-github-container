@@ -111,6 +111,36 @@ jobs:
           script: |
             const packages = process.env.PACKAGES.split("\n").map(packageName => packageName.trim()).filter(Boolean);
 
+            const sleep = (delayMs) =>
+              new Promise((resolve) => setTimeout(resolve, delayMs));
+
+            async function getPackageForOrganizationWithRetry(
+              packagePayload,
+              maxAttempts = 6,
+              delayMs = 5000,
+            ) {
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                  return await github.rest.packages.getPackageForOrganization(
+                    packagePayload
+                  );
+                } catch (error) {
+                  if (error.status !== 404 || attempt === maxAttempts) {
+                    throw error;
+                  }
+
+                  core.info(
+                    [
+                      `Package "${packagePayload.package_name}" is not visible yet`,
+                      `(attempt ${attempt}/${maxAttempts}).`,
+                      `Retrying in ${delayMs} ms.`,
+                    ].join(" ")
+                  );
+                  await sleep(delayMs);
+                }
+              }
+            }
+
             for(const packageName of packages) {
               const packagePayload = {
                 package_type: 'container',
@@ -119,7 +149,7 @@ jobs:
               };
 
               // Ensure that package exists
-              const packageExists = await github.rest.packages.getPackageForOrganization(packagePayload);
+              const packageExists = await getPackageForOrganizationWithRetry(packagePayload);
               if (!packageExists) {
                 return core.setFailed(`Package "${packageName}" does not exist`);
               }
@@ -207,6 +237,65 @@ jobs:
 
             const packages = process.env.PACKAGES.split("\n").map(packageName => packageName.trim()).filter(Boolean);
 
+            const sleep = (delayMs) =>
+              new Promise((resolve) => setTimeout(resolve, delayMs));
+
+            async function getPackageForOrganizationWithRetry(
+              packagePayload,
+              maxAttempts = 6,
+              delayMs = 5000,
+            ) {
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                  return await github.rest.packages.getPackageForOrganization(
+                    packagePayload
+                  );
+                } catch (error) {
+                  if (error.status !== 404 || attempt === maxAttempts) {
+                    throw error;
+                  }
+
+                  core.info(
+                    [
+                      `Package "${packagePayload.package_name}" is not visible yet`,
+                      `(attempt ${attempt}/${maxAttempts}).`,
+                      `Retrying in ${delayMs} ms.`,
+                    ].join(" ")
+                  );
+                  await sleep(delayMs);
+                }
+              }
+            }
+
+            async function getPackageVersionsForOrganizationWithRetry(
+              packagePayload,
+              maxAttempts = 6,
+              delayMs = 5000,
+            ) {
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                  return await github.paginate(
+                    github.rest.packages
+                      .getAllPackageVersionsForPackageOwnedByOrg
+                      .endpoint.merge(packagePayload)
+                  );
+                } catch (error) {
+                  if (error.status !== 404 || attempt === maxAttempts) {
+                    throw error;
+                  }
+
+                  core.info(
+                    [
+                      `Package versions for "${packagePayload.package_name}"`,
+                      `are not visible yet (attempt ${attempt}/${maxAttempts}).`,
+                      `Retrying in ${delayMs} ms.`,
+                    ].join(" ")
+                  );
+                  await sleep(delayMs);
+                }
+              }
+            }
+
             for(const packageName of packages) {
               const packagePayload = {
                 package_type: 'container',
@@ -215,12 +304,10 @@ jobs:
               };
 
               // Ensure that package still exists
-              const packageExists = await github.rest.packages.getPackageForOrganization(packagePayload);
+              const packageExists = await getPackageForOrganizationWithRetry(packagePayload);
               assert(packageExists, `Package "${packageName}" does not exist`);
 
-              const packageVersions = await github.paginate(
-                github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg.endpoint.merge(packagePayload)
-              );
+              const packageVersions = await getPackageVersionsForOrganizationWithRetry(packagePayload);
 
               const packageVersionExists = packageVersions.some(
                 (packageVersion) => packageVersion.metadata.container.tags.some(
