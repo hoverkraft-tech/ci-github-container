@@ -1,0 +1,157 @@
+---
+name: Test for "docker/setup" action
+run-name: Test for "docker/setup" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  tests:
+    name: Test for "docker/setup" action
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Arrange - Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Arrange - Ensure token is set
+        run: |
+          if [ -z "${{ github.token }}" ]; then
+            echo "GitHub token is not set"
+            exit 1
+          fi
+
+      - name: Act - Setup Docker
+        id: docker-setup
+        uses: ./actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ github.token }}
+
+      - name: Assert - Check setup outputs and installed tooling
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED_DOCKER_VERSION: 29.6.1
+          PUSH_REGISTRY_OUTPUT: ${{ steps.docker-setup.outputs.push-registry }}
+          CACHE_REGISTRY_OUTPUT: ${{ steps.docker-setup.outputs.cache-registry }}
+          PULL_REGISTRIES_OUTPUT: ${{ steps.docker-setup.outputs.pull-registries }}
+          BUILDX_NAME_OUTPUT: ${{ steps.docker-setup.outputs.buildx-name }}
+        with:
+          script: |
+            const assert = require("assert");
+
+            assert.equal(process.env.PUSH_REGISTRY_OUTPUT, "ghcr.io", '"push-registry" output is not valid');
+            assert.equal(process.env.CACHE_REGISTRY_OUTPUT, "ghcr.io", '"cache-registry" output is not valid');
+
+            let pullRegistries = null;
+            try {
+              pullRegistries = JSON.parse(process.env.PULL_REGISTRIES_OUTPUT);
+            } catch (error) {
+              assert.fail(`Failed to parse "pull-registries" output: ${error}`);
+            }
+
+            assert.deepEqual(pullRegistries, ["ghcr.io"], '"pull-registries" output is not valid');
+
+            const buildxName = `${process.env.BUILDX_NAME_OUTPUT || ''}`.trim();
+            assert(buildxName.length, '"buildx-name" output is empty');
+
+            const dockerVersionResult = await exec.getExecOutput(
+              "docker",
+              ["version", "--format", "{{.Server.Version}}"],
+              { silent: true },
+            );
+            assert.equal(
+              dockerVersionResult.stdout.trim(),
+              process.env.EXPECTED_DOCKER_VERSION,
+              'Installed Docker version is not the expected pinned version',
+            );
+
+            const buildxVersionResult = await exec.getExecOutput(
+              "docker",
+              ["buildx", "version"],
+              { silent: true },
+            );
+            assert(buildxVersionResult.stdout.trim().length, '"docker buildx version" returned an empty result');
+
+            const buildxInspectResult = await exec.getExecOutput(
+              "docker",
+              ["buildx", "inspect", buildxName],
+              { ignoreReturnCode: true, silent: true },
+            );
+            assert.equal(buildxInspectResult.exitCode, 0, 'Configured Buildx builder is not inspectable');
+
+  tests-with-multiple-registries-and-no-buildx:
+    name: Test for "docker/setup" action with multiple registries and no Buildx
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Arrange - Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Arrange - Ensure token is set
+        run: |
+          if [ -z "${{ github.token }}" ]; then
+            echo "GitHub token is not set"
+            exit 1
+          fi
+
+      - name: Act - Setup Docker
+        id: docker-setup
+        uses: ./actions/docker/setup
+        with:
+          oci-registry: |
+            {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}
+          oci-registry-username: |
+            {"push":"${{ github.repository_owner }}"}
+          oci-registry-password: |
+            {"push":"${{ github.token }}"}
+          setup-buildx: false
+
+      - name: Assert - Check registry outputs without Buildx
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED_DOCKER_VERSION: 29.6.1
+          PUSH_REGISTRY_OUTPUT: ${{ steps.docker-setup.outputs.push-registry }}
+          CACHE_REGISTRY_OUTPUT: ${{ steps.docker-setup.outputs.cache-registry }}
+          PULL_REGISTRIES_OUTPUT: ${{ steps.docker-setup.outputs.pull-registries }}
+          BUILDX_NAME_OUTPUT: ${{ steps.docker-setup.outputs.buildx-name }}
+        with:
+          script: |
+            const assert = require("assert");
+
+            assert.equal(process.env.PUSH_REGISTRY_OUTPUT, "ghcr.io", '"push-registry" output is not valid');
+            assert.equal(process.env.CACHE_REGISTRY_OUTPUT, "ghcr.io", '"cache-registry" output is not valid');
+
+            let pullRegistries = null;
+            try {
+              pullRegistries = JSON.parse(process.env.PULL_REGISTRIES_OUTPUT);
+            } catch (error) {
+              assert.fail(`Failed to parse "pull-registries" output: ${error}`);
+            }
+
+            assert.deepEqual(
+              pullRegistries,
+              ["docker.io", "ghcr.io"],
+              '"pull-registries" output is not valid for multiple registries',
+            );
+            assert.equal(`${process.env.BUILDX_NAME_OUTPUT || ''}`.trim(), '', '"buildx-name" output must be empty when Buildx is disabled');
+
+            const dockerVersionResult = await exec.getExecOutput(
+              "docker",
+              ["version", "--format", "{{.Server.Version}}"],
+              { silent: true },
+            );
+            assert.equal(
+              dockerVersionResult.stdout.trim(),
+              process.env.EXPECTED_DOCKER_VERSION,
+              'Installed Docker version is not the expected pinned version',
+            );
