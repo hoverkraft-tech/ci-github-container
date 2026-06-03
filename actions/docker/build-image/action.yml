@@ -167,15 +167,6 @@ runs:
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
-        buildx-cleanup: false
-
-    - name: Register Buildx cleanup
-      # FIXME: Workaround for GitHub Actions post-step ordering behavior with composite actions.
-      # The built-in Buildx cleanup can run before later post steps that still need the builder.
-      # See: https://github.com/actions/runner/issues/1657
-      uses: ./../self-actions/docker/cleanup-builder
-      with:
-        builder: ${{ steps.docker-setup.outputs.buildx-name }}
 
     - id: metadata
       uses: ./../self-actions/docker/get-image-metadata
@@ -283,13 +274,6 @@ runs:
           const cacheImage = cacheType === 'registry' ? `${cacheBaseImage}/cache` : metadataImage;
           core.setOutput('cache-image', cacheImage);
 
-          try {
-            await exec.exec('command -v docker', { stdio: 'ignore' });
-            core.setOutput('docker-exists', 'true');
-          } catch (error) {
-            // docker not available on runner
-          }
-
           const multiplatformInput = (process.env.MULTI_PLATFORM_INPUT || '').trim().toLowerCase();
           const isMultiplatform = !(multiplatformInput.length === 0 || multiplatformInput === 'false');
           if (isMultiplatform) {
@@ -329,7 +313,7 @@ runs:
                 runnerArchNormalized = 'arm/v7';
                 break;
               default:
-                core.warning(`Unsupported architecture: ${runnerArchRaw}`);
+                core.warning(`Unsupported architecture: ${runnerArch}`);
                 break;
             }
 
@@ -363,15 +347,6 @@ runs:
         restore-keys: |
           cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-
 
-    - if: steps.get-docker-config.outputs.cache-type == 'gha'
-      name: Restore Docker cache mounts
-      uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
-      with:
-        builder: ${{ steps.docker-setup.outputs.buildx-name }}
-        cache-dir: cache-mount
-        dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
-        skip-extraction: ${{ steps.cache.outputs.cache-hit }}
-
     - id: cache-inputs
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
@@ -391,25 +366,28 @@ runs:
           );
 
     - id: build
-      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      # Keep Docker-dependent post steps in a composite that runs after docker/setup.
+      # GitHub then completes cache extraction and build summary generation before setup tears down Docker.
+      uses: ./../self-actions/docker/build-image/internal
       with:
+        builder: ${{ steps.docker-setup.outputs.buildx-name }}
+        cache-mounts-enabled: ${{ steps.get-docker-config.outputs.cache-type == 'gha' }}
+        cache-hit: ${{ steps.cache.outputs.cache-hit }}
+        dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         context: ${{ steps.get-docker-config.outputs.context-path }} # zizmor: ignore[template-injection]
         build-args: ${{ inputs.build-args }}
         target: ${{ inputs.target }}
-        file: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         secrets: ${{ inputs.secrets }}
         secret-envs: ${{ inputs.secret-envs }}
-        platforms: ${{ inputs.platform }}
+        platform: ${{ inputs.platform }}
         cache-from: ${{ steps.cache-inputs.outputs.cache-from }}
         cache-to: ${{ steps.cache-inputs.outputs.cache-to }}
         no-cache: ${{ steps.get-docker-config.outputs.cache-disabled }}
-        outputs: |
+        image-outputs: |
           ${{ steps.get-docker-config.outputs.multi-platform && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
         annotations: ${{ steps.metadata.outputs.annotations }}
         tags: ${{ steps.get-docker-config.outputs.multi-platform && steps.metadata.outputs.image || steps.metadata.outputs.tags }}
-        provenance: false # Disable provenance to avoid unknown/unknown arch
-        sbom: false # Disable sbom to avoid unknown/unknown arch
 
     - id: get-built-image
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

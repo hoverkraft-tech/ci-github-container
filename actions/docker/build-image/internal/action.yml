@@ -1,0 +1,102 @@
+---
+name: "Docker - Run image build"
+description: |
+  Internal build-image implementation that keeps Docker-dependent post steps together.
+
+inputs:
+  builder:
+    description: "Docker Buildx builder name."
+    required: true
+  cache-mounts-enabled:
+    description: "Whether to inject and extract Docker cache mounts."
+    default: false
+    required: false
+  cache-hit:
+    description: "Whether the Docker cache mounts were restored from an exact cache key."
+    default: false
+    required: false
+  dockerfile:
+    description: "Resolved Dockerfile path."
+    required: true
+  context:
+    description: "Resolved Docker build context path."
+    required: true
+  build-args:
+    description: "List of build-time variables."
+    required: false
+  target:
+    description: "Dockerfile target stage."
+    required: false
+  secrets:
+    description: "List of secrets exposed to the build."
+    required: false
+  secret-envs:
+    description: "List of secret environment variables exposed to the build."
+    required: false
+  platform:
+    description: "Platform to build for."
+    required: true
+  cache-from:
+    description: "External cache sources for BuildKit."
+    required: false
+  cache-to:
+    description: "External cache destinations for BuildKit."
+    required: false
+  no-cache:
+    description: "Whether to disable the build cache."
+    default: false
+    required: false
+  image-outputs:
+    description: "BuildKit image output configuration."
+    required: true
+  labels:
+    description: "Image labels."
+    required: false
+  annotations:
+    description: "Image annotations."
+    required: false
+  tags:
+    description: "Image tags."
+    required: true
+
+outputs:
+  metadata:
+    description: "Build result metadata."
+    value: ${{ steps.build.outputs.metadata }}
+
+runs:
+  using: "composite"
+  steps:
+    - if: inputs.cache-mounts-enabled == 'true'
+      name: Restore Docker cache mounts
+      uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
+      with:
+        # Nested local composite posts are evaluated in the enclosing composite context.
+        # Prefer its step outputs during post, and use the internal inputs during main.
+        # See https://github.com/actions/runner/issues/2009.
+        builder: ${{ steps.docker-setup.outputs.buildx-name || inputs.builder }}
+        # An empty cache-dir makes cache-dance treat container mount targets as host paths.
+        cache-dir: cache-mount
+        dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path || inputs.dockerfile }}
+        skip-extraction: ${{ steps.cache.outputs.cache-hit || inputs.cache-hit }}
+
+    - id: build
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      with:
+        builder: ${{ inputs.builder }}
+        context: ${{ inputs.context }} # zizmor: ignore[template-injection]
+        build-args: ${{ inputs.build-args }}
+        target: ${{ inputs.target }}
+        file: ${{ inputs.dockerfile }}
+        secrets: ${{ inputs.secrets }}
+        secret-envs: ${{ inputs.secret-envs }}
+        platforms: ${{ inputs.platform }}
+        cache-from: ${{ inputs.cache-from }}
+        cache-to: ${{ inputs.cache-to }}
+        no-cache: ${{ inputs.no-cache }}
+        outputs: ${{ inputs.image-outputs }}
+        labels: ${{ inputs.labels }}
+        annotations: ${{ inputs.annotations }}
+        tags: ${{ inputs.tags }}
+        provenance: false # Disable provenance to avoid unknown/unknown arch
+        sbom: false # Disable sbom to avoid unknown/unknown arch

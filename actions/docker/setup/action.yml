@@ -45,10 +45,11 @@ inputs:
       Whether to install and configure Docker Buildx.
     default: true
     required: false
-  buildx-cleanup:
+  # FIXME: upgrade version when available (https://github.com/docker/actions-toolkit/blob/main/.github/docker-releases.json)
+  docker-version:
     description: |
-      Whether the Buildx builder should be removed during post-job cleanup.
-    default: true
+      Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
+    default: "29.7.2"
     required: false
   # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
   buildx-version:
@@ -74,7 +75,7 @@ outputs:
     description: "JSON array of registries used to pull base images."
     value: ${{ steps.resolve-oci-registries.outputs.pull-registries }}
   buildx-name:
-    description: "Docker Buildx builder name."
+    description: "Docker Buildx builder name. Empty when setup-buildx is false."
     value: ${{ steps.setup-buildx.outputs.name }}
 
 runs:
@@ -397,13 +398,41 @@ runs:
 
     - id: detect-docker
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        EXPECTED_DOCKER_VERSION: ${{ inputs.docker-version }}
       with:
         script: |
-          const dockerPath = await io.which('docker', false);
-          core.setOutput('exists', dockerPath ? 'true' : 'false');
+          const requestedDockerVersion = `${process.env.EXPECTED_DOCKER_VERSION || ''}`.trim();
+          if (!requestedDockerVersion.length) {
+            throw new Error('"docker-version" input must not be empty');
+          }
+          const expectedDockerVersion = requestedDockerVersion.replace(/^v(?=\d)/, '');
 
-    - if: steps.detect-docker.outputs.exists != 'true'
+          const dockerPath = await io.which('docker', false);
+          if (dockerPath) {
+            try {
+              const { stdout } = await exec.getExecOutput(
+                'docker',
+                ['version', '--format', '{{.Client.Version}}|{{.Server.Version}}'],
+                { silent: true },
+              );
+              const [clientVersion, serverVersion] = stdout.trim().split('|');
+              if (clientVersion === expectedDockerVersion && serverVersion === expectedDockerVersion) {
+                core.info(`Docker client and daemon already use required version ${expectedDockerVersion}`);
+                return;
+              }
+            } catch (error) {
+              core.warning(`Failed to detect Docker version: ${error}`);
+            }
+          }
+
+          core.setOutput('docker-install-version', requestedDockerVersion);
+
+    - if: steps.detect-docker.outputs.docker-install-version != ''
+      id: setup-docker
       uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1 # v5.4.0
+      with:
+        version: ${{ steps.detect-docker.outputs.docker-install-version }}
 
     - if: inputs.setup-buildx != 'false'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -446,10 +475,10 @@ runs:
       id: setup-buildx
       with:
         version: ${{ inputs.buildx-version }}
+        endpoint: ${{ steps.setup-docker.outputs.sock }}
         driver-opts: |
           image=${{ inputs.buildkit-image }}
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
-        cleanup: ${{ inputs.buildx-cleanup }}
 
     - if: steps.resolve-oci-registries.outputs.has-registry-auth == 'true'
       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
