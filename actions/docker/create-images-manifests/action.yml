@@ -203,6 +203,9 @@ runs:
             throw new Error(`"built-images" output is not a valid JSON: ${error}`);
           }
 
+          const sleep = (delayMs) =>
+            new Promise((resolve) => setTimeout(resolve, delayMs));
+
           const getImageDigest = async function(image) {
             // Check if the image already has a digest
             if (image.match(/@/)) {
@@ -210,12 +213,50 @@ runs:
               return image;
             }
 
-            const inspectImageCommand = `docker buildx imagetools inspect ${image}`;
+            const inspectImageArgs = ["buildx", "imagetools", "inspect", image];
+            const inspectImageCommand = `docker ${inspectImageArgs.join(" ")}`;
             core.debug(`Inspecting image "${image}" with command: "${inspectImageCommand}"`);
 
-            const { stdout } = await exec.getExecOutput(inspectImageCommand);
+            let stdout = "";
+            const maxAttempts = 6;
+            const delayMs = 5000;
 
-            core.debug(`Inspect image "${image}" ("${inspectImageCommand}") executed: ${stdout}`);
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              const result = await exec.getExecOutput(
+                "docker",
+                inspectImageArgs,
+                { ignoreReturnCode: true },
+              );
+
+              stdout = result.stdout;
+
+              if (result.exitCode === 0 && stdout) {
+                core.debug(
+                  `Inspect image "${image}" ("${inspectImageCommand}") executed: ${stdout}`
+                );
+                break;
+              }
+
+              const commandOutput = `${result.stderr || ""}\n${stdout}`.trim();
+              const isRetryableNotFound = /not found|manifest unknown|no such manifest/i.test(commandOutput);
+
+              if (!isRetryableNotFound || attempt === maxAttempts) {
+                throw new Error(
+                  `Failed to retrieve manifest for image "${image}": ` +
+                  `"${inspectImageCommand}" failed with exit code ${result.exitCode}. ` +
+                  `Output: ${commandOutput || "<empty>"}`
+                );
+              }
+
+              core.info(
+                [
+                  `Image "${image}" manifest is not visible yet`,
+                  `(attempt ${attempt}/${maxAttempts}).`,
+                  `Retrying in ${delayMs} ms.`,
+                ].join(" ")
+              );
+              await sleep(delayMs);
+            }
 
             if (!stdout) {
               throw new Error(`Failed to retrieve manifest for image "${image}": "${inspectImageCommand}" returned empty output`);
