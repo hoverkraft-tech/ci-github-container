@@ -67,7 +67,7 @@ inputs:
     default: ".version,.appVersion"
   ref:
     description: |
-      The git ref to checkout before releasing the chart.
+      The Git ref to checkout before releasing the chart.
       Can be a branch, tag or commit SHA.
     required: false
 
