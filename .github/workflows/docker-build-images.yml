@@ -609,7 +609,6 @@ jobs:
           oci-registry-password: ${{ secrets.oci-registry-password }} # zizmor: ignore[secrets-outside-env]
           built-images: ${{ needs.publish-manifests.outputs.built-images }}
           setup-buildx: false
-          buildx-cleanup: false
 
       - uses: ./../self-workflow/actions/docker/attest-image
         with:

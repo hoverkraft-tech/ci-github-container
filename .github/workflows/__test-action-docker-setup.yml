@@ -1,0 +1,147 @@
+---
+name: Test for "docker/setup" action
+run-name: Test for "docker/setup" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  tests:
+    name: Test for "docker/setup" action
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Arrange - Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange - Resolve the required Docker version
+        id: resolve-docker-version
+        shell: bash
+        run: |
+          docker_version="$(ruby -e 'require "yaml"; puts YAML.safe_load(File.read("actions/docker/setup/action.yml")).dig("inputs", "docker-version", "default")')"
+
+          if [ -z "$docker_version" ]; then
+            echo "Failed to resolve docker-version default from actions/docker/setup/action.yml"
+            exit 1
+          fi
+
+          echo "docker-version=$docker_version" >> "$GITHUB_OUTPUT"
+
+      - name: Act - Setup Docker with defaults
+        id: docker-setup
+        uses: ./actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ github.token }}
+
+      - name: Act - Reuse pinned Docker with multiple registries and no Buildx
+        id: docker-setup-without-buildx
+        uses: ./actions/docker/setup
+        with:
+          oci-registry: |
+            {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}
+          oci-registry-username: |
+            {"push":"${{ github.repository_owner }}"}
+          oci-registry-password: |
+            {"push":"${{ github.token }}"}
+          setup-buildx: false
+
+      - name: Assert - Check setup outputs and installed tooling
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED_DOCKER_VERSION: ${{ steps.resolve-docker-version.outputs.docker-version }}
+          DEFAULT_PUSH_REGISTRY: ${{ steps.docker-setup.outputs.push-registry }}
+          DEFAULT_CACHE_REGISTRY: ${{ steps.docker-setup.outputs.cache-registry }}
+          DEFAULT_PULL_REGISTRIES: ${{ steps.docker-setup.outputs.pull-registries }}
+          DEFAULT_BUILDX_NAME: ${{ steps.docker-setup.outputs.buildx-name }}
+          MULTI_PUSH_REGISTRY: ${{ steps.docker-setup-without-buildx.outputs.push-registry }}
+          MULTI_CACHE_REGISTRY: ${{ steps.docker-setup-without-buildx.outputs.cache-registry }}
+          MULTI_PULL_REGISTRIES: ${{ steps.docker-setup-without-buildx.outputs.pull-registries }}
+          MULTI_BUILDX_NAME: ${{ steps.docker-setup-without-buildx.outputs.buildx-name }}
+        with:
+          script: |
+            const assert = require("assert");
+
+            function parseJson(label, value) {
+              try {
+                return JSON.parse(value);
+              } catch (error) {
+                assert.fail(`Failed to parse ${label}: ${error}`);
+              }
+            }
+
+            assert.equal(process.env.DEFAULT_PUSH_REGISTRY, "ghcr.io", 'Default "push-registry" output is not valid');
+            assert.equal(process.env.DEFAULT_CACHE_REGISTRY, "ghcr.io", 'Default "cache-registry" output is not valid');
+            assert.deepEqual(
+              parseJson('default "pull-registries" output', process.env.DEFAULT_PULL_REGISTRIES),
+              ["ghcr.io"],
+              'Default "pull-registries" output is not valid',
+            );
+
+            assert.equal(process.env.MULTI_PUSH_REGISTRY, "ghcr.io", 'Multi-registry "push-registry" output is not valid');
+            assert.equal(process.env.MULTI_CACHE_REGISTRY, "ghcr.io", 'Multi-registry "cache-registry" output is not valid');
+            assert.deepEqual(
+              parseJson('multi-registry "pull-registries" output', process.env.MULTI_PULL_REGISTRIES),
+              ["docker.io", "ghcr.io"],
+              'Multi-registry "pull-registries" output is not valid',
+            );
+            assert.equal(
+              `${process.env.MULTI_BUILDX_NAME || ''}`.trim(),
+              '',
+              '"buildx-name" output must be empty when Buildx is disabled',
+            );
+
+            const expectedDockerVersion = process.env.EXPECTED_DOCKER_VERSION;
+            const dockerVersionResult = await exec.getExecOutput(
+              "docker",
+              ["version", "--format", "{{.Client.Version}}|{{.Server.Version}}"],
+              { silent: true },
+            );
+            assert.deepEqual(
+              dockerVersionResult.stdout.trim().split('|'),
+              [expectedDockerVersion, expectedDockerVersion],
+              'Docker client and daemon do not use the expected pinned version',
+            );
+
+            const buildxName = `${process.env.DEFAULT_BUILDX_NAME || ''}`.trim();
+            assert(buildxName.length, 'Default "buildx-name" output is empty');
+
+            const dockerContextResult = await exec.getExecOutput(
+              "docker",
+              ["context", "inspect", "--format", "{{ (index .Endpoints \"docker\").Host }}"],
+              { silent: true },
+            );
+            const expectedDockerEndpoint = dockerContextResult.stdout.trim();
+            assert(expectedDockerEndpoint.length, 'Failed to resolve current Docker context endpoint');
+
+            const buildxListResult = await exec.getExecOutput(
+              "docker",
+              ["buildx", "ls", "--format", "json"],
+              { ignoreReturnCode: true, silent: true },
+            );
+            assert.equal(
+              buildxListResult.exitCode,
+              0,
+              `Failed to list Buildx builders: ${buildxListResult.stderr || 'unknown error'}`,
+            );
+
+            const buildxBuilders = buildxListResult.stdout
+              .split(/\r?\n/)
+              .map(line => line.trim())
+              .filter(Boolean)
+              .map(line => parseJson('Buildx builder', line));
+            const buildxBuilder = buildxBuilders.find(builder => builder.Name === buildxName);
+            assert(buildxBuilder, `Configured Buildx builder "${buildxName}" is not listed`);
+
+            const buildxNodes = buildxBuilder.Nodes;
+            assert(Array.isArray(buildxNodes) && buildxNodes.length > 0, 'Buildx nodes output is empty');
+
+            const buildxNode = buildxNodes.find(node => node.Endpoint === expectedDockerEndpoint);
+            assert(buildxNode, 'Configured Buildx builder is not attached to the current Docker context endpoint');
+            assert.equal(buildxNode.Status, 'running', 'Configured Buildx node is not running');

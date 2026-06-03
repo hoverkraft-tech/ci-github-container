@@ -28,6 +28,15 @@ jobs:
             exit 1
           fi
 
+      - name: Arrange - Use a run-specific cache-mount key
+        env:
+          CACHE_MOUNT_TEST_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          # The cache-mount key includes the Dockerfile hash. This ensures that
+          # every workflow attempt exercises cache-dance post extraction.
+          cp ./tests/application/Dockerfile ./tests/application/Dockerfile.cache-miss
+          printf '\n# Cache-mount lifecycle test: %s\n' "$CACHE_MOUNT_TEST_RUN" >> ./tests/application/Dockerfile.cache-miss
+
       - name: Act - Build image
         id: build-image
         uses: ./actions/docker/build-image
@@ -35,7 +44,7 @@ jobs:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}
           context: "."
-          dockerfile: "./tests/application/Dockerfile"
+          dockerfile: "./tests/application/Dockerfile.cache-miss"
           target: "prod"
           platform: "linux/amd64"
           image: application-test

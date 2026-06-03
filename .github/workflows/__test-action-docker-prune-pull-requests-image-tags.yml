@@ -207,13 +207,13 @@ jobs:
           BASE_IMAGE: ${{ needs.arrange-verify.outputs.base-image }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           TAG_TO_DELETE: ${{ needs.arrange-prepare-variables.outputs.tag }}
-          BUILT_IMAGES: ${{ needs.arrange-build-images.outputs.built-images }}
         run: |
           NEW_IMAGE="ghcr.io/hoverkraft-tech/ci-github-container/$IMAGE_NAME:$TAG_TO_DELETE"
 
-          docker pull "$BASE_IMAGE"
-          docker tag "$BASE_IMAGE" "$NEW_IMAGE"
-          docker push "$NEW_IMAGE"
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.version=$TAG_TO_DELETE" \
+            --tag "$NEW_IMAGE" \
+            "$BASE_IMAGE"
 
       - id: prune-pull-requests-image-tags
         uses: ./actions/docker/prune-pull-requests-image-tags
