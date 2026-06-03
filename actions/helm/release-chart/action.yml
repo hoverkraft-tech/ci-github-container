@@ -81,7 +81,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
       with:
         ref: ${{ inputs.ref }}
 
@@ -157,7 +157,7 @@ runs:
 
           core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@b553a696531fbd36743ccbb0c76c717971b8acdb # 0.35.4
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
       with:
         source-path: ${{ github.action_path }}/../..
         destination-directory-name: self-actions-update-chart-values
