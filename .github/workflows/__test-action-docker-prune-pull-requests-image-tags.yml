@@ -56,8 +56,9 @@ jobs:
 
             // Define expected packages
             const packages = [`ci-github-container/${process.env.IMAGE_NAME}`];
-            const isTagPush = context.eventName === "push" && context.ref.startsWith("refs/tags/");
-            if (!isTagPush) {
+            const shouldExpectRegistryCache = context.eventName === "pull_request"
+              || (context.eventName === "push" && !context.ref.startsWith("refs/tags/"));
+            if (shouldExpectRegistryCache) {
               packages.push(`ci-github-container/${process.env.IMAGE_NAME}/cache`);
             }
 
