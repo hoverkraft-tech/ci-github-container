@@ -99,9 +99,10 @@ runs:
     - uses: hoverkraft-tech/ci-github-common/actions/local-actions@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
       with:
         source-path: ${{ github.action_path }}/../..
+        destination-directory-name: self-actions-create-images-manifests
 
     - id: docker-setup
-      uses: ./../self-actions/docker/setup
+      uses: ./../self-actions-create-images-manifests/docker/setup
       with:
         oci-registry: ${{ inputs.oci-registry }}
         oci-registry-username: ${{ inputs.oci-registry-username }}
