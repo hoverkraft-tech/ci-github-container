@@ -1,0 +1,30 @@
+---
+misconfigurations:
+  - id: KSV-0011
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."
+  - id: KSV-0015
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."
+  - id: KSV-0016
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."
+  - id: KSV-0018
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."
+  - id: KSV-0020
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."
+  - id: KSV-0021
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."
+  - id: KSV-0110
+    paths:
+      - "tests/charts/umbrella-application/charts/database/**"
+    statement: "Helm dependency alias path (database) is virtual and not a real workspace file."

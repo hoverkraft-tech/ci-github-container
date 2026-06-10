@@ -6,12 +6,13 @@
 namespace: "app-system"
 
 application:
-  dbConnection: mysql
-  dbHost: "mysql"
-  dbPort: 3306
+  dbConnection: valkey
+  dbHost: "valkey"
+  dbPort: 6379
   dbDatabase: test
   dbUsername: test
   dbPassword: test
+  healthCheckPath: "/"
 
 replicaCount: 1
 
@@ -108,21 +109,33 @@ networkPolicy:
   egress: []
 
 # chart dependencies
-mysql:
-  fullnameOverride: mysql
+valkey:
+  fullnameOverride: valkey
   enabled: false
   auth:
-    database: test
-    username: test
-    password: test
-    rootPassword: root
-  # NOTE: see https://news.broadcom.com/app-dev/broadcom-introduces-bitnami-secure-images-for-production-ready-containerized-applications
-  image:
-    repository: bitnamilegacy/mysql
-  metrics:
-    image:
-      repository: bitnamilegacy/mysqld-exporter
-  volumePermissions:
-    image:
-      repository: bitnamilegacy/os-shell
+    enabled: false
+  architecture: standalone
+  primary:
+    podSecurityContext:
+      enabled: true
+      fsGroup: 10001
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
 # jscpd:ignore-end

@@ -48,7 +48,7 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           envFrom:
-            - configMapRef:
+            - secretRef:
                 name: {{ template "test-application.fullname" . }}-config
           ports:
             - name: http
@@ -63,11 +63,11 @@ spec:
               mountPath: /tmp
           livenessProbe:
             httpGet:
-              path: /health/check
+              path: {{ .Values.application.healthCheckPath | default "/" | quote }}
               port: http
           readinessProbe:
             httpGet:
-              path: /health/check
+              path: {{ .Values.application.healthCheckPath | default "/" | quote }}
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

@@ -6,9 +6,9 @@ A Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository                           | Name  | Version |
-| ------------------------------------ | ----- | ------- |
-| <https://charts.bitnami.com/bitnami> | MySQL | 14.0.3  |
+| Repository                       | Name   | Version |
+| -------------------------------- | ------ | ------- |
+| <https://valkey.io/valkey-helm/> | valkey | 0.9.4   |
 
 ## Values
 
@@ -45,9 +45,9 @@ A Helm chart for Kubernetes
 | mysql.auth.username                        | string | `"test"`                                                                    |             |
 | mysql.enabled                              | bool   | `false`                                                                     |             |
 | mysql.fullnameOverride                     | string | `"mysql"`                                                                   |             |
-| mysql.image.repository                     | string | `"bitnamilegacy/mysql"`                                                     |             |
-| mysql.metrics.image.repository             | string | `"bitnamilegacy/mysqld-exporter"`                                           |             |
-| mysql.volumePermissions.image.repository   | string | `"bitnamilegacy/os-shell"`                                                  |             |
+| mysql.image.repository                     | string | `"docker.io/valkey/valkey"`                                                 |             |
+| mysql.metrics.image.repository             | string | `"ghcr.io/oliver006/redis_exporter"`                                        |             |
+| mysql.volumePermissions.image.repository   | string | `"docker.io/valkey/valkey"`                                                 |             |
 | nameOverride                               | string | `""`                                                                        |             |
 | namespace                                  | string | `"app-system"`                                                              |             |
 | networkPolicy.egress                       | list   | `[]`                                                                        |             |

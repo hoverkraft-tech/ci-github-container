@@ -149,12 +149,12 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         source-path: ${{ github.action_path }}/../..
 
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         value: ${{ inputs.platform }}
 
@@ -204,6 +204,13 @@ runs:
           const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
           const rawContext = (process.env.CONTEXT_INPUT || '').trim();
           const contextPath = rawContext.length > 0 ? rawContext : '.';
+
+          const resolvedContextPath = path.resolve(workspace, contextPath);
+          if (!fs.existsSync(resolvedContextPath) || !fs.statSync(resolvedContextPath).isDirectory()) {
+            return core.setFailed(`Context directory not found at path: ${resolvedContextPath}`);
+          }
+          core.setOutput('context-path', fs.realpathSync(resolvedContextPath));
+
           const rawDockerfile = (process.env.DOCKERFILE_INPUT || '').trim();
           const dockerfileName = rawDockerfile.length > 0 ? rawDockerfile : 'Dockerfile';
 
@@ -303,7 +310,7 @@ runs:
 
     # Caching setup
     - id: cache-arguments
-      uses: int128/docker-build-cache-config-action@1bdbbd61b3eea23c7e7a121eb15dd9b0a9ec7d97 # v1.57.0
+      uses: int128/docker-build-cache-config-action@3674b5d646e77fc3913044193ac579c5efd20791 # v1.58.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -330,7 +337,7 @@ runs:
     - id: build
       uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
       with:
-        context: ${{ inputs.context }}
+        context: ${{ steps.get-docker-config.outputs.context-path }} # zizmor: ignore[template-injection]
         build-args: ${{ inputs.build-args }}
         target: ${{ inputs.target }}
         file: ${{ steps.get-docker-config.outputs.dockerfile-path }}
@@ -349,22 +356,36 @@ runs:
 
     - id: get-built-image
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        BUILT_METADATA: ${{ steps.build.outputs.metadata }}
+        INPUT_IMAGE: ${{ inputs.image }}
+        METADATA_IMAGE: ${{ steps.metadata.outputs.image }}
+        METADATA_TAGS: ${{ steps.metadata.outputs.tags }}
+        METADATA_ANNOTATIONS: ${{ steps.metadata.outputs.annotations }}
+        MULTI_PLATFORM: ${{ steps.get-docker-config.outputs.multi-platform }}
       with:
         script: |
-          const builtMetadata = ${{ steps.build.outputs.metadata }};
+          const builtMetadataRaw = process.env.BUILT_METADATA || "";
+          let builtMetadata;
+          try {
+            builtMetadata = JSON.parse(builtMetadataRaw);
+          } catch (error) {
+            core.setFailed(`Given "metadata" output is not valid JSON: ${error}`);
+            return;
+          }
           if (typeof builtMetadata !== 'object') {
             core.setFailed('Given "metadata" output is not a JSON object.');
             return;
           }
 
-          const name = `${{ inputs.image }}`;
-          const image = `${{ steps.metadata.outputs.image }}`;
+          const name = process.env.INPUT_IMAGE || "";
+          const image = process.env.METADATA_IMAGE || "";
           const registryMatch = image.match(/^([^\/]+)\/.*/);
           const registry = registryMatch ? registryMatch[1] : null;
           const repositoryMatch = image.match(/^[^\/]+\/([^:]+)/);
           const repository = repositoryMatch ? repositoryMatch[1] : null;
 
-          const tags = `${{ steps.metadata.outputs.tags }}`
+          const tags = (process.env.METADATA_TAGS || "")
           .split("\n")
           .map(tag => tag.replace(/[^\/]+\/[^:]+:(.+)/,'$1').trim())
           .filter(tag => tag !== "");
@@ -420,7 +441,7 @@ runs:
           const digest = uniqueDigests[0];
           const imageWithDigest = `${image}@${digest}`;
 
-          const annotations = `${{ steps.metadata.outputs.annotations }}`
+          const annotations = (process.env.METADATA_ANNOTATIONS || "")
             .split("\n")
             .map(annotation => {
               const cleanedAnnotation = annotation
@@ -435,7 +456,7 @@ runs:
               return annotations;
             }, {})
 
-          const isMultiplatform = Boolean(`${{ steps.get-docker-config.outputs.multi-platform }}`);
+          const isMultiplatform = (process.env.MULTI_PLATFORM || "") === "true";
 
           const builtImage = {
             name,

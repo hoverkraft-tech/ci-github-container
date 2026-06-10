@@ -6,12 +6,13 @@
 namespace: "app-system"
 
 app:
-  dbConnection: mysql
-  dbHost: "mysql"
-  dbPort: 3306
+  dbConnection: valkey
+  dbHost: "database"
+  dbPort: 6379
   dbDatabase: test
   dbUsername: test
   dbPassword: test
+  healthCheckPath: "/"
 
 replicaCount: 1
 
@@ -39,8 +40,10 @@ serviceAccount:
 podAnnotations: {}
 
 podSecurityContext:
-  {}
-  # fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
 
 securityContext:
   capabilities:
@@ -50,6 +53,7 @@ securityContext:
   readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 10001
+  runAsGroup: 10001
   seccompProfile:
     type: RuntimeDefault
 
@@ -108,20 +112,34 @@ networkPolicy:
   egress: []
 
 # chart dependencies
-mysql:
-  fullnameOverride: mysql
+valkey:
+  fullnameOverride: valkey
   enabled: false
+  architecture: standalone
   auth:
-    database: test
-    username: test
-    password: test
-    rootPassword: root
-  # NOTE: see https://news.broadcom.com/app-dev/broadcom-introduces-bitnami-secure-images-for-production-ready-containerized-applications
+    enabled: false
   image:
-    repository: bitnamilegacy/mysql
-  metrics:
-    image:
-      repository: bitnamilegacy/mysqld-exporter
-  volumePermissions:
-    image:
-      repository: bitnamilegacy/os-shell
+    repository: docker.io/valkey/valkey
+  primary:
+    podSecurityContext:
+      enabled: true
+      fsGroup: 10001
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

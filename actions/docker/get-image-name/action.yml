@@ -31,17 +31,21 @@ runs:
   steps:
     - id: image-name-generator
       shell: bash
+      env:
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_OCI_REGISTRY: ${{ inputs.oci-registry }}
       run: |
-        REPOSITORY="$(echo "${{ inputs.repository }}" | awk '{print tolower($0)}')"
+        REPOSITORY="$(echo "$INPUT_REPOSITORY" | awk '{print tolower($0)}')"
         if [ -z "$REPOSITORY" ]; then echo "Repository name is required"; exit 1; fi
         IMAGE_NAME="$REPOSITORY"
 
-        IMAGE="${{ inputs.image }}"
+        IMAGE="$INPUT_IMAGE"
         if [ -n "$IMAGE" ]; then IMAGE_NAME="$IMAGE_NAME/$IMAGE"; fi
 
         echo "image-name=$IMAGE_NAME" >> $GITHUB_OUTPUT
 
-        OCI_REGISTRY="${{ inputs.oci-registry }}"
+        OCI_REGISTRY="$INPUT_OCI_REGISTRY"
         if [ -n "$OCI_REGISTRY" ]; then IMAGE_NAME="$OCI_REGISTRY/$IMAGE_NAME"; fi
 
         echo "image-name-with-registry=$IMAGE_NAME" >> $GITHUB_OUTPUT

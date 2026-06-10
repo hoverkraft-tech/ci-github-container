@@ -1,6 +1,6 @@
 dependencies:
-- name: mysql
-  repository: https://charts.bitnami.com/bitnami
-  version: 14.0.3
-digest: sha256:80cd59471fc8937944ac535c25f1da52a9820c3f2ed001e3ed741adb41f9e121
-generated: "2026-05-18T16:32:39.279673538+02:00"
+- name: valkey
+  repository: https://valkey.io/valkey-helm/
+  version: 0.9.4
+digest: sha256:02d171e6b43fc1a26390ea72c0ace962f93d0f85473bbec32837b1c18a88160c
+generated: "2026-06-10T11:54:19.79339073+02:00"

@@ -1,12 +1,13 @@
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
   name: {{ include "app.fullname" . }}-config
   namespace: {{ .Values.namespace | default "app-system" }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
-data:
+type: Opaque
+stringData:
   {{- with .Values.app }}
   DB_CONNECTION: {{ .dbConnection | quote }}
   DB_HOST: {{ .dbHost | quote }}

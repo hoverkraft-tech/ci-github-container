@@ -24,7 +24,7 @@ jobs:
           oci-registry: ghcr.io
           image: application-test
 
-      - name: Check get image name ouputs
+      - name: Check get image name outputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name }}
@@ -69,7 +69,7 @@ jobs:
           image: application-test
           repository: hoverkraft-tech/other-repository
 
-      - name: Check get image name ouput
+      - name: Check get image name output
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE_NAME_OUTPUT: ${{ steps.get-image-name.outputs.image-name }}
