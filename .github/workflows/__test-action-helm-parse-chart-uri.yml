@@ -24,7 +24,7 @@ jobs:
         with:
           uri: "ghcr.io/my-org/my-repo/charts/application/my-repo:0.1.0"
 
-      - name: Assert - Check parse chart URI ouputs
+      - name: Assert - Check parse chart URI outputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           REPOSITORY_OUTPUT: ${{ steps.parse-chart-uri.outputs.repository }}

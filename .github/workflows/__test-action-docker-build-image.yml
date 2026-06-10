@@ -161,8 +161,10 @@ jobs:
           password: ${{ github.token }}
 
       - name: Assert - Check docker image
+        env:
+          BUILT_IMAGE_OUTPUT: ${{ steps.build-image.outputs.built-image }}
         run: |
-          IMAGE=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.image')
+          IMAGE=$(echo "$BUILT_IMAGE_OUTPUT" | jq -r '.image')
           if ! docker pull "$IMAGE"; then
             echo "Failed to pull $IMAGE"
             exit 1
@@ -245,8 +247,10 @@ jobs:
           password: ${{ github.token }}
 
       - name: Assert - Check docker image
+        env:
+          BUILT_IMAGE_OUTPUT: ${{ steps.build-image.outputs.built-image }}
         run: |
-          IMAGE=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.image')
+          IMAGE=$(echo "$BUILT_IMAGE_OUTPUT" | jq -r '.image')
           if ! docker pull "$IMAGE"; then
             echo "Failed to pull $IMAGE"
             exit 1
@@ -341,8 +345,10 @@ jobs:
           password: ${{ github.token }}
 
       - name: Assert - Check docker image
+        env:
+          BUILT_IMAGE_OUTPUT: ${{ steps.build-image.outputs.built-image }}
         run: |
-          IMAGE=$(echo '${{ steps.build-image.outputs.built-image }}' | jq -r '.image')
+          IMAGE=$(echo "$BUILT_IMAGE_OUTPUT" | jq -r '.image')
           if ! docker pull "$IMAGE"; then
             echo "Failed to pull $IMAGE"
             exit 1

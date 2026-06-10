@@ -6,10 +6,10 @@ An umbrella Helm chart for Kubernetes
 
 ## Requirements
 
-| Repository                           | Name            | Version |
-| ------------------------------------ | --------------- | ------- |
-| file://./charts/app                  | app             | 0.0.0   |
-| <https://charts.bitnami.com/bitnami> | database(MySQL) | 14.0.3  |
+| Repository                       | Name             | Version |
+| -------------------------------- | ---------------- | ------- |
+| file://./charts/app              | app              | 0.0.0   |
+| <https://valkey.io/valkey-helm/> | database(valkey) | 0.9.4   |
 
 ## Values
 
@@ -22,7 +22,7 @@ An umbrella Helm chart for Kubernetes
 | database.fullnameOverride                                          | string | `"database"`                                                                |             |
 | database.image.digest                                              | string | `"sha256:ec13e229247a737f7149b7f255d8f2d9c72da861f8bf263b22091bf131540da3"` |             |
 | database.image.pullPolicy                                          | string | `"Always"`                                                                  |             |
-| database.image.repository                                          | string | `"bitnamilegacy/mysql"`                                                     |             |
+| database.image.repository                                          | string | `"docker.io/valkey/valkey"`                                                 |             |
 | database.namespaceOverride                                         | string | `"app-system"`                                                              |             |
 | database.primary.containerSecurityContext.allowPrivilegeEscalation | bool   | `false`                                                                     |             |
 | database.primary.containerSecurityContext.capabilities.drop[0]     | string | `"ALL"`                                                                     |             |

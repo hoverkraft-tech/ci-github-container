@@ -15,12 +15,12 @@ RUN \
   rm -f /etc/apt/apt.conf.d/docker-clean && \
   echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' >/etc/apt/apt.conf.d/keep-cache && \
   apt-get update && \
-  apt-get install -y curl
+  apt-get install -y --no-install-recommends curl
 
 # Configure nginx to listen on port 8080
 RUN sed -i 's/listen       80;/listen       8080;/' /etc/nginx/conf.d/default.conf
 
-# Create a hmtl page for healthcheck
+# Create a html page for healthcheck
 RUN mkdir -p /usr/share/nginx/html/health/check && echo "<html><body><h1>OK</h1></body></html>" > /usr/share/nginx/html/health/check/index.html
 
 EXPOSE 8080

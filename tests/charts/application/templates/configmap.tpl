@@ -1,13 +1,14 @@
 # jscpd:ignore-start
 ---
-kind: ConfigMap
+kind: Secret
 apiVersion: v1
 metadata:
   name: {{ template "test-application.fullname" . }}-config
   namespace: {{ .Values.namespace | default "app-system" }}
   labels:
     {{- include "test-application.labels" . | nindent 4 }}
-data:
+type: Opaque
+stringData:
   {{- with .Values.application }}
   DB_CONNECTION: {{ .dbConnection | quote }}
   DB_HOST: {{ .dbHost | quote }}

@@ -3,12 +3,15 @@ name: Internal - Common Continuous Integration tasks
 
 on: # yamllint disable-line rule:truthy
   workflow_call:
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY:
+        required: false
 
 permissions: {}
 
 jobs:
   linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
     permissions:
       actions: read
       contents: read
@@ -84,7 +87,8 @@ jobs:
       issues: read
       packages: write
       pull-requests: read
-    secrets: inherit
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
 
   test-workflow-docker-build-images-caching:
     name: Test docker build images - Caching
@@ -96,7 +100,8 @@ jobs:
       issues: read
       packages: write
       pull-requests: read
-    secrets: inherit
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
 
   test-workflow-docker-build-images-multi-registry:
     name: Test docker build images - Multi registry inputs
@@ -108,7 +113,8 @@ jobs:
       issues: read
       packages: write
       pull-requests: read
-    secrets: inherit
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
 
   test-workflow-docker-build-images-platforms-and-signing:
     name: Test docker build images - Platforms and Signing
@@ -120,4 +126,5 @@ jobs:
       issues: read
       packages: write
       pull-requests: read
-    secrets: inherit
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}

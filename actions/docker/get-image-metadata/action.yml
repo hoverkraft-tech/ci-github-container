@@ -46,7 +46,7 @@ runs:
   steps:
     # #region Prepare build variables
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         source-path: ${{ github.action_path }}/../..
 
@@ -59,14 +59,19 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
 
     - id: define-metadata-inputs
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        GH_REF: ${{ github.ref }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        ISSUE_NUMBER: ${{ steps.get-issue-number.outputs.issue-number }}
       with:
         result-encoding: string
         script: |
-          const tagInput = `${{ inputs.tag }}`
+          const tagInput = process.env.INPUT_TAG || "";
           if (tagInput.length) {
             core.setOutput('tags',`type=raw,value=${tagInput}`);
             core.setOutput('flavor', 'latest=false');
@@ -74,7 +79,8 @@ runs:
           }
 
           // If push on default branch set tag to latest
-          const isPushOnDefaultBranch = context.eventName === 'push' && `${{ github.ref }}` === `refs/heads/${{ github.event.repository.default_branch }}`;
+          const defaultBranch = process.env.DEFAULT_BRANCH || "";
+          const isPushOnDefaultBranch = context.eventName === 'push' && (process.env.GH_REF || "") === `refs/heads/${defaultBranch}`;
           // For schedule events, don't set latest tag to avoid unintended updates
           const isSchedule = context.eventName === 'schedule';
           core.setOutput('flavor', (isPushOnDefaultBranch && !isSchedule) ? 'latest=true' : 'latest=false');
@@ -86,7 +92,7 @@ runs:
 
           if(isPullRequestOrIssueComment) {
             core.setOutput('tags',[
-              `type=sha,prefix=pr-${{ steps.get-issue-number.outputs.issue-number }}-`,
+              `type=sha,prefix=pr-${process.env.ISSUE_NUMBER || ""}-`,
               `type=ref,event=pr`,
             ].join("\n"));
             return;
@@ -101,7 +107,7 @@ runs:
 
           // For schedule events, use the default branch name as tag
           if(context.eventName === 'schedule') {
-            core.setOutput('tags', `type=raw,value=${{ github.event.repository.default_branch }}`);
+            core.setOutput('tags', `type=raw,value=${defaultBranch}`);
             return;
           }
 
@@ -119,18 +125,23 @@ runs:
 
     - id: generate-outputs
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        IMAGE_NAME_WITH_REGISTRY: ${{ steps.image-name.outputs.image-name-with-registry }}
+        DOCKER_METADATA_LABELS: ${{ steps.docker-metadata.outputs.labels }}
+        DOCKER_METADATA_ANNOTATIONS: ${{ steps.docker-metadata.outputs.annotations }}
+        DOCKER_METADATA_TAGS: ${{ steps.docker-metadata.outputs.tags }}
       with:
         script: |
-          const image = `${{ steps.image-name.outputs.image-name-with-registry }}`;
+          const image = process.env.IMAGE_NAME_WITH_REGISTRY || "";
           core.setOutput('image', image);
 
-          const labels = `${{ steps.docker-metadata.outputs.labels }}`;
+          const labels = process.env.DOCKER_METADATA_LABELS || "";
           core.setOutput('labels', labels);
 
-          const annotations = `${{ steps.docker-metadata.outputs.annotations }}`;
+          const annotations = process.env.DOCKER_METADATA_ANNOTATIONS || "";
           core.setOutput('annotations', annotations);
 
-          const tags = `${{ steps.docker-metadata.outputs.tags }}`;
+          const tags = process.env.DOCKER_METADATA_TAGS || "";
 
           const sortedTags = tags
             .split("\n")

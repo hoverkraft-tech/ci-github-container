@@ -4,6 +4,9 @@ run-name: Test for "docker-build-images" workflow - Building
 
 on: # yamllint disable-line rule:truthy
   workflow_call:
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY:
+        required: false
 
 permissions: {}
 
@@ -54,7 +57,7 @@ jobs:
     needs: act-build-images-args-secrets
     runs-on: "ubuntu-latest"
     steps:
-      - name: Check built images ouput
+      - name: Check built images output
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BUILT_IMAGES_OUTPUT: ${{ needs.act-build-images-args-secrets.outputs.built-images }}

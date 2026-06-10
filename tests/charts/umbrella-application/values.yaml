@@ -15,12 +15,11 @@ database:
   enabled: true
   fullnameOverride: database
   namespaceOverride: app-system
+  architecture: standalone
+  existingConfigmap: database-custom-config
   auth:
-    database: test-umbrella-application
-    username: test-umbrella-application
+    enabled: false
   image:
-    repository: bitnamilegacy/mysql
-    digest: sha256:ec13e229247a737f7149b7f255d8f2d9c72da861f8bf263b22091bf131540da3
     pullPolicy: Always
   primary:
     podSecurityContext:
@@ -38,3 +37,10 @@ database:
           - ALL
       seccompProfile:
         type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
