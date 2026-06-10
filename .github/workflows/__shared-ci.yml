@@ -28,6 +28,16 @@ jobs:
       contents: read
       packages: write
 
+  test-action-docker-create-images-manifests:
+    needs: linter
+    uses: ./.github/workflows/__test-action-docker-create-images-manifests.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
+
   test-action-docker-prune-pull-requests-image-tags:
     needs: linter
     # yamllint disable-line rule:line-length
