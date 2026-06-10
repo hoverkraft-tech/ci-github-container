@@ -70,7 +70,7 @@ jobs:
                 ...originalImage,
                 tags: ["1.0.0"],
                 images: [`${originalImage.registry}/${originalImage.repository}:1.0.0-rc.0`],
-                "multi-platform": true,
+                "multi-platform": true, // Force multi-platform to force create tag
               },
             };
 
