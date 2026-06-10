@@ -131,30 +131,51 @@ runs:
             }
           }
 
-          // Helper function to build annotations options
-          function buildAnnotationsOption(annotations) {
-            const annotationLevels = ["index"];
-            return Object.keys(annotations)
-              .map(annotation => annotationLevels
-                .map(annotationLevel => `--annotation "${annotationLevel}:${annotation}=${annotations[annotation]}"`)
-              )
-              .flat()
-              .join(" ");
-          }
 
           // Helper function to create multiarch manifest
           async function createMultiarchManifest(builtImage, imagesWithTags) {
-            const platformsOption = builtImage.platforms.map(platform => `--platform ${platform}`).join(" ");
-            const tagsOption = imagesWithTags.map(image => `--tag ${image}`).join(" ");
-            const sources = builtImage.images.join(" ");
-            const annotationsOption = buildAnnotationsOption(builtImage.annotations);
+            const platformArgs = builtImage.platforms.flatMap(platform => ["--platform", platform]);
+            const tagArgs = imagesWithTags.flatMap(image => ["--tag", image]);
+            const annotationArgs = Object.keys(builtImage.annotations).flatMap(key => [
+              "--annotation",
+              `index:${key}=${builtImage.annotations[key]}`,
+            ]);
+            const sourceArgs = builtImage.images;
 
-            const createManifestCommand = `docker buildx imagetools create ${platformsOption} ${annotationsOption} ${tagsOption} ${sources}`;
+            const createManifestArgs = [
+              "buildx", "imagetools", "create",
+              ...platformArgs,
+              ...annotationArgs,
+              ...tagArgs,
+              ...sourceArgs,
+            ];
 
-            await exec.exec(createManifestCommand);
-            core.debug(`Create manifest for "${builtImage.name}" ("${createManifestCommand}") executed`);
+            const maxAttempts = 6;
+            const delayMs = 5000;
 
-            builtImage.images = imagesWithTags;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              const result = await exec.getExecOutput("docker", createManifestArgs, { ignoreReturnCode: true });
+
+              if (result.exitCode === 0) {
+                core.debug(`Create manifest for "${builtImage.name}" executed`);
+                builtImage.images = imagesWithTags;
+                return;
+              }
+
+              const commandOutput = `${result.stderr || ""}\n${result.stdout || ""}`.trim();
+              const isRetryableNotFound = /not found|manifest unknown|no such manifest/i.test(commandOutput);
+
+              if (!isRetryableNotFound || attempt === maxAttempts) {
+                throw new Error(
+                  `Failed to create manifest for "${builtImage.name}" (attempt ${attempt}/${maxAttempts}, exit code: ${result.exitCode}).\n${commandOutput}`,
+                );
+              }
+
+              core.warning(
+                `Source manifest for "${builtImage.name}" not yet available (attempt ${attempt}/${maxAttempts}). Retrying in ${delayMs}ms...`,
+              );
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
           }
 
           // Helper function to build image tags
