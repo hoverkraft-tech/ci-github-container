@@ -46,7 +46,7 @@ permissions:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@77f7324c534748f90cc191746164e0099e19e69a # 0.37.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@c9088e8447c5a8be45157e17701023fc50ccb1c0 # 0.37.2
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string (default format) or a JSON object.
@@ -254,7 +254,7 @@ jobs:
             core.setOutput("built-images", JSON.stringify(cloneInput));
 
       - id: clone-tag
-        uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@77f7324c534748f90cc191746164e0099e19e69a # 0.37.0
+        uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@c9088e8447c5a8be45157e17701023fc50ccb1c0 # 0.37.2
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
