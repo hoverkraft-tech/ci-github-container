@@ -179,6 +179,89 @@ Registry credentials are resolved by role using the same keys as `oci-registry`.
 <!-- secrets:start -->
 <!-- secrets:end -->
 <!-- examples:start -->
+
+## Examples
+
+### Clone an existing tag to a new tag
+
+This example first builds and publishes an original tag (`1.0.0-rc.0`) with the reusable workflow `.github/workflows/docker-build-images.yml`, then copies that tag to `1.0.0` using this action.
+
+```yaml
+jobs:
+  build-original-tag:
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@<sha> # x.y.z
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      sign: false
+      images: |
+        [
+          {
+            "name": "application",
+            "context": ".",
+            "dockerfile": "./tests/application/Dockerfile",
+            "target": "prod",
+            "platforms": ["linux/amd64"],
+            "tag": "1.0.0-rc.0"
+          }
+        ]
+
+  clone-image-tag:
+    needs: build-original-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@<sha> # vx.y.z
+        with:
+          persist-credentials: false
+
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/setup@<sha> # x.y.z
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: create-images-manifests-input
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUILT_IMAGES_OUTPUT: ${{ needs.build-original-tag.outputs.built-images }}
+        with:
+          script: |
+            const builtImages = JSON.parse(process.env.BUILT_IMAGES_OUTPUT);
+
+            const imageName = "application";
+            const originalImage = builtImages[imageName];
+            if (!originalImage) {
+              throw new Error(`Missing "${imageName}" entry in "built-images" output`);
+            }
+
+            // Build manifest-clone input: source = existing 1.0.0-rc.0 tag, destination = 1.0.0 tag.
+            const cloneInput = {
+              [imageName]: {
+                ...originalImage,
+                tags: ["1.0.0"],
+                images: [`${originalImage.registry}/${originalImage.repository}:1.0.0-rc.0`],
+                "multi-platform": true,
+              },
+            };
+
+            core.setOutput("built-images", JSON.stringify(cloneInput));
+
+      - id: clone-tag
+        uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@5396e1258d209f9af18e55da8692361508e3338c # 0.36.2
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          built-images: ${{ steps.create-images-manifests-input.outputs.built-images }}
+```
+
 <!-- examples:end -->
 
 <!--

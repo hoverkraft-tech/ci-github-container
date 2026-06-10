@@ -1,0 +1,121 @@
+---
+name: Test for "docker/create-images-manifests" action
+run-name: Test for "docker/create-images-manifests" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  build-original-tag:
+    name: Arrange - Build original tag
+    uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      sign: false
+      images: |
+        [
+          {
+            "name": "test-create-manifests-clone-tag",
+            "context": ".",
+            "dockerfile": "./tests/application/Dockerfile",
+            "target": "prod",
+            "platforms": ["linux/amd64"],
+            "tag": "1.0.0-rc.0"
+          }
+        ]
+
+  clone-tag:
+    name: Act/Assert - Clone 1.0.0-rc.0 to 1.0.0
+    needs: build-original-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: ./actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: create-images-manifests-input
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUILT_IMAGES_OUTPUT: ${{ needs.build-original-tag.outputs.built-images }}
+        with:
+          script: |
+            const builtImages = JSON.parse(process.env.BUILT_IMAGES_OUTPUT);
+
+            const imageName = "test-create-manifests-clone-tag";
+            const originalImage = builtImages[imageName];
+            if (!originalImage) {
+              throw new Error(`Missing "${imageName}" entry in "built-images" output`);
+            }
+
+            const cloneInput = {
+              [imageName]: {
+                ...originalImage,
+                tags: ["1.0.0"],
+                images: [`${originalImage.registry}/${originalImage.repository}:1.0.0-rc.0`],
+                "multi-platform": true,
+              },
+            };
+
+            core.setOutput("built-images", JSON.stringify(cloneInput));
+
+      - id: clone-tag
+        uses: ./actions/docker/create-images-manifests
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          built-images: ${{ steps.create-images-manifests-input.outputs.built-images }}
+
+      - name: Assert - Cloned tag exists in registry
+        run: |
+          docker manifest inspect ghcr.io/hoverkraft-tech/ci-github-container/test-create-manifests-clone-tag:1.0.0 >/dev/null
+
+      - name: Assert - Cloned image digest and tag
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ORIGINAL_BUILT_IMAGES_OUTPUT: ${{ needs.build-original-tag.outputs.built-images }}
+          CLONED_BUILT_IMAGES_OUTPUT: ${{ steps.clone-tag.outputs.built-images }}
+        with:
+          script: |
+            const assert = require("assert");
+
+            const imageName = "test-create-manifests-clone-tag";
+
+            const originalBuiltImages = JSON.parse(process.env.ORIGINAL_BUILT_IMAGES_OUTPUT);
+            const clonedBuiltImages = JSON.parse(process.env.CLONED_BUILT_IMAGES_OUTPUT);
+
+            const originalImage = originalBuiltImages[imageName];
+            const clonedImage = clonedBuiltImages[imageName];
+
+            assert(originalImage, `Missing "${imageName}" in original built-images output`);
+            assert(clonedImage, `Missing "${imageName}" in cloned built-images output`);
+
+            assert.equal(clonedImage.tags.length, 1, `Expected one cloned tag for "${imageName}"`);
+            assert.equal(clonedImage.tags[0], "1.0.0", `Unexpected cloned tag for "${imageName}"`);
+
+            assert.match(originalImage.digest, /^sha256:[a-f0-9]{64}$/, `Invalid original digest format for "${imageName}"`);
+            assert.match(clonedImage.digest, /^sha256:[a-f0-9]{64}$/, `Invalid digest format for "${imageName}"`);
+
+            const expectedClonedImage = `${clonedImage.registry}/${clonedImage.repository}:1.0.0@${clonedImage.digest}`;
+            assert(
+              clonedImage.images.includes(expectedClonedImage),
+              `Expected cloned image reference not found: ${expectedClonedImage}`,
+            );
