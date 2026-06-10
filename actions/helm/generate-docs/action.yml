@@ -54,12 +54,15 @@ runs:
   steps:
     - id: prepare-variables
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_VALUES_FILE: ${{ inputs.values-file }}
       with:
         script: |
           const { existsSync, realpathSync, writeFileSync } = require('node:fs');
           const { basename, isAbsolute, join } = require('node:path');
 
-          let workingDirectory = ${{ toJson(inputs.working-directory) }};
+          let workingDirectory = process.env.INPUT_WORKING_DIRECTORY || "";
           if (!workingDirectory || !workingDirectory.length) {
             return core.setFailed("Input 'working-directory' is required.");
           }
@@ -75,7 +78,7 @@ runs:
           const filesPattern = join(workingDirectory, "**/*.md");;
           core.setOutput("files-pattern", filesPattern);
 
-          let valuesFile = ${{ toJson(inputs.values-file) }};
+          let valuesFile = process.env.INPUT_VALUES_FILE || "";
           if (valuesFile && valuesFile.length) {
             if(isAbsolute(valuesFile)) {
               if (!existsSync(valuesFile)) {
@@ -142,7 +145,7 @@ runs:
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
     - if: ${{ inputs.checkout-ref != '' }}
-      uses: hoverkraft-tech/ci-github-common/actions/checkout@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+      uses: hoverkraft-tech/ci-github-common/actions/checkout@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         ref: ${{ inputs.checkout-ref }}
 
@@ -157,7 +160,7 @@ runs:
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@6b74a8f070140f5c120f78026d58e4c00d1b1e37 # 0.24.2
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@df348077afa4e79725151d50606e9dc63f86dcb6 # 0.24.4
       with:
         working-directory: ${{ github.action_path }}
 
@@ -246,7 +249,7 @@ runs:
         client-id: ${{ inputs.github-app-client-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       id: create-and-merge-pull-request
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}

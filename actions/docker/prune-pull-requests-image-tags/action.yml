@@ -32,14 +32,14 @@ inputs:
     default: ""
   github-token:
     description: |
-      GitHub token with the folowing scopes: `pull-requests:read`, `packages:read` and `packages:delete`.
+      GitHub token with the following scopes: `pull-requests:read`, `packages:read` and `packages:delete`.
       See https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages#about-scopes-and-permissions-for-package-registries.
     default: ${{ github.token }}
 
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         source-path: ${{ github.action_path }}/../..
 
@@ -49,14 +49,20 @@ runs:
         image: ${{ inputs.image }}
 
     - id: is-organization-or-user
-      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
 
     - id: get-tags-to-delete
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_PULL_REQUEST_TAG_FILTER: ${{ inputs.pull-request-tag-filter }}
+        INPUT_PRESERVE_TAGS_FILTER: ${{ inputs.preserve-tags-filter }}
+        IMAGE_NAME_OUTPUT: ${{ steps.image-name.outputs.image-name }}
+        IS_ORGANIZATION_OUTPUT: ${{ steps.is-organization-or-user.outputs.is-organization }}
+        ACTION_PATH: ${{ github.action_path }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const pullRequestTagFilter = `${{ inputs.pull-request-tag-filter }}`;
+          const pullRequestTagFilter = process.env.INPUT_PULL_REQUEST_TAG_FILTER || "";
           if (!pullRequestTagFilter.length) {
               core.setFailed('Input "pull-request-tag-filter" is undefined');
               return;
@@ -78,11 +84,11 @@ runs:
             return;
           }
 
-          const imageName = `${{ steps.image-name.outputs.image-name }}`;
-          const isOrganization = `${{ steps.is-organization-or-user.outputs.is-organization }}` === 'true';
-          const preserveTagsFilter = `${{ inputs.preserve-tags-filter }}`;
+          const imageName = process.env.IMAGE_NAME_OUTPUT || "";
+          const isOrganization = (process.env.IS_ORGANIZATION_OUTPUT || "") === 'true';
+          const preserveTagsFilter = process.env.INPUT_PRESERVE_TAGS_FILTER || "";
 
-          const script = require(`${{ github.action_path }}/index.js`)
+          const script = require(`${process.env.ACTION_PATH}/index.js`)
           const tagsToDelete = await script({
             github,
             context,

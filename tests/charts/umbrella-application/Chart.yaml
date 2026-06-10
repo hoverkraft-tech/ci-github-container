@@ -31,8 +31,8 @@ dependencies:
     version: 0.0.0
     condition: app.enabled
 
-  - name: mysql
+  - name: valkey
     alias: database
-    version: 14.0.3
-    repository: https://charts.bitnami.com/bitnami
+    version: 0.9.4
+    repository: https://valkey.io/valkey-helm/
     condition: database.enabled

@@ -60,12 +60,15 @@ jobs:
           values: ${{ matrix.chart.values }}
           tag: 0.1.0
           helm-repositories: |
-            bitnami https://charts.bitnami.com/bitnami
+            valkey https://valkey.io/valkey-helm/
 
-      # yamllint disable rule:line-length
       - name: Check release chart output
+        env:
+          RELEASED_IMAGE: ${{ steps.release-chart.outputs.image }}
+          EXPECTED_RELEASED_IMAGE: "ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container:0.1.0"
+          CHART_NAME: ${{ matrix.chart.name }}
         run: |
-          if [ "${{ steps.release-chart.outputs.image }}" != "ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container:0.1.0" ]; then
+          if [ "$RELEASED_IMAGE" != "$EXPECTED_RELEASED_IMAGE" ]; then
             echo "Unexpected chart image name"
             exit 1
           fi
@@ -73,9 +76,12 @@ jobs:
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
 
       - name: Check chart status
-        run: |
-          echo ${{ github.token }} | helm registry login -u ${{ github.repository_owner }} --password-stdin ghcr.io
-          helm pull --version "0.1.0" oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          CHART_NAME: ${{ matrix.chart.name }}
           HELM_EXPERIMENTAL_OCI: "1"
+        run: |
+          echo "$GH_TOKEN" | helm registry login -u "$REPOSITORY_OWNER" --password-stdin ghcr.io
+          helm pull --version "0.1.0" "oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/$CHART_NAME-test/ci-github-container"
     # yamllint enable rule:line-length

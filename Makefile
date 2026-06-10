@@ -8,12 +8,14 @@ lint: ## Execute linting
 
 lint-fix: ## Execute linting and fix
 	$(call run_linter, \
-		-e FIX_JSON_PRETTIER=true \
-		-e FIX_JAVASCRIPT_PRETTIER=true \
-		-e FIX_YAML_PRETTIER=true \
+		-e FIX_SPELL_CODESPELL=true \
 		-e FIX_MARKDOWN=true \
 		-e FIX_MARKDOWN_PRETTIER=true \
-		-e FIX_NATURAL_LANGUAGE=true)
+		-e FIX_NATURAL_LANGUAGE=true \
+		-e FIX_SHELL_SHFMT=true \
+		-e FIX_BIOME_LINT=true \
+		-e FIX_BIOME_FORMAT=true \
+	)
 
 npm-audit-fix: ## Execute npm audit fix
 	@set -uo pipefail; \
@@ -42,11 +44,28 @@ test-build-application: ## Build the test application image
 		-t ghcr.io/hoverkraft-tech/ci-github-container/application-test:0.1.0 ./tests/application
 
 test-ct-install: ## Run ct install to install the test application
-	@namespace="test-chart-$$(uuidgen | tr '[:upper:]' '[:lower:]')"; \
-	cleanup() { kubectl delete namespace "$$namespace" --ignore-not-found >/dev/null 2>&1 || true; }; \
-	trap cleanup EXIT; \
-	kubectl create namespace "$$namespace" >/dev/null; \
-	ct install --config ct.yaml --namespace "$$namespace" --helm-extra-set-args "--set=namespace=$$namespace,image.tag=0.1.0,image.digest="
+	@set -eu; \
+	for command in ct helm kind kubectl docker; do \
+		if ! command -v "$$command" >/dev/null 2>&1; then \
+			echo "Error: '$$command' is required for Kind-based chart install tests"; \
+			exit 1; \
+		fi; \
+	done; \
+	KIND_CLUSTER="test-chart-$$(date +%s)"; \
+	NAMESPACE="test-chart-$$(date +%s)"; \
+	APP_IMAGE="ghcr.io/hoverkraft-tech/ci-github-container/application-test:0.1.0"; \
+	trap 'exit_code=$$?; kubectl delete namespace "$$NAMESPACE" --ignore-not-found >/dev/null 2>&1 || true; if [ "$${TEST_CT_KEEP_KIND:-0}" != "1" ]; then kind delete cluster --name "$$KIND_CLUSTER" >/dev/null 2>&1 || true; else echo "Keeping Kind cluster $$KIND_CLUSTER for debugging"; fi; exit $$exit_code' EXIT; \
+	echo "Building test image $$APP_IMAGE..."; \
+	DOCKER_BUILDKIT=1 docker build --target prod --file tests/application/Dockerfile --tag "$$APP_IMAGE" tests/application; \
+	echo "Creating Kind cluster '$$KIND_CLUSTER'..."; \
+	kind create cluster --name "$$KIND_CLUSTER" >/dev/null; \
+	echo "Loading image into Kind cluster..."; \
+	kind load docker-image --name "$$KIND_CLUSTER" "$$APP_IMAGE" >/dev/null; \
+	kubectl config use-context "kind-$$KIND_CLUSTER" >/dev/null; \
+	kubectl create namespace "$$NAMESPACE" >/dev/null; \
+	echo "Running ct install..."; \
+	helm repo remove valkey-io >/dev/null 2>&1 || true; \
+	ct install --config ct.yaml --namespace "$$NAMESPACE" --helm-extra-set-args "--set=namespace=$$NAMESPACE,image.registry=ghcr.io,image.repository=hoverkraft-tech/ci-github-container/application-test,image.tag=0.1.0,image.digest=,image.pullPolicy=IfNotPresent,application.healthCheckPath=/health/check"
 
 define run_linter
 	DEFAULT_WORKSPACE="$(CURDIR)"; \
@@ -56,7 +75,6 @@ define run_linter
 	docker run \
 		-e DEFAULT_WORKSPACE="$$DEFAULT_WORKSPACE" \
 		-e FILTER_REGEX_INCLUDE="$(filter-out $@,$(MAKECMDGOALS))" \
-		-e IGNORE_GITIGNORED_FILES=true \
 		$(1) \
 		-v $$VOLUME \
 		--rm \

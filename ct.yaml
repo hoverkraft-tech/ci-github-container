@@ -5,6 +5,8 @@ charts:
   - tests/charts/application
 chart-yaml-schema: tests/charts/chart-schema.yaml
 lint-conf: tests/charts/lintconf.yaml
+chart-repos:
+  - valkey-io=https://valkey.io/valkey-helm/
 helm-dependency-extra-args:
   - --skip-refresh
 validate-maintainers: false

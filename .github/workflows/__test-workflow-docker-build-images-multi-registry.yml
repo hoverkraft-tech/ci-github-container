@@ -4,6 +4,9 @@ run-name: Test for "docker-build-images" workflow - Multi registry inputs
 
 on: # yamllint disable-line rule:truthy
   workflow_call:
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY:
+        required: false
 
 permissions: {}
 
@@ -47,12 +50,15 @@ jobs:
     permissions:
       packages: read
     steps:
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ github.token }}
+          persist-credentials: false
+
+      - uses: ./actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Assert built image output and pullability
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

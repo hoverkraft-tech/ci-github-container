@@ -24,4 +24,5 @@ jobs:
       pull-requests: read
       security-events: write
       statuses: write
-    secrets: inherit
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}

@@ -3,14 +3,14 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "app.fullname" . }}
+  name: {{ include "test-application.fullname" . }}
   namespace: {{ .Values.namespace | default "app-system" }}
   labels:
-    {{- include "app.labels" . | nindent 4 }}
+    {{- include "test-application.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "app.selectorLabels" . | nindent 6 }}
+      {{- include "test-application.selectorLabels" . | nindent 6 }}
   policyTypes:
     - Ingress
     - Egress
@@ -20,7 +20,6 @@ spec:
     - {{- toYaml . | nindent 6 }}
     {{- end }}
     {{- else }}
-    # Default: Allow ingress from any pod in the same namespace on HTTP port
     - from:
         - namespaceSelector: {}
       ports:
@@ -33,7 +32,6 @@ spec:
     - {{- toYaml . | nindent 6 }}
     {{- end }}
     {{- else }}
-    # Default: Allow egress to DNS and MySQL
     - to: []
       ports:
         - protocol: UDP
@@ -43,16 +41,15 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mysql
+              app.kubernetes.io/name: valkey
       ports:
         - protocol: TCP
-          port: 3306
-    # Allow HTTPS for external API calls
+          port: 6379
     - to: []
       ports:
         - protocol: TCP
-          port: 443
-        - protocol: TCP
           port: 80
+        - protocol: TCP
+          port: 443
     {{- end }}
 {{- end }}

@@ -50,7 +50,7 @@ jobs:
             image.tag=${{ fromJson(needs.build-test-images.outputs.built-images).application-test.tags[0] }}
             image.digest=${{ fromJson(needs.build-test-images.outputs.built-images).application-test.digest }}
           helm-repositories: |
-            bitnami https://charts.bitnami.com/bitnami
+            valkey https://valkey.io/valkey-helm/
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}

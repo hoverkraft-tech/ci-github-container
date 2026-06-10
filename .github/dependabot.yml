@@ -4,6 +4,8 @@ updates:
   - package-ecosystem: docker
     open-pull-requests-limit: 20
     directory: "/"
+    cooldown:
+      default-days: 7
     schedule:
       interval: weekly
       day: friday
@@ -18,6 +20,8 @@ updates:
     directories:
       - "/"
       - "/actions/**/*"
+    cooldown:
+      default-days: 7
     schedule:
       interval: weekly
       day: friday
@@ -31,6 +35,8 @@ updates:
     open-pull-requests-limit: 20
     directories:
       - "/tests/charts/*/*"
+    cooldown:
+      default-days: 7
     schedule:
       interval: weekly
       day: friday
@@ -43,6 +49,8 @@ updates:
   - package-ecosystem: "devcontainers"
     open-pull-requests-limit: 20
     directory: "/"
+    cooldown:
+      default-days: 7
     schedule:
       interval: weekly
       day: friday
@@ -52,6 +60,8 @@ updates:
     open-pull-requests-limit: 20
     directories:
       - "/actions/**/*"
+    cooldown:
+      default-days: 7
     schedule:
       interval: weekly
       day: friday

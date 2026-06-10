@@ -48,7 +48,7 @@ spec:
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
-            - configMapRef:
+            - secretRef:
                 name: {{ template "app.fullname" . }}-config
           ports:
             - name: http
@@ -63,11 +63,11 @@ spec:
               mountPath: /tmp
           livenessProbe:
             httpGet:
-              path: /health/check
+              path: {{ .Values.app.healthCheckPath | default "/" | quote }}
               port: http
           readinessProbe:
             httpGet:
-              path: /health/check
+              path: {{ .Values.app.healthCheckPath | default "/" | quote }}
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

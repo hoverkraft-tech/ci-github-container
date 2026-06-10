@@ -1,29 +1,29 @@
 {
-  "name": "Alpine",
-  "image": "mcr.microsoft.com/devcontainers/base:alpine-3.21",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:3": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers-extra/features/act:1": {}
-  },
-  "remoteEnv": {
-    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
-  },
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "eamodio.gitlens",
-        "github.vscode-github-actions",
-        "github.copilot",
-        "github.copilot-chat",
-        "ms-vscode.makefile-tools",
-        "esbenp.prettier-vscode",
-        "ms-azuretools.vscode-containers",
-        "Tim-Koehler.helm-intellisense"
-      ],
-      "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh"
-      }
-    }
-  }
+	"name": "Alpine",
+	"image": "mcr.microsoft.com/devcontainers/base:alpine-3.21",
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:3": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers-extra/features/act:1": {}
+	},
+	"remoteEnv": {
+		"GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"eamodio.gitlens",
+				"github.vscode-github-actions",
+				"github.copilot",
+				"github.copilot-chat",
+				"ms-vscode.makefile-tools",
+				"esbenp.prettier-vscode",
+				"ms-azuretools.vscode-containers",
+				"Tim-Koehler.helm-intellisense"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "zsh"
+			}
+		}
+	}
 }
