@@ -96,7 +96,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@59c06291a1619e383a38f2006f15627aa528bb95 # 0.37.0
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
       with:
         source-path: ${{ github.action_path }}/../..
         destination-directory-name: self-actions-create-images-manifests

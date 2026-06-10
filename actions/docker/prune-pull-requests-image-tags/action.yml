@@ -39,7 +39,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@59c06291a1619e383a38f2006f15627aa528bb95 # 0.37.0
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
       with:
         source-path: ${{ github.action_path }}/../..
 
@@ -49,7 +49,7 @@ runs:
         image: ${{ inputs.image }}
 
     - id: is-organization-or-user
-      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@59c06291a1619e383a38f2006f15627aa528bb95 # 0.37.0
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
 
     - id: get-tags-to-delete
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

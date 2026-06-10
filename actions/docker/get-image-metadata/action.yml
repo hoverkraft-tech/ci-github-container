@@ -46,7 +46,7 @@ runs:
   steps:
     # #region Prepare build variables
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@59c06291a1619e383a38f2006f15627aa528bb95 # 0.37.0
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
       with:
         source-path: ${{ github.action_path }}/../..
 
@@ -59,7 +59,7 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@59c06291a1619e383a38f2006f15627aa528bb95 # 0.37.0
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
 
     - id: define-metadata-inputs
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
