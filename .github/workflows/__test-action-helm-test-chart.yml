@@ -19,6 +19,7 @@ jobs:
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
     with:
+      sign: false
       images: |
         [
           {

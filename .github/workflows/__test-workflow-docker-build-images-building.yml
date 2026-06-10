@@ -28,6 +28,7 @@ jobs:
         SECRET_ANOTHER_TEST=another-test-secret
       build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
     with:
+      sign: false
       images: |
         [
           {
