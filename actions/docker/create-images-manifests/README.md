@@ -254,7 +254,7 @@ jobs:
             core.setOutput("built-images", JSON.stringify(cloneInput));
 
       - id: clone-tag
-        uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@5396e1258d209f9af18e55da8692361508e3338c # 0.36.2
+        uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@77f7324c534748f90cc191746164e0099e19e69a # 0.37.0
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
