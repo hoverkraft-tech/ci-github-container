@@ -46,7 +46,7 @@ permissions:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@5396e1258d209f9af18e55da8692361508e3338c # 0.36.2
+- uses: hoverkraft-tech/ci-github-container/actions/docker/create-images-manifests@77f7324c534748f90cc191746164e0099e19e69a # 0.37.0
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string (default format) or a JSON object.
