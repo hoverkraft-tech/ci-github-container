@@ -81,7 +81,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         ref: ${{ inputs.ref }}
 
@@ -157,7 +157,7 @@ runs:
 
           core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@66578f5b9aec4ac5558b5dad750c4c74dfcb65c5 # 0.35.5
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@6a0fdae9e2598eccf7a9ec2bc20e7ce8e7c10c48 # 0.36.4
       with:
         source-path: ${{ github.action_path }}/../..
         destination-directory-name: self-actions-update-chart-values
@@ -168,7 +168,7 @@ runs:
         values: ${{ steps.chart-tag-updates.outputs.values }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@6b74a8f070140f5c120f78026d58e4c00d1b1e37 # 0.24.2
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@df348077afa4e79725151d50606e9dc63f86dcb6 # 0.24.4
       with:
         working-directory: ${{ github.action_path }}
 
