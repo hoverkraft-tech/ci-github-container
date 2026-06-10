@@ -131,7 +131,6 @@ runs:
             }
           }
 
-
           // Helper function to create multiarch manifest
           async function createMultiarchManifest(builtImage, imagesWithTags) {
             const platformArgs = builtImage.platforms.flatMap(platform => ["--platform", platform]);
