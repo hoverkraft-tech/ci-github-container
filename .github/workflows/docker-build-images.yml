@@ -99,7 +99,7 @@ on: # yamllint disable-line rule:truthy
         default: ${{ github.repository_owner }}
       cache-type:
         description: |
-          Cache type.
+          Cache type. Set to `false` or empty to disable cache entirely.
           See https://docs.docker.com/build/cache/backends.
         default: "gha"
         type: string

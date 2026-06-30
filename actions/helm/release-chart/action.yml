@@ -188,11 +188,13 @@ runs:
           const rootChartFileContent = yaml.parse(fs.readFileSync(rootChartFile, 'utf8'));
 
           if (!rootChartFileContent.dependencies || rootChartFileContent.dependencies.length === 0) {
+            core.debug(`No dependencies found in Chart.yaml file: ${rootChartFile}`);
             return;
           }
 
           const chartLockFile = process.env.INPUT_PATH + '/Chart.lock';
           if (!fs.existsSync(chartLockFile)) {
+            core.debug(`Chart.lock file not found: ${chartLockFile}`);
             return core.setFailed(`Chart.lock file not found: ${chartLockFile}`);
           }
 
@@ -203,6 +205,7 @@ runs:
 
           for (const dependency of dependencies) {
             const isLocalDependency = dependency.repository.startsWith('file://') && dependency.version === '0.0.0';
+            core.debug(`Dependency ${dependency.name} is local: ${isLocalDependency}`);
 
             if (isLocalDependency) {
               dependency.version = process.env.INPUT_TAG;
@@ -211,6 +214,7 @@ runs:
           }
 
           if (!hasLocalDependencies) {
+            core.debug(`No local dependencies found in Chart.lock file: ${chartLockFile}`);
             return;
           }
 

@@ -97,7 +97,7 @@ inputs:
     required: false
   cache-type:
     description: |
-      Cache type.
+      Cache type. Set to `false` or empty to disable cache entirely.
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
@@ -237,7 +237,12 @@ runs:
           const tagSuffix = `-${slugifiedPlatform}`;
           core.setOutput('cache-flavor', `suffix=${tagSuffix}`);
 
-          const cacheType = (process.env.CACHE_TYPE_INPUT || '').trim();
+          const rawCacheType = (process.env.CACHE_TYPE_INPUT || '').trim().toLowerCase();
+          const cacheDisabled = rawCacheType.length === 0 || rawCacheType === 'false';
+          const cacheType = cacheDisabled ? '' : rawCacheType;
+          core.setOutput('cache-disabled', cacheDisabled ? 'true' : 'false');
+          core.setOutput('cache-type', cacheType);
+
           const metadataImage = process.env.METADATA_IMAGE || '';
           const cacheRegistry = (process.env.CACHE_REGISTRY || '').trim();
           if (cacheType === 'registry' && !cacheRegistry.length) {
@@ -309,16 +314,18 @@ runs:
         platforms: ${{ inputs.platform }}
 
     # Caching setup
-    - id: cache-arguments
+    - if: steps.get-docker-config.outputs.cache-disabled != 'true'
+      id: cache-arguments
       uses: int128/docker-build-cache-config-action@3674b5d646e77fc3913044193ac579c5efd20791 # v1.58.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
         pull-request-cache: true
-        cache-type: ${{ inputs.cache-type }}
+        cache-type: ${{ steps.get-docker-config.outputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
-    - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    - if: steps.get-docker-config.outputs.cache-type == 'gha'
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: cache
       with:
         path: cache-mount
@@ -326,7 +333,8 @@ runs:
         restore-keys: |
           cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-
 
-    - name: Restore Docker cache mounts
+    - if: steps.get-docker-config.outputs.cache-type == 'gha'
+      name: Restore Docker cache mounts
       uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
       with:
         builder: ${{ steps.docker-setup.outputs.buildx-name }}
@@ -344,8 +352,9 @@ runs:
         secrets: ${{ inputs.secrets }}
         secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
-        cache-from: ${{ steps.cache-arguments.outputs.cache-from }}
-        cache-to: ${{ steps.cache-arguments.outputs.cache-to }}
+        cache-from: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.cache-arguments.outputs.cache-from || '' }}
+        cache-to: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.cache-arguments.outputs.cache-to || '' }}
+        no-cache: ${{ steps.get-docker-config.outputs.cache-disabled }}
         outputs: |
           ${{ steps.get-docker-config.outputs.multi-platform && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
         labels: ${{ steps.metadata.outputs.labels }}
