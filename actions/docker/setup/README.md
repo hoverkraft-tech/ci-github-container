@@ -75,13 +75,13 @@ Shared action to configure Docker tooling and OCI registry authentication.
 
     # Buildx version used by docker/setup-buildx-action.
     #
-    # Default: `v0.34.1`
-    buildx-version: v0.34.1
+    # Default: `v0.35.0`
+    buildx-version: v0.35.0
 
     # BuildKit image used by docker/setup-buildx-action.
     #
-    # Default: `moby/buildkit:v0.30.0`
-    buildkit-image: moby/buildkit:v0.30.0
+    # Default: `moby/buildkit:v0.31.1`
+    buildkit-image: moby/buildkit:v0.31.1
 ````
 
 <!-- usage:end -->
@@ -106,8 +106,8 @@ Shared action to configure Docker tooling and OCI registry authentication.
 |                               | When provided, registry authentication targets are inferred from the built image data.                                                           |              |                         |
 | **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`                  |
 | **`buildx-cleanup`**          | Whether the Buildx builder should be removed during post-job cleanup.                                                                            | **false**    | `true`                  |
-| **`buildx-version`**          | Buildx version used by docker/setup-buildx-action.                                                                                               | **false**    | `v0.34.1`               |
-| **`buildkit-image`**          | BuildKit image used by docker/setup-buildx-action.                                                                                               | **false**    | `moby/buildkit:v0.30.0` |
+| **`buildx-version`**          | Buildx version used by docker/setup-buildx-action.                                                                                               | **false**    | `v0.35.0`               |
+| **`buildkit-image`**          | BuildKit image used by docker/setup-buildx-action.                                                                                               | **false**    | `moby/buildkit:v0.31.1` |
 
 <!-- inputs:end -->
 
