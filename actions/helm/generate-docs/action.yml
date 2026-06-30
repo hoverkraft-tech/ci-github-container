@@ -145,7 +145,7 @@ runs:
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
     - if: ${{ inputs.checkout-ref != '' }}
-      uses: hoverkraft-tech/ci-github-common/actions/checkout@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
+      uses: hoverkraft-tech/ci-github-common/actions/checkout@2334d395217f9811699dbd4ace9d8559e4d99e0d # 0.37.3
       with:
         ref: ${{ inputs.checkout-ref }}
 
@@ -154,7 +154,7 @@ runs:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.prepare-variables.outputs.values-file }}
-      uses: losisin/helm-values-schema-json-action@39cdf80504f6c95ad3c4f317e2135e2509ea56bb # v3.0.0
+      uses: losisin/helm-values-schema-json-action@cfefdf4241da6dbe17f3378e3cd0e863d4a4c3c8 # v3.0.1
       with:
         values: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
@@ -166,7 +166,7 @@ runs:
 
     - name: Cache textlint
       id: cache-textlint
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.prepare-variables.outputs.textlint-cache-path }}
         key: ${{ runner.os }}-textlint-${{ hashFiles(steps.prepare-variables.outputs.textlint-config-path) }}
@@ -212,7 +212,7 @@ runs:
 
     - name: Cache prettier
       id: cache-prettier
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.prepare-variables.outputs.prettier-cache-path }}
         key: ${{ runner.os }}-prettier
@@ -249,7 +249,7 @@ runs:
         client-id: ${{ inputs.github-app-client-id }}
         private-key: ${{ inputs.github-app-key }}
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@2334d395217f9811699dbd4ace9d8559e4d99e0d # 0.37.3
       id: create-and-merge-pull-request
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}

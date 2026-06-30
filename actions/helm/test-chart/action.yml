@@ -76,7 +76,7 @@ runs:
             'input must be true',
           );
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@2334d395217f9811699dbd4ace9d8559e4d99e0d # 0.37.3
       with:
         fetch-depth: 0
 
@@ -128,12 +128,12 @@ runs:
             core.setOutput('path', 'ct.yaml');
           }
 
-    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
 
     - name: Set up chart-testing
       uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@624be17604ee0a7378488191aacb35851e7cf001 # 0.37.1
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@2334d395217f9811699dbd4ace9d8559e4d99e0d # 0.37.3
       with:
         source-path: ${{ github.action_path }}/../..
         destination-directory-name: self-actions-test-chart
