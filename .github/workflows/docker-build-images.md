@@ -30,7 +30,6 @@ This includes [multi-platform](https://docs.docker.com/build/building/multi-plat
 
 ### Permissions
 
-- **`actions`**: `write`
 - **`contents`**: `read`
 - **`id-token`**: `write`
 - **`issues`**: `read`
