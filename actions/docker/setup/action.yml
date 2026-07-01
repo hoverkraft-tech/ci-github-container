@@ -50,6 +50,12 @@ inputs:
       Whether the Buildx builder should be removed during post-job cleanup.
     default: true
     required: false
+  # FIXME: upgrade version when available (https://github.com/docker/actions-toolkit/blob/main/.github/docker-releases.json)
+  docker-version:
+    description: |
+      Docker version used when Docker must be installed by the action.
+    default: "29.6.1"
+    required: false
   # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
   buildx-version:
     description: |
@@ -397,13 +403,34 @@ runs:
 
     - id: detect-docker
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        EXPECTED_DOCKER_VERSION: ${{ inputs.docker-version }}
       with:
         script: |
           const dockerPath = await io.which('docker', false);
-          core.setOutput('exists', dockerPath ? 'true' : 'false');
 
-    - if: steps.detect-docker.outputs.exists != 'true'
+          if (!dockerPath) {
+            core.setOutput('docker-install-version', process.env.EXPECTED_DOCKER_VERSION);
+            return;
+          }
+
+          try {
+            const { stdout } = await exec.getExecOutput('docker', ['version', '--format', '{{.Server.Version}}']);
+            const dockerVersion = stdout.trim();
+
+            // Check if the detected Docker version is the same as the expected version.
+            if (dockerVersion !== process.env.EXPECTED_DOCKER_VERSION) {
+              core.setOutput('docker-install-version', process.env.EXPECTED_DOCKER_VERSION);
+            }
+          } catch (error) {
+            core.warning(`Failed to detect Docker version, defaulting to expected version: ${error}`);
+            core.setOutput('docker-install-version', process.env.EXPECTED_DOCKER_VERSION);
+          };
+
+    - if: steps.detect-docker.outputs.docker-install-version
       uses: docker/setup-docker-action@0234bb73ccb40f0c430b795634f9247e2b5c2d23 # v5.2.0
+      with:
+        version: type=archive,channel=stable,version=${{ steps.detect-docker.outputs.docker-install-version }}
 
     - if: inputs.setup-buildx != 'false'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

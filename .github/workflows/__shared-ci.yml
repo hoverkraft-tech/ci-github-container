@@ -40,6 +40,12 @@ jobs:
       packages: write
       pull-requests: read
 
+  test-action-docker-setup:
+    needs: linter
+    uses: ./.github/workflows/__test-action-docker-setup.yml
+    permissions:
+      contents: read
+
   test-action-docker-prune-pull-requests-image-tags:
     needs: linter
     # yamllint disable-line rule:line-length
