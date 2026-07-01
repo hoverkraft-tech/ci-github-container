@@ -48,12 +48,7 @@ jobs:
           "test-caching-mono-arch-gha",
           "test-caching-multi-arch-gha",
           "test-create-manifests-clone-tag",
-          "test-multi-registry-inputs",
-          "test-prune-${{ github.run_number }}",
-          "test-${{ github.ref_name }}-${{ github.run_number }}-mono-arch-signed",
-          "test-${{ github.ref_name }}-${{ github.run_number }}-multi-arch-signed",
-          "test-${{ github.ref_name }}-${{ github.run_number }}-mono-arch-unsigned",
-          "test-${{ github.ref_name }}-${{ github.run_number }}-multi-arch-unsigned"
+          "test-multi-registry-inputs"
         ]
 
   clean-with-cache:
@@ -69,7 +64,6 @@ jobs:
       images: |
         [
           "test-multi-registry-inputs",
-          "test-prune-${{ github.run_number }}",
           "test-caching-mono-arch-registry",
           "test-caching-multi-arch-registry"
         ]
