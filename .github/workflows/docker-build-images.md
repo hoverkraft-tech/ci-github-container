@@ -30,6 +30,7 @@ This includes [multi-platform](https://docs.docker.com/build/building/multi-plat
 
 ### Permissions
 
+- **`actions`**: `write`
 - **`contents`**: `read`
 - **`id-token`**: `write`
 - **`issues`**: `read`
@@ -51,7 +52,7 @@ on:
 permissions: {}
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@c9088e8447c5a8be45157e17701023fc50ccb1c0 # 0.37.2
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@cfc7074e26bbfbdf33f163d209d2c14957358152 # 0.38.0
     permissions:
       actions: write
       contents: read

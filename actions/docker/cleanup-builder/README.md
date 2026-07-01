@@ -21,7 +21,7 @@ Register a post-job step that removes a Docker Buildx builder after later post s
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/cleanup-builder@c9088e8447c5a8be45157e17701023fc50ccb1c0 # 0.37.2
+- uses: hoverkraft-tech/ci-github-container/actions/docker/cleanup-builder@cfc7074e26bbfbdf33f163d209d2c14957358152 # 0.38.0
   with:
     # Docker Buildx builder name to remove during post-job cleanup.
     builder: ""
