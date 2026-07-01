@@ -64,7 +64,6 @@ jobs:
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
-      actions: write
       contents: read
       id-token: write
       issues: read
@@ -101,7 +100,6 @@ jobs:
     needs: arrange
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
-      actions: write
       contents: read
       id-token: write
       issues: read

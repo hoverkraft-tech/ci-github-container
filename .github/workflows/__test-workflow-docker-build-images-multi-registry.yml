@@ -15,7 +15,6 @@ jobs:
     name: Act - Build images with structured registry inputs
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
-      actions: write
       contents: read
       id-token: write
       issues: read

@@ -69,7 +69,6 @@ jobs:
     needs: arrange-prepare-variables
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
-      actions: write
       contents: read
       id-token: write
       issues: read
