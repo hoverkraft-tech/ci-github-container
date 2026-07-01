@@ -38,6 +38,7 @@ If default GitHub token is used, the following permissions are required:
 
 ```yml
 permissions:
+  actions: write # Required for gha cache backend
   contents: read
   packages: write
 ```
