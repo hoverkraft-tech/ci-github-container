@@ -54,7 +54,6 @@ jobs:
   docker-build-images:
     uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@cfc7074e26bbfbdf33f163d209d2c14957358152 # 0.38.0
     permissions:
-      actions: write
       contents: read
       id-token: write
       issues: read

@@ -366,7 +366,6 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.prepare-variables.outputs.images) }}
     permissions:
-      actions: write # Required for gha cache backend
       contents: read
       pull-requests: read
       issues: read
