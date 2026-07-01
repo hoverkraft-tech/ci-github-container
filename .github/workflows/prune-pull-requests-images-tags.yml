@@ -105,6 +105,44 @@ jobs:
       pull-requests: read
       packages: write
     steps:
+      - name: Wait for package visibility
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          IMAGE: ${{ matrix.image }}
+        with:
+          script: |
+            const sleep = (delayMs) =>
+              new Promise((resolve) => setTimeout(resolve, delayMs));
+
+            const owner = context.repo.owner;
+            const packageName = `${context.repo.repo.toLowerCase()}/${process.env.IMAGE}`;
+            const packagePayload = {
+              package_type: 'container',
+              package_name: packageName,
+              org: owner,
+            };
+
+            for (let attempt = 1; attempt <= 6; attempt++) {
+              try {
+                await github.rest.packages.getPackageForOrganization(packagePayload);
+                core.info(`Package "${packageName}" is visible.`);
+                return;
+              } catch (error) {
+                if (error.status !== 404 || attempt === 6) {
+                  throw error;
+                }
+
+                core.info(
+                  [
+                    `Package "${packageName}" is not visible yet`,
+                    `(attempt ${attempt}/6).`,
+                    'Retrying in 5000 ms.',
+                  ].join(' '),
+                );
+                await sleep(5000);
+              }
+            }
+
       - id: local-workflow-actions
         uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@2334d395217f9811699dbd4ace9d8559e4d99e0d # 0.37.3
         with:
