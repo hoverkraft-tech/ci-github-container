@@ -133,6 +133,8 @@ permissions:
     secret-envs: ""
 
     # Cache type. Set to `false` or empty to disable cache entirely.
+    # For `gha`, cache restore remains enabled on untrusted default-branch-scoped triggers,
+    # but cache export is skipped automatically because GitHub only grants read-only cache access there.
     # See https://docs.docker.com/build/cache/backends.
     #
     # Default: `gha`
@@ -203,6 +205,7 @@ permissions:
 | **`secret-envs`**             | List of secret environment variables to expose to the build (e.g., `key=envname, MY_SECRET=MY_ENV_VAR`).                                         | **false**    | -                                |
 |                               | See <https://docs.docker.com/build/ci/github-actions/secrets/>.                                                                                  |              |                                  |
 | **`cache-type`**              | Cache type. Set to `false` or empty to disable cache entirely.                                                                                   | **false**    | `gha`                            |
+|                               | For `gha`, cache restore remains enabled on untrusted default-branch-scoped triggers, but cache export is skipped automatically because GitHub only grants read-only cache access there. |              |                                  |
 |                               | See <https://docs.docker.com/build/cache/backends>.                                                                                              |              |                                  |
 | **`buildkitd-config-inline`** | Inline BuildKit daemon configuration.                                                                                                            | **false**    | -                                |
 |                               | See <https://github.com/docker/setup-buildx-action#inputs>.                                                                                      |              |                                  |
