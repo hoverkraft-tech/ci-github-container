@@ -12,6 +12,7 @@ jobs:
     name: Arrange - Build original tag
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
+      actions: write
       contents: read
       id-token: write
       issues: read
