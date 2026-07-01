@@ -98,6 +98,8 @@ inputs:
   cache-type:
     description: |
       Cache type. Set to `false` or empty to disable cache entirely.
+      For `gha`, cache restore remains enabled on untrusted default-branch-scoped triggers,
+      but cache export is skipped automatically because GitHub only grants read-only cache access there.
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
@@ -189,7 +191,9 @@ runs:
         CACHE_REGISTRY: ${{ steps.docker-setup.outputs.cache-registry }}
         CACHE_TYPE_INPUT: ${{ inputs.cache-type }}
         CONTEXT_INPUT: ${{ inputs.context }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         DOCKERFILE_INPUT: ${{ inputs.dockerfile }}
+        GH_REF: ${{ github.ref }}
         METADATA_IMAGE: ${{ steps.metadata.outputs.image }}
         MULTI_PLATFORM_INPUT: ${{ inputs.multi-platform }}
         PLATFORM_INPUT: ${{ inputs.platform }}
@@ -242,6 +246,31 @@ runs:
           const cacheType = cacheDisabled ? '' : rawCacheType;
           core.setOutput('cache-disabled', cacheDisabled ? 'true' : 'false');
           core.setOutput('cache-type', cacheType);
+
+          const defaultBranch = (process.env.DEFAULT_BRANCH || '').trim();
+          const githubRef = (process.env.GH_REF || '').trim();
+          const defaultBranchRef = defaultBranch.length > 0 ? `refs/heads/${defaultBranch}` : '';
+          const usesDefaultBranchScope = defaultBranchRef.length > 0 && githubRef === defaultBranchRef;
+          const ghaCacheReadWriteEvents = new Set([
+            'push',
+            'schedule',
+            'workflow_dispatch',
+            'repository_dispatch',
+            'delete',
+            'registry_package',
+            'page_build',
+          ]);
+          const cacheExportDisabled = cacheType === 'gha'
+            && usesDefaultBranchScope
+            && !ghaCacheReadWriteEvents.has(context.eventName);
+          core.setOutput('cache-export-disabled', cacheExportDisabled ? 'true' : 'false');
+
+          if (cacheExportDisabled) {
+            core.info(
+              `Disabling gha cache export for ${context.eventName} on ${githubRef}. `
+              + 'GitHub only grants read-only cache access for this default-branch-scoped trigger, so cache restores remain enabled and cache writes are skipped.'
+            );
+          }
 
           const metadataImage = process.env.METADATA_IMAGE || '';
           const cacheRegistry = (process.env.CACHE_REGISTRY || '').trim();
@@ -353,7 +382,7 @@ runs:
         secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
         cache-from: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.cache-arguments.outputs.cache-from || '' }}
-        cache-to: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.cache-arguments.outputs.cache-to || '' }}
+        cache-to: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.get-docker-config.outputs.cache-export-disabled != 'true' && steps.cache-arguments.outputs.cache-to || '' }}
         no-cache: ${{ steps.get-docker-config.outputs.cache-disabled }}
         outputs: |
           ${{ steps.get-docker-config.outputs.multi-platform && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
