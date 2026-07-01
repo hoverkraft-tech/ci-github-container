@@ -268,7 +268,8 @@ runs:
           if (cacheExportDisabled) {
             core.info(
               `Disabling gha cache export for ${context.eventName} on ${githubRef}. `
-              + 'GitHub only grants read-only cache access for this default-branch-scoped trigger, so cache restores remain enabled and cache writes are skipped.'
+              + 'GitHub only grants read-only cache access for this default-branch-scoped trigger, '
+              + 'so cache restores remain enabled and cache writes are skipped.'
             );
           }
 
@@ -371,6 +372,24 @@ runs:
         dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
+    - id: cache-inputs
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        CACHE_DISABLED: ${{ steps.get-docker-config.outputs.cache-disabled }}
+        CACHE_EXPORT_DISABLED: ${{ steps.get-docker-config.outputs.cache-export-disabled }}
+        CACHE_FROM: ${{ steps.cache-arguments.outputs.cache-from }}
+        CACHE_TO: ${{ steps.cache-arguments.outputs.cache-to }}
+      with:
+        script: |
+          const cacheDisabled = (process.env.CACHE_DISABLED || '') === 'true';
+          const cacheExportDisabled = (process.env.CACHE_EXPORT_DISABLED || '') === 'true';
+
+          core.setOutput('cache-from', cacheDisabled ? '' : (process.env.CACHE_FROM || ''));
+          core.setOutput(
+            'cache-to',
+            cacheDisabled || cacheExportDisabled ? '' : (process.env.CACHE_TO || '')
+          );
+
     - id: build
       uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
       with:
@@ -381,8 +400,8 @@ runs:
         secrets: ${{ inputs.secrets }}
         secret-envs: ${{ inputs.secret-envs }}
         platforms: ${{ inputs.platform }}
-        cache-from: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.cache-arguments.outputs.cache-from || '' }}
-        cache-to: ${{ steps.get-docker-config.outputs.cache-disabled != 'true' && steps.get-docker-config.outputs.cache-export-disabled != 'true' && steps.cache-arguments.outputs.cache-to || '' }}
+        cache-from: ${{ steps.cache-inputs.outputs.cache-from }}
+        cache-to: ${{ steps.cache-inputs.outputs.cache-to }}
         no-cache: ${{ steps.get-docker-config.outputs.cache-disabled }}
         outputs: |
           ${{ steps.get-docker-config.outputs.multi-platform && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=image,push=true' }}
