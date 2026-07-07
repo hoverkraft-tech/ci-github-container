@@ -39,6 +39,8 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 #### - [Setup](actions/docker/setup/README.md)
 
+#### - [Attest images](actions/docker/attest-images/README.md)
+
 #### - [Sign images](actions/docker/sign-images/README.md)
 
 ### Helm

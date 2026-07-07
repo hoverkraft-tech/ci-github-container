@@ -35,6 +35,7 @@ This includes [multi-platform](https://docs.docker.com/build/building/multi-plat
 - **`issues`**: `read`
 - **`packages`**: `write`
 - **`pull-requests`**: `read`
+- **`attestations`**: `write` (only required when `attest: true`)
 
 <!-- overview:end -->
 
@@ -58,6 +59,7 @@ jobs:
       issues: read
       packages: write
       pull-requests: read
+      attestations: write # only required when `attest: true`
     secrets:
       # Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries.
       # Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
@@ -178,6 +180,12 @@ jobs:
       #
       # Default: `true`
       sign: true
+
+      # Generate build provenance attestations for built images.
+      # See [attest-images](../../actions/docker/attest-images/README.md).
+      #
+      # Default: `false`
+      attest: false
 ````
 
 <!-- usage:end -->
@@ -229,6 +237,8 @@ jobs:
 |                                         | <!-- textlint-disable --><pre lang="ini">[registry."my-registry.local:5000"]&#13; http = true&#13; insecure = true</pre><!-- textlint-enable -->                                                                                                                                                                                                                                                                                                                                                            |              |             |                                  |
 | **`sign`**                              | Sign built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | **false**    | **boolean** | `true`                           |
 |                                         | See [sign-images](../../actions/docker/sign-images/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                              |              |             |                                  |
+| **`attest`**                            | Generate build provenance attestations for built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | **false**    | **boolean** | `false`                          |
+|                                         | See [attest-images](../../actions/docker/attest-images/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                          |              |             |                                  |
 
 <!-- inputs:end -->
 
