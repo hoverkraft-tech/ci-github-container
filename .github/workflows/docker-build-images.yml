@@ -568,7 +568,9 @@ jobs:
 
             // Get images to attest
             const imagesToAttest = Object.values(builtImages).map(image => image.images).flat();
-            core.setOutput('images-to-attest', JSON.stringify(imagesToAttest));
+            if (imagesToAttest.length > 0) {
+              core.setOutput('images-to-attest', JSON.stringify(imagesToAttest));
+            }
 
       - uses: ./../self-workflow/actions/docker/attest-images
         if: steps.get-images-to-attest.outputs.images-to-attest
