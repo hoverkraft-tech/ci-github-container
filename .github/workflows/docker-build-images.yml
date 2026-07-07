@@ -123,6 +123,13 @@ on: # yamllint disable-line rule:truthy
         type: boolean
         default: true
         required: false
+      attest:
+        description: |
+          Generate build provenance attestations for built images.
+          See [attest-images](../../actions/docker/attest-images/README.md).
+        type: boolean
+        default: false
+        required: false
     secrets:
       oci-registry-password:
         description: |
@@ -461,7 +468,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write # Needed for signing images
+      id-token: write # Needed for signing and attesting images
+      attestations: write # Needed for attesting images
     needs: [prepare-variables, build-images]
     runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
@@ -541,4 +549,29 @@ jobs:
         if: steps.get-images-to-sign.outputs.images-to-sign
         with:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: get-images-to-attest
+        if: inputs.attest
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUILT_IMAGES_INPUT: ${{ steps.create-images-manifests.outputs.built-images }}
+        with:
+          script: |
+            const builtImagesInput = process.env.BUILT_IMAGES_INPUT;
+            let builtImages = null;
+            try {
+              builtImages = JSON.parse(builtImagesInput);
+            } catch (error) {
+              throw new Error(`"built-images" input is not a valid JSON: ${error}`);
+            }
+
+            // Get images to attest
+            const imagesToAttest = Object.values(builtImages).map(image => image.images).flat();
+            core.setOutput('images-to-attest', JSON.stringify(imagesToAttest));
+
+      - uses: ./../self-workflow/actions/docker/attest-images
+        if: steps.get-images-to-attest.outputs.images-to-attest
+        with:
+          images: ${{ steps.get-images-to-attest.outputs.images-to-attest }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
