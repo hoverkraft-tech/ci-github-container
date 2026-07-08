@@ -48,36 +48,70 @@ jobs:
 
             const tag = '0.1.0';
 
+            function createScenario({ architecture, sign, attest, platforms }) {
+              const signingState = sign ? 'signed' : 'unsigned';
+              const attestationState = attest ? 'attested' : 'not-attested';
+
+              return {
+                name: `${architecture} - ${signingState} - ${attestationState}`,
+                'image-name': `${imageNamePrefix}-${architecture}-${signingState}-${attestationState}`,
+                platforms: JSON.stringify(platforms),
+                sign,
+                attest,
+                tag,
+              };
+            }
+
             const matrix = {
               include: [
-                {
-                  name: "mono-arch - signed",
-                  "image-name": `${imageNamePrefix}-mono-arch-signed`,
-                  platforms: '["linux/amd64"]',
+                createScenario({
+                  architecture: 'mono-arch',
                   sign: true,
-                  tag
-                },
-                {
-                  name: "multi-arch - signed",
-                  "image-name": `${imageNamePrefix}-multi-arch-signed`,
-                  platforms: '["linux/amd64","linux/arm64"]',
+                  attest: false,
+                  platforms: ['linux/amd64'],
+                }),
+                createScenario({
+                  architecture: 'mono-arch',
                   sign: true,
-                  tag
-                },
-                {
-                  name: "mono-arch - unsigned",
-                  "image-name": `${imageNamePrefix}-mono-arch-unsigned`,
-                  platforms: '["linux/amd64"]',
+                  attest: true,
+                  platforms: ['linux/amd64'],
+                }),
+                createScenario({
+                  architecture: 'multi-arch',
+                  sign: true,
+                  attest: false,
+                  platforms: ['linux/amd64', 'linux/arm64'],
+                }),
+                createScenario({
+                  architecture: 'multi-arch',
+                  sign: true,
+                  attest: true,
+                  platforms: ['linux/amd64', 'linux/arm64'],
+                }),
+                createScenario({
+                  architecture: 'mono-arch',
                   sign: false,
-                  tag
-                },
-                {
-                  name: "multi-arch - unsigned",
-                  "image-name": `${imageNamePrefix}-multi-arch-unsigned`,
-                  platforms: '["linux/amd64","linux/arm64"]',
+                  attest: false,
+                  platforms: ['linux/amd64'],
+                }),
+                createScenario({
+                  architecture: 'mono-arch',
                   sign: false,
-                  tag
-                }
+                  attest: true,
+                  platforms: ['linux/amd64'],
+                }),
+                createScenario({
+                  architecture: 'multi-arch',
+                  sign: false,
+                  attest: false,
+                  platforms: ['linux/amd64', 'linux/arm64'],
+                }),
+                createScenario({
+                  architecture: 'multi-arch',
+                  sign: false,
+                  attest: true,
+                  platforms: ['linux/amd64', 'linux/arm64'],
+                }),
               ]
             };
             return matrix;
@@ -90,6 +124,7 @@ jobs:
       matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
+      attestations: write
       contents: read
       id-token: write
       issues: read
@@ -99,6 +134,7 @@ jobs:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
       build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
     with:
+      attest: ${{ matrix.attest }}
       sign: ${{ matrix.sign }}
       images: |
         [
@@ -144,27 +180,42 @@ jobs:
         env:
           IMAGE_NAME: ${{ matrix.image-name }}
           SIGN: ${{ matrix.sign }}
+          ATTEST: ${{ matrix.attest }}
+          SCENARIO_NAME: ${{ matrix.name }}
           PLATFORMS: ${{ matrix.platforms }}
         with:
           script: |
             const assert = require("assert");
-            const versions = await github.paginate(
-              github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
-              {
-                package_type: "container",
-                package_name: `ci-github-container/${process.env.IMAGE_NAME}`,
-                org: context.repo.owner,
-                per_page: 100
-              }
-            );
+            async function getPackageVersions(imageName) {
+              return github.paginate(
+                github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
+                {
+                  package_type: "container",
+                  package_name: `ci-github-container/${imageName}`,
+                  org: context.repo.owner,
+                  per_page: 100,
+                }
+              );
+            }
 
-            const totalCount = versions.length;
-            const taggedVersions = versions.filter(version => version.metadata.container.tags.length > 0);
-            const untaggedVersions = versions.filter(version => version.metadata.container.tags.length === 0);
+            function splitVersions(versions) {
+              return {
+                taggedVersions: versions.filter(version => version.metadata.container.tags.length > 0),
+                untaggedVersions: versions.filter(version => version.metadata.container.tags.length === 0),
+              };
+            }
+
+            function collectTags(versions) {
+              return versions.flatMap(version => version.metadata.container.tags);
+            }
+
+            const versions = await getPackageVersions(process.env.IMAGE_NAME);
+            const { taggedVersions, untaggedVersions } = splitVersions(versions);
 
             const platforms = JSON.parse(process.env.PLATFORMS);
             const isSinglePlatform = platforms.length === 1;
             const isSigned = process.env.SIGN === 'true';
+            const isAttested = process.env.ATTEST === 'true';
 
             // Expected tagged versions:
             // - Always 1 for the main tag
@@ -172,22 +223,78 @@ jobs:
             //   Note: ghcr.io doesn't support OCI 1.1 referrers yet, so cosign falls back to legacy attachments
             const expectedTaggedVersions = isSigned ? 2 : 1;
 
-            // Expected untagged versions:
+            // Expected untagged versions without attestation:
             // - For single platform: 0 (no untagged versions when optimized)
             // - For multi platform: number of platforms (one per platform digest-only push)
             // - Plus 1 for cosign "dsse-envelope" attachment when signed
             //   Note: ghcr.io doesn't support OCI 1.1 referrers yet, so cosign falls back to legacy attachments
-            const expectedUntaggedVersions = (isSinglePlatform ? 0 : platforms.length) + (isSigned ? 1 : 0);
+            const expectedBaselineUntaggedVersions = (isSinglePlatform ? 0 : platforms.length) + (isSigned ? 1 : 0);
+
+            if (!isAttested) {
+              assert.equal(
+                taggedVersions.length,
+                expectedTaggedVersions,
+                `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}: ${JSON.stringify(taggedVersions, null, 2)}`
+              );
+              assert.equal(
+                untaggedVersions.length,
+                expectedBaselineUntaggedVersions,
+                `Expected ${expectedBaselineUntaggedVersions} untagged versions, but found ${untaggedVersions.length}: ${JSON.stringify(untaggedVersions, null, 2)}`
+              );
+              return;
+            }
+
+            const baselineImageName = process.env.IMAGE_NAME.replace(/-attested$/, '-not-attested');
+            assert.notEqual(
+              baselineImageName,
+              process.env.IMAGE_NAME,
+              `Could not derive non-attested baseline image name from scenario ${process.env.SCENARIO_NAME}`
+            );
+
+            const baselineVersions = await getPackageVersions(baselineImageName);
+            const {
+              taggedVersions: baselineTaggedVersions,
+              untaggedVersions: baselineUntaggedVersions,
+            } = splitVersions(baselineVersions);
+            const taggedTags = collectTags(taggedVersions);
+            const baselineTaggedTags = collectTags(baselineTaggedVersions);
+            const extraTaggedTags = taggedTags.filter(tag => !baselineTaggedTags.includes(tag));
+
+            const baselineTaggedVersionsMessage =
+              `Expected ${expectedTaggedVersions} tagged versions for baseline image ${baselineImageName}, ` +
+              `but found ${baselineTaggedVersions.length}: ${JSON.stringify(baselineTaggedVersions, null, 2)}`;
+            const baselineUntaggedVersionsMessage =
+              `Expected ${expectedBaselineUntaggedVersions} untagged versions for baseline image ${baselineImageName}, ` +
+              `but found ${baselineUntaggedVersions.length}: ${JSON.stringify(baselineUntaggedVersions, null, 2)}`;
+            const attestationArtifactMessage =
+              `Expected attested image ${process.env.IMAGE_NAME} to publish additional untagged ` +
+              `attestation artifacts compared to baseline ${baselineImageName}, but found none. ` +
+              `Baseline: ${JSON.stringify(baselineUntaggedVersions, null, 2)} ` +
+              `Attested: ${JSON.stringify(untaggedVersions, null, 2)}`;
+            const taggedVersionParityMessage =
+              `Expected attestation to add sha256-* tagged registry artifacts on top of baseline ` +
+              `${baselineImageName}, but found extra tags ${JSON.stringify(extraTaggedTags)}`;
 
             assert.equal(
-              taggedVersions.length,
+              baselineTaggedVersions.length,
               expectedTaggedVersions,
-              `Expected ${expectedTaggedVersions} tagged versions, but found ${taggedVersions.length}: ${JSON.stringify(taggedVersions, null, 2)}`
+              baselineTaggedVersionsMessage
             );
             assert.equal(
-              untaggedVersions.length,
-              expectedUntaggedVersions,
-              `Expected ${expectedUntaggedVersions} untagged versions, but found ${untaggedVersions.length}: ${JSON.stringify(untaggedVersions, null, 2)}`
+              baselineUntaggedVersions.length,
+              expectedBaselineUntaggedVersions,
+              baselineUntaggedVersionsMessage
+            );
+
+            const attestationArtifactCount = untaggedVersions.length - baselineUntaggedVersions.length;
+            assert(
+              attestationArtifactCount > 0,
+              attestationArtifactMessage
+            );
+
+            assert(
+              extraTaggedTags.length > 0 && extraTaggedTags.every(tag => tag.startsWith('sha256-')),
+              taggedVersionParityMessage
             );
 
       - name: Verify image manifest and platforms

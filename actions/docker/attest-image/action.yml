@@ -1,0 +1,70 @@
+---
+name: "Docker - Attest image"
+description: |
+  Action to generate build provenance attestations for OCI images.
+  It uses [actions/attest](https://github.com/actions/attest) to create SLSA provenance attestations.
+  Attestations are published to the GitHub Attestations API and optionally pushed to the image registry.
+  This action attests a single image subject per invocation.
+
+  Note: this action complements, and does not replace, image signing with cosign.
+  See [sign-images](../sign-images/README.md) for registry-native image signing.
+
+author: hoverkraft
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  image:
+    description: |
+      Image to attest.
+      It must be identified by an immutable digest reference in the format `registry/name:tag@digest`.
+      Example: `ghcr.io/my-org/my-repo/application:main@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d`
+    required: true
+  push-to-registry:
+    description: |
+      Whether to push the attestation to the image registry.
+      When enabled, the attestation is stored as an OCI artifact alongside the image.
+      Requires the registry to support OCI artifact storage.
+    default: "true"
+  github-token:
+    description: |
+      GitHub Token used to create attestations.
+      Permissions:
+      - `id-token`: `write`
+      - `attestations`: `write`
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: extract-subject
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_IMAGE: ${{ inputs.image }}
+      with:
+        script: |
+          const image = (process.env.INPUT_IMAGE || '').trim();
+
+          const registryPart = String.raw`(?<registry>[a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*(?::[0-9]+)?)`;
+          const repositoryPart = String.raw`(?<repository>[a-z0-9._\/-]+)`;
+          const tagPart = String.raw`(?<tag>[a-zA-Z0-9._-]+)`;
+          const digestPart = String.raw`(?<digest>sha256:[a-f0-9]{64})`;
+          const imageRegex = new RegExp(`^${registryPart}/${repositoryPart}:${tagPart}@${digestPart}$`);
+
+          const match = image.match(imageRegex);
+          if (!match || !match.groups) {
+            core.setFailed(`Invalid image format: ${image}. Expected format: registry/name:tag@digest`);
+            return;
+          }
+
+          const { registry, repository, digest } = match.groups;
+          core.setOutput('subject-name', `${registry}/${repository}`);
+          core.setOutput('subject-digest', digest);
+
+    - uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+      with:
+        subject-name: ${{ steps.extract-subject.outputs.subject-name }}
+        subject-digest: ${{ steps.extract-subject.outputs.subject-digest }}
+        push-to-registry: ${{ inputs.push-to-registry }}
+        github-token: ${{ inputs.github-token }}

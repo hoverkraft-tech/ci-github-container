@@ -16,6 +16,7 @@ jobs:
     name: Arrange - Build with args, secrets
     uses: ./.github/workflows/docker-build-images.yml
     permissions:
+      attestations: write
       contents: read
       id-token: write
       issues: read

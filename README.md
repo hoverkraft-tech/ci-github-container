@@ -23,6 +23,8 @@ Opinionated GitHub Actions and reusable workflows to build, test, sign, and dist
 
 _Actions that operate on OCI images across their build, metadata, and lifecycle management phases._
 
+#### - [Attest image](actions/docker/attest-image/README.md)
+
 #### - [Build image](actions/docker/build-image/README.md)
 
 #### - [Cleanup builder](actions/docker/cleanup-builder/README.md)
@@ -38,8 +40,6 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 #### - [Prune pull requests image tags](actions/docker/prune-pull-requests-image-tags/README.md)
 
 #### - [Setup](actions/docker/setup/README.md)
-
-#### - [Attest images](actions/docker/attest-images/README.md)
 
 #### - [Sign images](actions/docker/sign-images/README.md)
 

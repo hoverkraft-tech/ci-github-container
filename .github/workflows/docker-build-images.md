@@ -182,10 +182,10 @@ jobs:
       sign: true
 
       # Generate build provenance attestations for built images.
-      # See [attest-images](../../actions/docker/attest-images/README.md).
+      # See [attest-image](../../actions/docker/attest-image/README.md).
       #
-      # Default: `false`
-      attest: false
+      # Default: `true`
+      attest: true
 ````
 
 <!-- usage:end -->
@@ -237,8 +237,8 @@ jobs:
 |                                         | <!-- textlint-disable --><pre lang="ini">[registry."my-registry.local:5000"]&#13; http = true&#13; insecure = true</pre><!-- textlint-enable -->                                                                                                                                                                                                                                                                                                                                                            |              |             |                                  |
 | **`sign`**                              | Sign built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | **false**    | **boolean** | `true`                           |
 |                                         | See [sign-images](../../actions/docker/sign-images/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                              |              |             |                                  |
-| **`attest`**                            | Generate build provenance attestations for built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | **false**    | **boolean** | `false`                          |
-|                                         | See [attest-images](../../actions/docker/attest-images/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                          |              |             |                                  |
+| **`attest`**                            | Generate build provenance attestations for built images.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | **false**    | **boolean** | `true`                           |
+|                                         | See [attest-image](../../actions/docker/attest-image/README.md).                                                                                                                                                                                                                                                                                                                                                                                                                                            |              |             |                                  |
 
 <!-- inputs:end -->
 
