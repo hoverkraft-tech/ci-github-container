@@ -126,9 +126,9 @@ on: # yamllint disable-line rule:truthy
       attest:
         description: |
           Generate build provenance attestations for built images.
-          See [attest-images](../../actions/docker/attest-images/README.md).
+          See [attest-image](../../actions/docker/attest-image/README.md).
         type: boolean
-        default: false
+        default: true
         required: false
     secrets:
       oci-registry-password:
@@ -473,6 +473,7 @@ jobs:
     needs: [prepare-variables, build-images]
     runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
+      attestation-images: ${{ steps.get-attestation-images.outputs.attestation-images }}
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
@@ -551,7 +552,7 @@ jobs:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: get-images-to-attest
+      - id: get-attestation-images
         if: inputs.attest
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -566,14 +567,51 @@ jobs:
               throw new Error(`"built-images" input is not a valid JSON: ${error}`);
             }
 
-            // Get images to attest
-            const imagesToAttest = Object.values(builtImages).map(image => image.images).flat();
-            if (imagesToAttest.length > 0) {
-              core.setOutput('images-to-attest', JSON.stringify(imagesToAttest));
+            const subjectMap = new Map();
+            for (const image of Object.values(builtImages)) {
+              const subjectName = `${image.registry}/${image.repository}`;
+              const key = `${subjectName}@${image.digest}`;
+
+              if (!subjectMap.has(key)) {
+                subjectMap.set(key, image.images[0]);
+              }
             }
 
-      - uses: ./../self-workflow/actions/docker/attest-images
-        if: steps.get-images-to-attest.outputs.images-to-attest
+            const attestationImages = Array.from(subjectMap.values());
+            if (attestationImages.length > 0) {
+              core.setOutput('attestation-images', JSON.stringify(attestationImages));
+            }
+
+  attest-image:
+    name: Attest image (${{ matrix.image }})
+    if: inputs.attest && needs.publish-manifests.outputs.attestation-images != ''
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    needs: [publish-manifests]
+    runs-on: ${{ fromJson(inputs.runs-on) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.publish-manifests.outputs.attestation-images) }}
+    steps:
+      - id: local-workflow-actions
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@2334d395217f9811699dbd4ace9d8559e4d99e0d # 0.37.3
         with:
-          images: ${{ steps.get-images-to-attest.outputs.images-to-attest }}
+          actions-path: actions
+
+      - uses: ./../self-workflow/actions/docker/setup
+        with:
+          oci-registry: ${{ inputs.oci-registry }}
+          oci-registry-username: ${{ inputs.oci-registry-username }}
+          oci-registry-password: ${{ secrets.oci-registry-password }} # zizmor: ignore[secrets-outside-env]
+          built-images: ${{ needs.publish-manifests.outputs.built-images }}
+          setup-buildx: false
+          buildx-cleanup: false
+
+      - uses: ./../self-workflow/actions/docker/attest-image
+        with:
+          image: ${{ matrix.image }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

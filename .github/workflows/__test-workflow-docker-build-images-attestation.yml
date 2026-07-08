@@ -48,29 +48,57 @@ jobs:
 
             const tag = '0.1.0';
 
+            function createImageDefinition(name, platforms) {
+              return {
+                name,
+                context: '.',
+                dockerfile: './tests/application/Dockerfile',
+                'build-args': { BUILD_RUN_ID: String(context.runId) },
+                target: 'base',
+                platforms,
+                tag,
+              };
+            }
+
+            function createScenario({ name, imageNames, platforms, attest }) {
+              return {
+                name,
+                attest,
+                images: JSON.stringify(imageNames.map(imageName => createImageDefinition(imageName, platforms))),
+                verify_images: JSON.stringify(imageNames.map(imageName => `${imageName}:${tag}`)),
+                package_names: JSON.stringify(imageNames),
+              };
+            }
+
             const matrix = {
               include: [
-                {
-                  name: "mono-arch - attested",
-                  "image-name": `${imageNamePrefix}-mono-arch-attested`,
-                  platforms: '["linux/amd64"]',
+                createScenario({
+                  name: 'mono-arch - attested',
+                  imageNames: [`${imageNamePrefix}-mono-arch-attested`],
+                  platforms: ['linux/amd64'],
                   attest: true,
-                  tag
-                },
-                {
-                  name: "multi-arch - attested",
-                  "image-name": `${imageNamePrefix}-multi-arch-attested`,
-                  platforms: '["linux/amd64","linux/arm64"]',
+                }),
+                createScenario({
+                  name: 'multi-arch - attested',
+                  imageNames: [`${imageNamePrefix}-multi-arch-attested`],
+                  platforms: ['linux/amd64', 'linux/arm64'],
                   attest: true,
-                  tag
-                },
-                {
-                  name: "mono-arch - not attested",
-                  "image-name": `${imageNamePrefix}-mono-arch-not-attested`,
-                  platforms: '["linux/amd64"]',
+                }),
+                createScenario({
+                  name: 'multiple images - attested',
+                  imageNames: [
+                    `${imageNamePrefix}-multi-image-attested-a`,
+                    `${imageNamePrefix}-multi-image-attested-b`,
+                  ],
+                  platforms: ['linux/amd64'],
+                  attest: true,
+                }),
+                createScenario({
+                  name: 'mono-arch - not attested',
+                  imageNames: [`${imageNamePrefix}-mono-arch-not-attested`],
+                  platforms: ['linux/amd64'],
                   attest: false,
-                  tag
-                }
+                }),
               ]
             };
             return matrix;
@@ -95,18 +123,7 @@ jobs:
     with:
       attest: ${{ matrix.attest }}
       sign: false
-      images: |
-        [
-          {
-            "name": "${{ matrix.image-name }}",
-            "context": ".",
-            "dockerfile": "./tests/application/Dockerfile",
-            "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
-            "target": "base",
-            "platforms": ${{ matrix.platforms }},
-            "tag": "${{ matrix.tag }}"
-          }
-        ]
+      images: ${{ matrix.images }}
 
   assert-images-attestation:
     name: Assert - Images attestation (${{ matrix.name }})
@@ -127,28 +144,58 @@ jobs:
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify image attestation
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SHOULD_HAVE_ATTESTATION: ${{ matrix.attest }}
-          IMAGE_NAME: "${{ matrix.image-name }}:${{ matrix.tag }}"
+          VERIFY_IMAGES_JSON: ${{ matrix.verify_images }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${SHOULD_HAVE_ATTESTATION}" = "true" ]; then
-            echo "Verifying attestation for image: ${IMAGE_NAME}"
-            gh attestation verify \
-              oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
-              --repo hoverkraft-tech/ci-github-container
-            exit $?
-          fi
+        with:
+          script: |
+            const shouldHaveAttestation = process.env.SHOULD_HAVE_ATTESTATION === 'true';
+            const verifyImages = JSON.parse(process.env.VERIFY_IMAGES_JSON || '[]');
+            const repo = 'hoverkraft-tech/ci-github-container';
 
-          echo "Image ${IMAGE_NAME} should not have an attestation"
-          if gh attestation verify \
-            oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
-            --repo hoverkraft-tech/ci-github-container; then
-            echo "::error::Image ${IMAGE_NAME} should not be attested but attestation verification succeeded"
-            exit 1
-          fi
+            for (const imageName of verifyImages) {
+              if (!imageName) {
+                continue;
+              }
 
-          echo "Attestation verification failed as expected for non-attested image ${IMAGE_NAME}"
+              const args = [
+                'attestation',
+                'verify',
+                `oci://ghcr.io/${repo}/${imageName}`,
+                '--repo',
+                repo,
+              ];
+
+              const result = await exec.getExecOutput('gh', args, {
+                ignoreReturnCode: true,
+              });
+
+              if (result.stdout) {
+                process.stdout.write(result.stdout);
+              }
+
+              if (result.stderr) {
+                process.stderr.write(result.stderr);
+              }
+
+              if (shouldHaveAttestation) {
+                console.log(`Verifying attestation for image: ${imageName}`);
+                if (result.exitCode !== 0) {
+                  throw new Error(`Attestation verification failed for ${imageName}`);
+                }
+                continue;
+              }
+
+              console.log(`Image ${imageName} should not have an attestation`);
+              if (result.exitCode === 0) {
+                core.setFailed(`Image ${imageName} should not be attested but attestation verification succeeded`);
+                return;
+              }
+
+              console.log(`Attestation verification failed as expected for non-attested image ${imageName}`);
+            }
 
   cleanup:
     name: Cleanup ephemeral test packages
@@ -166,14 +213,17 @@ jobs:
       - name: Delete test packages
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          IMAGE_NAME: ${{ matrix.image-name }}
+          PACKAGE_NAMES_JSON: ${{ matrix.package_names }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            await github.rest.packages.deletePackageForOrg({
-              package_type: 'container',
-              package_name: `ci-github-container/${process.env.IMAGE_NAME}`,
-              org: 'hoverkraft-tech',
-            });
+            const packageNames = JSON.parse(process.env.PACKAGE_NAMES_JSON || '[]');
+            for (const packageName of packageNames) {
+              await github.rest.packages.deletePackageForOrg({
+                package_type: 'container',
+                package_name: `ci-github-container/${packageName}`,
+                org: 'hoverkraft-tech',
+              });
+            }
 
 # jscpd:ignore-end
