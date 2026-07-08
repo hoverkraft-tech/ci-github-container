@@ -137,18 +137,16 @@ jobs:
             gh attestation verify \
               oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
               --repo hoverkraft-tech/ci-github-container
-            exit $?
+          else
+            echo "Image ${IMAGE_NAME} should not have an attestation"
+            if gh attestation verify \
+              oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
+              --repo hoverkraft-tech/ci-github-container; then
+              echo "::error::Image ${IMAGE_NAME} should not be attested but attestation verification succeeded"
+              exit 1
+            fi
+            echo "Attestation verification failed as expected for non-attested image ${IMAGE_NAME}"
           fi
-
-          echo "Image ${IMAGE_NAME} should not have an attestation"
-          if gh attestation verify \
-            oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
-            --repo hoverkraft-tech/ci-github-container; then
-            echo "::error::Image ${IMAGE_NAME} should not be attested but attestation verification succeeded"
-            exit 1
-          fi
-
-          echo "Attestation verification failed as expected for non-attested image ${IMAGE_NAME}"
 
   cleanup:
     name: Cleanup ephemeral test packages
