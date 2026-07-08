@@ -1,0 +1,179 @@
+---
+name: Test for "docker-build-images" workflow - Attestation
+run-name: Test for "docker-build-images" workflow - Attestation
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY:
+        required: false
+
+permissions: {}
+
+# jscpd:ignore-start
+jobs:
+  arrange:
+    name: Arrange
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.define-matrix.outputs.result }}
+    steps:
+      - run: |
+          if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
+            echo "GitHub token secret is not set"
+            exit 1
+          fi
+
+      - id: define-matrix
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          result-encoding: json
+          script: |
+            let imageNamePrefix;
+
+            if (context.eventName === "pull_request") {
+              const pullRequestNumber = context.payload.pull_request?.number;
+              if (!pullRequestNumber) {
+                throw new Error("Pull request number is not available in the event payload");
+              }
+              imageNamePrefix = `pr-${pullRequestNumber}`;
+            } else {
+              imageNamePrefix = process.env.GITHUB_REF_NAME;
+              if (!imageNamePrefix) {
+                throw new Error("GITHUB_REF_NAME environment variable is not set");
+              }
+            }
+
+            imageNamePrefix = `test-${imageNamePrefix}-${context.runNumber}`.replace(/\//g, "-");
+
+            const tag = '0.1.0';
+
+            const matrix = {
+              include: [
+                {
+                  name: "mono-arch - attested",
+                  "image-name": `${imageNamePrefix}-mono-arch-attested`,
+                  platforms: '["linux/amd64"]',
+                  attest: true,
+                  tag
+                },
+                {
+                  name: "multi-arch - attested",
+                  "image-name": `${imageNamePrefix}-multi-arch-attested`,
+                  platforms: '["linux/amd64","linux/arm64"]',
+                  attest: true,
+                  tag
+                },
+                {
+                  name: "mono-arch - not attested",
+                  "image-name": `${imageNamePrefix}-mono-arch-not-attested`,
+                  platforms: '["linux/amd64"]',
+                  attest: false,
+                  tag
+                }
+              ]
+            };
+            return matrix;
+
+  act-build-images:
+    name: Act - Build images (${{ matrix.name }})
+    needs: arrange
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
+    uses: ./.github/workflows/docker-build-images.yml
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+      build-secret-github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+    with:
+      attest: ${{ matrix.attest }}
+      sign: false
+      images: |
+        [
+          {
+            "name": "${{ matrix.image-name }}",
+            "context": ".",
+            "dockerfile": "./tests/application/Dockerfile",
+            "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },
+            "target": "base",
+            "platforms": ${{ matrix.platforms }},
+            "tag": "${{ matrix.tag }}"
+          }
+        ]
+
+  assert-images-attestation:
+    name: Assert - Images attestation (${{ matrix.name }})
+    needs: [arrange, act-build-images]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: ./actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify image attestation
+        env:
+          SHOULD_HAVE_ATTESTATION: ${{ matrix.attest }}
+          IMAGE_NAME: "${{ matrix.image-name }}:${{ matrix.tag }}"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${SHOULD_HAVE_ATTESTATION}" = "true" ]; then
+            echo "Verifying attestation for image: ${IMAGE_NAME}"
+            gh attestation verify \
+              oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
+              --repo hoverkraft-tech/ci-github-container
+            exit $?
+          fi
+
+          echo "Image ${IMAGE_NAME} should not have an attestation"
+          if gh attestation verify \
+            oci://ghcr.io/hoverkraft-tech/ci-github-container/"${IMAGE_NAME}" \
+            --repo hoverkraft-tech/ci-github-container; then
+            echo "::error::Image ${IMAGE_NAME} should not be attested but attestation verification succeeded"
+            exit 1
+          fi
+
+          echo "Attestation verification failed as expected for non-attested image ${IMAGE_NAME}"
+
+  cleanup:
+    name: Cleanup ephemeral test packages
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - arrange
+      - assert-images-attestation
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.arrange.outputs.matrix) }}
+    permissions:
+      packages: write
+    steps:
+      - name: Delete test packages
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          IMAGE_NAME: ${{ matrix.image-name }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.packages.deletePackageForOrg({
+              package_type: 'container',
+              package_name: `ci-github-container/${process.env.IMAGE_NAME}`,
+              org: 'hoverkraft-tech',
+            });
+
+# jscpd:ignore-end
