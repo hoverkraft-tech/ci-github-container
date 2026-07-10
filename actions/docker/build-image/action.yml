@@ -339,14 +339,14 @@ runs:
           }
 
     - if: steps.get-docker-config.outputs.platform-exists != 'true'
-      uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+      uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
       with:
         platforms: ${{ inputs.platform }}
 
     # Caching setup
     - if: steps.get-docker-config.outputs.cache-disabled != 'true'
       id: cache-arguments
-      uses: int128/docker-build-cache-config-action@e7428bcd6851e35bd024e91ea18c0da8c0a098b4 # v1.60.0
+      uses: int128/docker-build-cache-config-action@6bc1706b2177387f35c9676a431df2e285466d9a # v1.61.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -391,7 +391,7 @@ runs:
           );
 
     - id: build
-      uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
       with:
         context: ${{ steps.get-docker-config.outputs.context-path }} # zizmor: ignore[template-injection]
         build-args: ${{ inputs.build-args }}
