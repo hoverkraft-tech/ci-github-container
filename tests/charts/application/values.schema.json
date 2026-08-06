@@ -1,0 +1,64 @@
+{
+	"$schema": "https://json-schema.org/draft-07/schema#",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"application": {
+			"type": "object"
+		},
+		"replicaCount": {
+			"type": "integer"
+		},
+		"image": {
+			"type": "object"
+		},
+		"imagePullSecrets": {
+			"type": "array"
+		},
+		"nameOverride": {
+			"type": "string"
+		},
+		"fullnameOverride": {
+			"type": "string"
+		},
+		"serviceAccount": {
+			"type": "object"
+		},
+		"podAnnotations": {
+			"type": "object"
+		},
+		"podSecurityContext": {
+			"type": "object"
+		},
+		"securityContext": {
+			"type": "object"
+		},
+		"service": {
+			"type": "object"
+		},
+		"ingress": {
+			"type": "object"
+		},
+		"resources": {
+			"type": "object"
+		},
+		"autoscaling": {
+			"type": "object"
+		},
+		"nodeSelector": {
+			"type": "object"
+		},
+		"tolerations": {
+			"type": "array"
+		},
+		"affinity": {
+			"type": "object"
+		},
+		"networkPolicy": {
+			"type": "object"
+		},
+		"valkey": {
+			"type": "object"
+		}
+	}
+}

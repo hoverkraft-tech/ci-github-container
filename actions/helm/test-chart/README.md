@@ -41,6 +41,10 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
     # Default: `${{ github.workspace }}`
     working-directory: ${{ github.workspace }}
 
+    # Namespace used to install test releases.
+    # Defaults to a random namespace created for the current workflow run.
+    namespace: ""
+
     # Set values for Helm chart.
     # Multiple values can be set using multiline string.
     # Example:
@@ -98,6 +102,8 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 | **Input**                   | **Description**                                                                                     | **Required** | **Default**                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
 | **`working-directory`**     | Working directory                                                                                   | **false**    | `${{ github.workspace }}`        |
+| **`namespace`**             | Namespace used to install test releases.                                                            | **false**    | random namespace for the run     |
+|                             | Defaults to a random namespace created for the current workflow run.                                |              |                                  |
 | **`helm-set`**              | Set values for Helm chart.                                                                          | **false**    | -                                |
 |                             | Multiple values can be set using multiline string.                                                  |              |                                  |
 |                             | Example:                                                                                            |              |                                  |

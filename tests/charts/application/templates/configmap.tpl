@@ -4,7 +4,7 @@ kind: Secret
 apiVersion: v1
 metadata:
   name: {{ template "test-application.fullname" . }}-config
-  namespace: {{ .Values.namespace | default "app-system" }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "test-application.labels" . | nindent 4 }}
 type: Opaque

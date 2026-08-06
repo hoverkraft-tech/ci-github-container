@@ -4,7 +4,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ include "test-application.fullname" . }}
-  namespace: {{ .Values.namespace | default "app-system" }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "test-application.labels" . | nindent 4 }}
 spec:

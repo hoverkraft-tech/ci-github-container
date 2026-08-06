@@ -41,7 +41,6 @@ A Helm chart for Kubernetes
 | ingress.hosts[0].paths[0].pathType                               | string | `"ImplementationSpecific"`                                                  |             |
 | ingress.tls                                                      | list   | `[]`                                                                        |             |
 | nameOverride                                                     | string | `""`                                                                        |             |
-| namespace                                                        | string | `"app-system"`                                                              |             |
 | networkPolicy.egress                                             | list   | `[]`                                                                        |             |
 | networkPolicy.enabled                                            | bool   | `true`                                                                      |             |
 | networkPolicy.ingress                                            | list   | `[]`                                                                        |             |
