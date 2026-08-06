@@ -4,7 +4,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "app.serviceAccountName" . }}
-  namespace: {{ .Values.namespace | default "app-system" }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
   {{- with .Values.serviceAccount.annotations }}

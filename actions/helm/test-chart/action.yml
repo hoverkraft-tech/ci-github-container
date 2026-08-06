@@ -13,6 +13,11 @@ inputs:
     description: "Working directory"
     required: false
     default: "${{ github.workspace }}"
+  namespace:
+    description: |
+      Namespace used to install test releases.
+      Defaults to a random namespace created for the current workflow run.
+    required: false
   helm-set:
     description: |
       Set values for Helm chart.
@@ -150,6 +155,7 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUT_CHECK_DIFF_ONLY: ${{ inputs.check-diff-only }}
+        INPUT_NAMESPACE: ${{ inputs.namespace }}
         CT_CONFIG_PATH: ${{ steps.check-ct-yaml.outputs.path }}
       with:
         script: |
@@ -177,9 +183,12 @@ runs:
 
           core.setOutput('args', args.join(' '));
           core.setOutput('args-json', JSON.stringify(args));
+          const namespace = process.env.INPUT_NAMESPACE?.trim();
+
           core.setOutput(
             'namespace',
-            `test-chart-${process.env.GITHUB_RUN_ID}-${randomUUID()}`,
+            namespace ||
+              `test-chart-${process.env.GITHUB_RUN_ID}-${randomUUID()}`,
           );
 
     - name: Run chart-testing (lint)
@@ -222,7 +231,35 @@ runs:
 
           core.setOutput('name', secretName);
 
-          await exec.exec('kubectl', ['create', 'namespace', namespace]);
+          const namespaceExists = await exec.exec(
+            'kubectl',
+            ['get', 'namespace', namespace],
+            {
+              ignoreReturnCode: true,
+              silent: true,
+            },
+          );
+
+          if (namespaceExists !== 0) {
+            await exec.exec('kubectl', ['create', 'namespace', namespace]);
+          }
+
+          const secretExists = await exec.exec(
+            'kubectl',
+            ['get', 'secret', secretName, `--namespace=${namespace}`],
+            {
+              ignoreReturnCode: true,
+              silent: true,
+            },
+          );
+
+          if (secretExists === 0) {
+            core.info(
+              `[helm-test-chart] Reusing OCI registry secret '${secretName}' in namespace '${namespace}'.`,
+            );
+            return;
+          }
+
           await exec.exec('kubectl', [
             '--context',
             'kind-chart-testing',
@@ -256,10 +293,7 @@ runs:
           );
           const namespace = process.env.NAMESPACE;
           const ctArgs = JSON.parse(process.env.CT_ARGS_JSON ?? '[]');
-          const helmSetLines = [
-            `namespace=${namespace}`,
-            ...(process.env.INPUT_HELM_SET ?? '').split(/\r?\n/),
-          ]
+          const helmSetLines = (process.env.INPUT_HELM_SET ?? '').split(/\r?\n/)
             .map((line) => line.trim())
             .filter((line) => line.length > 0)
             .map((line) => line.replaceAll(',', '\\,'));
@@ -279,15 +313,20 @@ runs:
             );
           }
 
-          const helmExtraSetArgs = `--set=${helmSetLines.join(',')}`;
-
-          await exec.exec('ct', [
+          const installArgs = [
             'install',
             ...ctArgs,
             '--namespace',
             namespace,
-            '--helm-extra-set-args',
-            helmExtraSetArgs,
-          ], {
+          ];
+
+          if (helmSetLines.length > 0) {
+            installArgs.push(
+              '--helm-extra-set-args',
+              `--set=${helmSetLines.join(',')}`,
+            );
+          }
+
+          await exec.exec('ct', installArgs, {
             cwd: workingDirectory,
           });
