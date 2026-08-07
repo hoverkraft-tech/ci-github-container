@@ -54,13 +54,13 @@ inputs:
   buildx-version:
     description: |
       Buildx version used by docker/setup-buildx-action.
-    default: "v0.35.0"
+    default: "v0.36.1"
     required: false
   # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
   buildkit-image:
     description: |
       BuildKit image used by docker/setup-buildx-action.
-    default: "moby/buildkit:v0.31.1"
+    default: "moby/buildkit:v0.32.2"
     required: false
 
 outputs:
