@@ -141,3 +141,17 @@ jobs:
       pull-requests: read
     secrets:
       CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+
+  test-workflow-docker-build-images-attestation:
+    name: Test docker build images - Attestation
+    needs: linter
+    uses: ./.github/workflows/__test-workflow-docker-build-images-attestation.yml
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
