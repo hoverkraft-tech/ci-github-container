@@ -35,7 +35,7 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@cfc7074e26bbfbdf33f163d209d2c14957358152 # 0.38.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@f8255a6a37eb141fa331527f5aed9b9e1d598c77 # 0.38.0
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
@@ -102,7 +102,7 @@ Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-a
 | **Input**                   | **Description**                                                                                     | **Required** | **Default**                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
 | **`working-directory`**     | Working directory                                                                                   | **false**    | `${{ github.workspace }}`        |
-| **`namespace`**             | Namespace used to install test releases.                                                            | **false**    | random namespace for the run     |
+| **`namespace`**             | Namespace used to install test releases.                                                            | **false**    | -                                |
 |                             | Defaults to a random namespace created for the current workflow run.                                |              |                                  |
 | **`helm-set`**              | Set values for Helm chart.                                                                          | **false**    | -                                |
 |                             | Multiple values can be set using multiline string.                                                  |              |                                  |
