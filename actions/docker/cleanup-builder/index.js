@@ -1,4 +1,4 @@
-const fs = require("fs");
+const fs = require("node:fs");
 
 function appendState(name, value) {
 	const stateFile = process.env.GITHUB_STATE;

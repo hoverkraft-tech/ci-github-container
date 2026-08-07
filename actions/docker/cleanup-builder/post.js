@@ -1,4 +1,4 @@
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("node:child_process");
 
 function info(message) {
 	process.stdout.write(`${message}\n`);

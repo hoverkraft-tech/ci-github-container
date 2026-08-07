@@ -1,10 +1,16 @@
 {
-	"name": "Alpine",
-	"image": "mcr.microsoft.com/devcontainers/base:alpine-3.21",
+	"name": "ci-github-container",
+	"image": "mcr.microsoft.com/devcontainers/base:debian",
 	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:4": {},
-		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers-extra/features/act:1": {}
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"configureZshAsDefaultShell": true
+		},
+		"ghcr.io/devcontainers/features/docker-in-docker:4": {
+			"moby": false
+		},
+		"ghcr.io/devcontainers/features/github-cli:1": {
+			"extensions": "nektos/gh-act"
+		}
 	},
 	"remoteEnv": {
 		"GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
@@ -17,13 +23,9 @@
 				"github.copilot",
 				"github.copilot-chat",
 				"ms-vscode.makefile-tools",
-				"esbenp.prettier-vscode",
-				"ms-azuretools.vscode-containers",
+				"biomejs.biome",
 				"Tim-Koehler.helm-intellisense"
-			],
-			"settings": {
-				"terminal.integrated.defaultProfile.linux": "zsh"
-			}
+			]
 		}
 	}
 }
