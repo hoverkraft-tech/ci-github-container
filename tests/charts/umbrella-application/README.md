@@ -9,7 +9,7 @@ An umbrella Helm chart for Kubernetes
 | Repository                       | Name             | Version |
 | -------------------------------- | ---------------- | ------- |
 | file://./charts/app              | app              | 0.0.0   |
-| <https://valkey.io/valkey-helm/> | database(valkey) | 0.10.0  |
+| <https://valkey.io/valkey-helm/> | database(valkey) | 0.11.0  |
 
 ## Values
 
