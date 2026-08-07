@@ -49,6 +49,22 @@ runs:
       with:
         github-token: ${{ inputs.github-token }}
         script: |
+          const sleep = (delayMs) =>
+            new Promise((resolve) => setTimeout(resolve, delayMs));
+
+          function isRetryableSecondaryRateLimit(commandOutput) {
+            return /secondary rate limit|exceeded a secondary rate limit/i.test(commandOutput);
+          }
+
+          function resolveRetryDelayMs(commandOutput, attempt, baseDelayMs) {
+            const retryAfterMatch = commandOutput.match(/retry-after[^0-9]*([0-9]+)/i);
+            if (retryAfterMatch) {
+              return (Number.parseInt(retryAfterMatch[1], 10) + 1) * 1000;
+            }
+
+            return baseDelayMs * 2 ** (attempt - 1);
+          }
+
           const imagesInput = process.env.INPUT_IMAGES || "";
           let images = null;
           try {
@@ -89,13 +105,51 @@ runs:
           }
 
           // Sign the images
-          const annotationsArgs = tags.size > 0 ? `-a tag=${Array.from(tags).at(-1)}` : "";
-          const imagesArgs = Array.from(imagesToSign).join(" ");
+          const annotationsArgs = tags.size > 0 ? ["-a", `tag=${Array.from(tags).at(-1)}`] : [];
+          const signImageArgs = [
+            "sign",
+            ...annotationsArgs,
+            "--registry-referrers-mode=oci-1-1",
+            "--yes",
+            ...Array.from(imagesToSign),
+          ];
           // Use OCI 1.1 referrers mode to avoid creating legacy sha256-... tags
           // Note: If the registry doesn't support OCI 1.1 referrers (like ghcr.io currently),
           // cosign will fall back to legacy attachments and create a sha256-... tag
-          const signImageCommand = `cosign sign ${annotationsArgs} --registry-referrers-mode=oci-1-1 --yes ${imagesArgs}`;
+          const signImageCommand = `cosign ${signImageArgs.join(" ")}`;
 
-          core.debug(`Signing images with command: "${signImageCommand}"`);
-          await exec.exec(signImageCommand);
-          core.debug("All images signed successfully");
+          const maxAttempts = 4;
+          const baseDelayMs = 60000;
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            core.debug(`Signing images with command: "${signImageCommand}"`);
+
+            const result = await exec.getExecOutput("cosign", signImageArgs, {
+              ignoreReturnCode: true,
+            });
+
+            if (result.exitCode === 0) {
+              core.debug("All images signed successfully");
+              return;
+            }
+
+            const commandOutput = `${result.stderr || ""}\n${result.stdout || ""}`.trim();
+            const isRetryable = isRetryableSecondaryRateLimit(commandOutput);
+
+            if (!isRetryable || attempt === maxAttempts) {
+              throw new Error(
+                `Failed to sign images (attempt ${attempt}/${maxAttempts}, exit code: ${result.exitCode}).\n${commandOutput || "<empty output>"}`,
+              );
+            }
+
+            const delayMs = resolveRetryDelayMs(commandOutput, attempt, baseDelayMs);
+            core.warning(
+              [
+                `Cosign sign hit a GitHub secondary rate limit (attempt ${attempt}/${maxAttempts}).`,
+                `Retrying in ${delayMs} ms.`,
+              ].join(" "),
+            );
+            await sleep(delayMs);
+          }
+
+          throw new Error("Unreachable: signing loop exited without returning or throwing.");
