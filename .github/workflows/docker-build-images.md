@@ -30,12 +30,12 @@ This includes [multi-platform](https://docs.docker.com/build/building/multi-plat
 
 ### Permissions
 
+- **`attestations`**: `write`
 - **`contents`**: `read`
 - **`id-token`**: `write`
 - **`issues`**: `read`
 - **`packages`**: `write`
 - **`pull-requests`**: `read`
-- **`attestations`**: `write` (only required when `attest: true`)
 
 <!-- overview:end -->
 
@@ -52,14 +52,14 @@ on:
 permissions: {}
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@cfc7074e26bbfbdf33f163d209d2c14957358152 # 0.38.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@f8255a6a37eb141fa331527f5aed9b9e1d598c77 # 0.38.0
     permissions:
+      attestations: write
       contents: read
       id-token: write
       issues: read
       packages: write
       pull-requests: read
-      attestations: write # only required when `attest: true`
     secrets:
       # Password or GitHub token (`packages:read` and `packages:write` scopes) configuration used to log against OCI registries.
       # Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
