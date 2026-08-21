@@ -346,7 +346,7 @@ runs:
     # Caching setup
     - if: steps.get-docker-config.outputs.cache-disabled != 'true'
       id: cache-arguments
-      uses: int128/docker-build-cache-config-action@d1b27ffbf29fb93b7239130db030c702198fd52b # v1.64.0
+      uses: int128/docker-build-cache-config-action@341cdf5b650bc4d8d5289a8df4e0389183711712 # v1.66.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
