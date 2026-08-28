@@ -1,0 +1,9 @@
+{
+	"files": {
+		"includes": [
+			"**",
+			"!.devcontainer/devcontainer-lock.json",
+			"!**/node_modules"
+		]
+	}
+}
