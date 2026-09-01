@@ -68,8 +68,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
     # Default: `true`
     setup-buildx: true
 
-    # Required Docker version. The action installs it when the active Docker
-    # client or daemon reports a different version.
+    # Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
     #
     # Default: `29.7.2`
     docker-version: 29.7.2
@@ -145,12 +144,12 @@ Optional pull registries without credentials are skipped, which is useful for pu
 
 ## Outputs
 
-| **Output**            | **Description**                                                 |
-| --------------------- | --------------------------------------------------------------- |
-| **`push-registry`**   | Registry used for published images/manifests.                   |
-| **`cache-registry`**  | Registry used for registry-backed build cache.                  |
-| **`pull-registries`** | JSON array of registries used to pull base images.              |
-| **`buildx-name`**     | Docker Buildx builder name. Empty when `setup-buildx` is false. |
+| **Output**            | **Description**                                               |
+| --------------------- | ------------------------------------------------------------- |
+| **`push-registry`**   | Registry used for published images/manifests.                 |
+| **`cache-registry`**  | Registry used for registry-backed build cache.                |
+| **`pull-registries`** | JSON array of registries used to pull base images.            |
+| **`buildx-name`**     | Docker Buildx builder name. Empty when setup-buildx is false. |
 
 <!-- outputs:end -->
 <!-- examples:start -->
