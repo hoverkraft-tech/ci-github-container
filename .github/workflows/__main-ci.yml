@@ -33,6 +33,8 @@ jobs:
     secrets:
       CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
 
+  # Keep this image set disjoint from clean-with-cache. That job already prunes
+  # both the base packages and their /cache packages.
   clean:
     needs: ci
     uses: ./.github/workflows/prune-pull-requests-images-tags.yml
@@ -48,8 +50,7 @@ jobs:
           "test-build-args-secrets",
           "test-caching-mono-arch-gha",
           "test-caching-multi-arch-gha",
-          "test-create-manifests-clone-tag",
-          "test-multi-registry-inputs"
+          "test-create-manifests-clone-tag"
         ]
 
   clean-with-cache:
