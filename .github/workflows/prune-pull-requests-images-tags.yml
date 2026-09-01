@@ -1,4 +1,4 @@
-# Workflow to performs a clean of closed pull requests images tags.
+# Workflow to prune closed pull request image tags for organization- and user-owned packages.
 # See [prune-pull-requests-image-tags](../../actions/docker/prune-pull-requests-image-tags/README.md) for more information.
 ---
 name: Prune pull requests images tags
@@ -105,10 +105,14 @@ jobs:
       pull-requests: read
       packages: write
     steps:
+      - id: is-organization-or-user
+        uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+
       - name: Wait for package visibility
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           IMAGE: ${{ matrix.image }}
+          IS_ORGANIZATION: ${{ steps.is-organization-or-user.outputs.is-organization }}
         with:
           script: |
             const sleep = (delayMs) =>
@@ -116,15 +120,20 @@ jobs:
 
             const owner = context.repo.owner;
             const packageName = `${context.repo.repo.toLowerCase()}/${process.env.IMAGE}`;
+            const isOrganization = process.env.IS_ORGANIZATION === 'true';
             const packagePayload = {
               package_type: 'container',
               package_name: packageName,
-              org: owner,
+              [isOrganization ? 'org' : 'username']: owner,
             };
 
             for (let attempt = 1; attempt <= 6; attempt++) {
               try {
-                await github.rest.packages.getPackageForOrganization(packagePayload);
+                if (isOrganization) {
+                  await github.rest.packages.getPackageForOrganization(packagePayload);
+                } else {
+                  await github.rest.packages.getPackageForUser(packagePayload);
+                }
                 core.info(`Package "${packageName}" is visible.`);
                 return;
               } catch (error) {

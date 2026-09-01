@@ -24,7 +24,7 @@
 
 ## Overview
 
-Workflow to performs a clean of closed pull requests images tags.
+Workflow to prune closed pull request image tags for organization- and user-owned packages.
 See [prune-pull-requests-image-tags](../../actions/docker/prune-pull-requests-image-tags/README.md) for more information.
 
 ### Permissions
