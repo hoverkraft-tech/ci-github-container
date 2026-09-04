@@ -8,7 +8,7 @@ A Helm chart for Kubernetes
 
 | Repository                       | Name   | Version |
 | -------------------------------- | ------ | ------- |
-| <https://valkey.io/valkey-helm/> | valkey | 0.11.0  |
+| <https://valkey.io/valkey-helm/> | valkey | 0.12.0  |
 
 ## Values
 
