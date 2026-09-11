@@ -149,12 +149,12 @@ runs:
       with:
         ref: ${{ inputs.checkout-ref }}
 
-    - uses: losisin/helm-docs-github-action@3a4528e97c49a5e83de6b78c50c61c8ee5c9f944 # v2.0.0
+    - uses: losisin/helm-docs-github-action@9e0787c426fdec38be6288bb5c0559dcb388412c # v2.0.1
       with:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.prepare-variables.outputs.values-file }}
-      uses: losisin/helm-values-schema-json-action@9f555986124362af978a9861cf0f81e1956300ad # v3.1.0
+      uses: losisin/helm-values-schema-json-action@9ed68d9d464a5e6f7f5fc1f3dc071828cf7d13a2 # v3.2.0
       with:
         values: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
