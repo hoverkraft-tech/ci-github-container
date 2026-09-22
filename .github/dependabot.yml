@@ -55,6 +55,10 @@ updates:
       interval: weekly
       day: friday
       time: "04:00"
+    groups:
+      devcontainers-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     open-pull-requests-limit: 20
