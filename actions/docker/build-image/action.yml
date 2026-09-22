@@ -323,14 +323,14 @@ runs:
           }
 
     - if: steps.get-docker-config.outputs.platform-exists != 'true'
-      uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+      uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       with:
         platforms: ${{ inputs.platform }}
 
     # Caching setup
     - if: steps.get-docker-config.outputs.cache-disabled != 'true'
       id: cache-arguments
-      uses: int128/docker-build-cache-config-action@53682992e5c4634237e64ae138af741c3ce1cdaa # v1.70.0
+      uses: int128/docker-build-cache-config-action@97740da6c51c4bcd68c7519e2179e6a93389b027 # v1.71.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
