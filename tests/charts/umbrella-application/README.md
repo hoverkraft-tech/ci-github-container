@@ -13,32 +13,41 @@ An umbrella Helm chart for Kubernetes
 
 ## Values
 
-| Key                                                                | Type   | Default                    | Description |
-| ------------------------------------------------------------------ | ------ | -------------------------- | ----------- |
-| app.enabled                                                        | bool   | `true`                     |             |
-| database.architecture                                              | string | `"standalone"`             |             |
-| database.auth.enabled                                              | bool   | `false`                    |             |
-| database.enabled                                                   | bool   | `true`                     |             |
-| database.existingConfigmap                                         | string | `"database-custom-config"` |             |
-| database.fullnameOverride                                          | string | `"database"`               |             |
-| database.image.pullPolicy                                          | string | `"Always"`                 |             |
-| database.namespaceOverride                                         | string | `"app-system"`             |             |
-| database.primary.containerSecurityContext.allowPrivilegeEscalation | bool   | `false`                    |             |
-| database.primary.containerSecurityContext.capabilities.drop[0]     | string | `"ALL"`                    |             |
-| database.primary.containerSecurityContext.enabled                  | bool   | `true`                     |             |
-| database.primary.containerSecurityContext.readOnlyRootFilesystem   | bool   | `true`                     |             |
-| database.primary.containerSecurityContext.runAsGroup               | int    | `10001`                    |             |
-| database.primary.containerSecurityContext.runAsNonRoot             | bool   | `true`                     |             |
-| database.primary.containerSecurityContext.runAsUser                | int    | `10001`                    |             |
-| database.primary.containerSecurityContext.seccompProfile.type      | string | `"RuntimeDefault"`         |             |
-| database.primary.podSecurityContext.enabled                        | bool   | `true`                     |             |
-| database.primary.podSecurityContext.fsGroup                        | int    | `10001`                    |             |
-| database.primary.resources.limits.cpu                              | string | `"200m"`                   |             |
-| database.primary.resources.limits.memory                           | string | `"256Mi"`                  |             |
-| database.primary.resources.requests.cpu                            | string | `"100m"`                   |             |
-| database.primary.resources.requests.memory                         | string | `"128Mi"`                  |             |
-| global.fullnameOverride                                            | string | `""`                       |             |
-| global.nameOverride                                                | string | `""`                       |             |
+| Key                                                                                        | Type   | Default                                                                           | Description |
+| ------------------------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------- | ----------- |
+| app.enabled                                                                                | bool   | `true`                                                                            |             |
+| database.auth.enabled                                                                      | bool   | `false`                                                                           |             |
+| database.enabled                                                                           | bool   | `true`                                                                            |             |
+| database.existingConfigmap                                                                 | string | `"database-custom-config"`                                                        |             |
+| database.fullnameOverride                                                                  | string | `"database"`                                                                      |             |
+| database.image.pullPolicy                                                                  | string | `"Always"`                                                                        |             |
+| database.image.tag                                                                         | string | `"9.1.2@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd"` |             |
+| database.initResources.limits.cpu                                                          | string | `"200m"`                                                                          |             |
+| database.initResources.limits.memory                                                       | string | `"256Mi"`                                                                         |             |
+| database.initResources.requests.cpu                                                        | string | `"100m"`                                                                          |             |
+| database.initResources.requests.memory                                                     | string | `"128Mi"`                                                                         |             |
+| database.namespaceOverride                                                                 | string | `"app-system"`                                                                    |             |
+| database.networkPolicy.ingress[0].from[0].podSelector.matchLabels."app.kubernetes.io/name" | string | `"app"`                                                                           |             |
+| database.networkPolicy.ingress[0].ports[0].port                                            | int    | `6379`                                                                            |             |
+| database.networkPolicy.ingress[0].ports[0].protocol                                        | string | `"TCP"`                                                                           |             |
+| database.podSecurityContext.fsGroup                                                        | int    | `10001`                                                                           |             |
+| database.podSecurityContext.runAsGroup                                                     | int    | `10001`                                                                           |             |
+| database.podSecurityContext.runAsUser                                                      | int    | `10001`                                                                           |             |
+| database.podSecurityContext.seccompProfile.type                                            | string | `"RuntimeDefault"`                                                                |             |
+| database.readinessProbe.enabled                                                            | bool   | `true`                                                                            |             |
+| database.resources.limits.cpu                                                              | string | `"200m"`                                                                          |             |
+| database.resources.limits.memory                                                           | string | `"256Mi"`                                                                         |             |
+| database.resources.requests.cpu                                                            | string | `"100m"`                                                                          |             |
+| database.resources.requests.memory                                                         | string | `"128Mi"`                                                                         |             |
+| database.securityContext.allowPrivilegeEscalation                                          | bool   | `false`                                                                           |             |
+| database.securityContext.capabilities.drop[0]                                              | string | `"ALL"`                                                                           |             |
+| database.securityContext.readOnlyRootFilesystem                                            | bool   | `true`                                                                            |             |
+| database.securityContext.runAsGroup                                                        | int    | `10001`                                                                           |             |
+| database.securityContext.runAsNonRoot                                                      | bool   | `true`                                                                            |             |
+| database.securityContext.runAsUser                                                         | int    | `10001`                                                                           |             |
+| database.securityContext.seccompProfile.type                                               | string | `"RuntimeDefault"`                                                                |             |
+| global.fullnameOverride                                                                    | string | `""`                                                                              |             |
+| global.nameOverride                                                                        | string | `""`                                                                              |             |
 
 ---
 
