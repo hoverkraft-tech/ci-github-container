@@ -1,0 +1,6 @@
+---
+quiet: true
+# Only the four upstream Valkey resources that inherit the Helm release namespace.
+# Chart install tests supply a dedicated namespace. Other namespace checks remain enabled.
+baseline: .github/linters/checkov-baseline.json
+output-baseline-as-skipped: true

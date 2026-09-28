@@ -1,0 +1,40 @@
+{
+	"failed_checks": [
+		{
+			"file": "/tests/charts/umbrella-application/test-umbrella-application/charts/database/templates/deploy_valkey.yaml",
+			"findings": [
+				{
+					"resource": "Deployment.default.database",
+					"check_ids": ["CKV_K8S_21"]
+				}
+			]
+		},
+		{
+			"file": "/tests/charts/umbrella-application/test-umbrella-application/charts/database/templates/service.yaml",
+			"findings": [
+				{
+					"resource": "Service.default.database",
+					"check_ids": ["CKV_K8S_21"]
+				}
+			]
+		},
+		{
+			"file": "/tests/charts/umbrella-application/test-umbrella-application/charts/database/templates/serviceaccount.yaml",
+			"findings": [
+				{
+					"resource": "ServiceAccount.default.database",
+					"check_ids": ["CKV_K8S_21"]
+				}
+			]
+		},
+		{
+			"file": "/tests/charts/umbrella-application/test-umbrella-application/charts/database/templates/init_config.yaml",
+			"findings": [
+				{
+					"resource": "ConfigMap.default.database-init-scripts",
+					"check_ids": ["CKV_K8S_21"]
+				}
+			]
+		}
+	]
+}
