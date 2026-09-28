@@ -1,4 +1,11 @@
 {
 	"threshold": 5,
-	"ignore": ["**/tests/**", "**/node_modules/**"]
+	"ignore": [
+		"**/tests/**",
+		".github/workflows/__test-*.yml",
+		"**/node_modules/**",
+		"**/package-lock.json",
+		"actions/**/README.md",
+		".github/workflows/*.md"
+	]
 }

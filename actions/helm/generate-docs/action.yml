@@ -248,6 +248,8 @@ runs:
       with:
         client-id: ${{ inputs.github-app-client-id }}
         private-key: ${{ inputs.github-app-key }}
+        permission-contents: write
+        permission-pull-requests: write
 
     - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
       id: create-and-merge-pull-request
