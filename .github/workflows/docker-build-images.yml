@@ -86,7 +86,7 @@ on: # yamllint disable-line rule:truthy
         default: "GITHUB_APP_TOKEN"
       build-secret-github-app-client-id:
         description: |
-          GitHub App client ID to generate GitHub token to be passed as build secret env.
+          GitHub App client ID to generate a token with read-only repository contents access for build secrets.
           See https://github.com/actions/create-github-app-token.
         required: false
         type: string
@@ -97,6 +97,14 @@ on: # yamllint disable-line rule:truthy
         required: false
         type: string
         default: ${{ github.repository_owner }}
+      build-secret-github-app-repositories:
+        description: |
+          Comma or newline-separated repository names accessible to the build token.
+          Repositories must belong to `build-secret-github-app-owner`.
+          Defaults to the calling repository. Include private dependency repositories explicitly.
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}
       cache-type:
         description: |
           Cache type. Set to `false` or empty to disable cache entirely.
@@ -182,6 +190,7 @@ jobs:
     outputs:
       artifact-name: ${{ steps.define-artifact-name.outputs.artifact-name }}
       images: ${{ steps.define-images-by-platform.outputs.images }}
+      build-secret-github-app-repositories: ${{ steps.validate-inputs.outputs.build-secret-github-app-repositories }}
     runs-on: ${{ fromJson(inputs.runs-on) }}
     steps:
       - id: validate-inputs
@@ -190,11 +199,24 @@ jobs:
           OCI_REGISTRY_PASSWORD: ${{ secrets.oci-registry-password }} # zizmor: ignore[secrets-outside-env]
           RUNS_ON_INPUT: ${{ inputs.runs-on }}
           IMAGES_INPUT: ${{ inputs.images }}
+          BUILD_SECRET_GITHUB_APP_CLIENT_ID: ${{ inputs.build-secret-github-app-client-id }}
+          BUILD_SECRET_GITHUB_APP_REPOSITORIES: ${{ inputs.build-secret-github-app-repositories }}
         with:
           script: |
             const ociRegistryPassword = process.env.OCI_REGISTRY_PASSWORD;
             if (!ociRegistryPassword) {
               throw new Error(`"oci-registry-password" secret is missing`);
+            }
+
+            if (process.env.BUILD_SECRET_GITHUB_APP_CLIENT_ID) {
+              const repositories = (process.env.BUILD_SECRET_GITHUB_APP_REPOSITORIES || '')
+                .split(/[,\n]/)
+                .map(repository => repository.trim())
+                .filter(Boolean);
+              if (!repositories.length) {
+                throw new Error('"build-secret-github-app-repositories" must contain at least one repository');
+              }
+              core.setOutput('build-secret-github-app-repositories', repositories.join(','));
             }
 
             const runsOnInput = process.env.RUNS_ON_INPUT;
@@ -396,7 +418,9 @@ jobs:
         id: generate-token
         with:
           client-id: ${{ inputs.build-secret-github-app-client-id }}
-          owner: ${{  inputs.build-secret-github-app-owner }}
+          owner: ${{ inputs.build-secret-github-app-owner }}
+          repositories: ${{ needs.prepare-variables.outputs.build-secret-github-app-repositories }}
+          permission-contents: read
           private-key: ${{ secrets.build-secret-github-app-key }} # zizmor: ignore[secrets-outside-env]
 
       - id: prepare-secret-envs
