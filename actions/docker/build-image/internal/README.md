@@ -31,7 +31,7 @@ Internal build-image implementation that keeps Docker-dependent post steps toget
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image/internal@f8255a6a37eb141fa331527f5aed9b9e1d598c77 # 0.38.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image/internal@5ffc3c81daacc57700a14bb91d67edbc67eedc1d # 0.39.0
   with:
     # Docker Buildx builder name.
     # This input is required.

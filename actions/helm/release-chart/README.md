@@ -49,7 +49,7 @@ When calling this action through a reusable workflow, grant `id-token: write` in
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@f8255a6a37eb141fa331527f5aed9b9e1d598c77 # 0.38.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@5ffc3c81daacc57700a14bb91d67edbc67eedc1d # 0.39.0
   with:
     # OCI registry where to push chart.
     #
