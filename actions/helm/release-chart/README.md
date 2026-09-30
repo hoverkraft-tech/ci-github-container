@@ -27,6 +27,7 @@
 
 Action to release a Helm chart to OCI registry.
 Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
+Set `sign` to `false` to opt out and still consume the immutable digest output.
 Supports umbrella charts: if a chart has local dependencies having version `0.0.0`,
 the action will update those dependencies version with the given tag, then update the Chart.lock accordingly.
 
