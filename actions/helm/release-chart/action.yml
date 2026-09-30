@@ -2,6 +2,8 @@
 name: "Release Helm Chart"
 description: |
   Action to release a Helm chart to OCI registry.
+  Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
+  Set `sign` to `false` to opt out and still consume the immutable digest output.
   Supports umbrella charts: if a chart has local dependencies having version `0.0.0`,
   the action will update those dependencies version with the given tag, then update the Chart.lock accordingly.
 author: hoverkraft
@@ -13,20 +15,17 @@ inputs:
   oci-registry:
     description: |
       OCI registry where to push chart.
-      See https://github.com/appany/helm-oci-chart-releaser#usage.
     required: true
     default: "ghcr.io"
   oci-registry-username:
     required: true
     description: |
       OCI registry username.
-      See https://github.com/appany/helm-oci-chart-releaser#usage.
     default: ${{ github.repository_owner }}
   oci-registry-password:
     required: true
     description: |
       OCI registry password.
-      See https://github.com/appany/helm-oci-chart-releaser#usage.
     default: ${{ github.token }}
   chart:
     description: "Chart name to release"
@@ -70,17 +69,44 @@ inputs:
       The Git ref to checkout before releasing the chart.
       Can be a branch, tag or commit SHA.
     required: false
+  sign:
+    description: |
+      Sign the published OCI chart using Cosign and GitHub Actions OIDC.
+      Enabled by default. Set to `false` to opt out.
+      Requires `id-token: write` and write access to the OCI registry.
+      Does not generate a Helm PGP provenance (.prov) file.
+    required: false
+    default: "true"
 
 outputs:
   image:
     value: ${{ steps.chart-releaser.outputs.image }}
     description: |
       Chart image (Format: `{registry}/{repository}/{image}:{tag}`).
-      See https://github.com/appany/helm-oci-chart-releaser.
+  digest:
+    value: ${{ steps.chart-releaser.outputs.digest }}
+    description: "Published chart OCI manifest digest (Format: `sha256:...`)."
+  image-digest:
+    value: ${{ steps.chart-releaser.outputs.image-digest }}
+    description: "Immutable chart reference (Format: `{registry}/{repository}/{image}@sha256:...`)."
 
 runs:
   using: "composite"
   steps:
+    - name: Validate signing configuration
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_SIGN: ${{ inputs.sign }}
+      with:
+        script: |
+          const sign = process.env.INPUT_SIGN;
+          if (!['true', 'false'].includes(sign)) {
+            throw new Error('"sign" must be "true" or "false".');
+          }
+          if (sign === 'true' && (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL || !process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN)) {
+            throw new Error('Signing charts requires the workflow job to grant id-token: write.');
+          }
+
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
       with:
         ref: ${{ inputs.ref }}
@@ -160,9 +186,9 @@ runs:
     - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
       with:
         source-path: ${{ github.action_path }}/../..
-        destination-directory-name: self-actions-update-chart-values
+        destination-directory-name: self-actions-release-chart
 
-    - uses: ./../self-actions-update-chart-values/helm/update-chart-values
+    - uses: ./../self-actions-release-chart/helm/update-chart-values
       with:
         path: ${{ inputs.path }}
         values: ${{ steps.chart-tag-updates.outputs.values }}
@@ -269,19 +295,77 @@ runs:
     - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
     - name: Prepare chart dependencies
-      uses: ./../self-actions-update-chart-values/helm/prepare-chart
+      uses: ./../self-actions-release-chart/helm/prepare-chart
       with:
         path: ${{ inputs.path }}
         helm-repositories: >-
           ${{ inputs.helm-repositories }}
 
     - id: chart-releaser
-      uses: appany/helm-oci-chart-releaser@d94988c92bed2e09c6113981f15f8bb495d10943 # v0.5.0
+      name: Package and push chart
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_REGISTRY: ${{ inputs.oci-registry }}
+        INPUT_USERNAME: ${{ inputs.oci-registry-username }}
+        INPUT_PASSWORD: ${{ inputs.oci-registry-password }}
+        CHART_REPOSITORY: ${{ github.repository }}/charts/${{ inputs.chart }}
       with:
-        name: ${{ github.event.repository.name }}
-        repository: ${{ github.repository }}/charts/${{ inputs.chart }}
-        tag: ${{ inputs.tag }}
-        path: ${{ inputs.path }}
-        registry: ${{ inputs.oci-registry }}
-        registry_username: ${{ inputs.oci-registry-username }}
-        registry_password: ${{ inputs.oci-registry-password }}
+        script: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const registry = process.env.INPUT_REGISTRY;
+          const destination = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'helm-release-'));
+          const registryConfig = path.join(destination, 'registry.json');
+          let loggedIn = false;
+          try {
+            await exec.exec('helm', [
+              'registry', 'login', registry, '--username', process.env.INPUT_USERNAME,
+              '--password-stdin', '--registry-config', registryConfig,
+            ], { input: Buffer.from(process.env.INPUT_PASSWORD) });
+            loggedIn = true;
+            await exec.exec('helm', [
+              'package', path.resolve(process.env.INPUT_PATH), '--version', process.env.INPUT_TAG, '--destination', destination,
+            ]);
+            const packages = fs.readdirSync(destination).filter(file => file.endsWith('.tgz'));
+            if (packages.length !== 1) {
+              throw new Error('Expected exactly one packaged chart.');
+            }
+            const result = await exec.getExecOutput('helm', [
+              'push', path.join(destination, packages[0]), `oci://${registry}/${process.env.CHART_REPOSITORY}`,
+              '--registry-config', registryConfig,
+            ]);
+            // Helm reports the pushed reference and manifest digest on stderr.
+            // Capture the push result so a concurrent tag update cannot change what we sign.
+            const output = `${result.stdout}\n${result.stderr}`;
+            const images = [...output.matchAll(/^Pushed:[ \t]+(\S+)[ \t]*\r?$/gm)];
+            const digests = [...output.matchAll(/^Digest:[ \t]+(sha256:[a-f0-9]{64})[ \t]*\r?$/gm)];
+            if (images.length !== 1 || digests.length !== 1) {
+              throw new Error('Helm push did not return a chart reference and SHA-256 manifest digest.');
+            }
+            const image = images[0][1];
+            const digest = digests[0][1];
+            core.setOutput('image', image);
+            core.setOutput('digest', digest);
+            core.setOutput('image-digest', `${image.slice(0, image.lastIndexOf(':'))}@${digest}`);
+          } finally {
+            try {
+              if (loggedIn) {
+                await exec.exec('helm', ['registry', 'logout', registry, '--registry-config', registryConfig]);
+              }
+            } catch (error) {
+              core.warning(`Helm registry logout failed: ${error.message}`);
+            } finally {
+              fs.rmSync(destination, { recursive: true, force: true });
+            }
+          }
+
+    - name: Sign chart digest
+      if: inputs.sign == 'true'
+      uses: ./../self-actions-release-chart/helm/sign-chart
+      with:
+        oci-registry: ${{ inputs.oci-registry }}
+        oci-registry-username: ${{ inputs.oci-registry-username }}
+        oci-registry-password: ${{ inputs.oci-registry-password }}
+        charts: ${{ steps.chart-releaser.outputs.image }}@${{ steps.chart-releaser.outputs.digest }}

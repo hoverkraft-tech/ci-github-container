@@ -74,6 +74,14 @@ jobs:
     permissions:
       contents: read
 
+  test-action-helm-sign-chart:
+    needs: linter
+    uses: ./.github/workflows/__test-action-helm-sign-chart.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+
   test-action-helm-update-chart-values:
     needs: linter
     uses: ./.github/workflows/__test-action-helm-update-chart-values.yml
@@ -85,6 +93,7 @@ jobs:
     uses: ./.github/workflows/__test-action-helm-release-chart.yml
     permissions:
       contents: read
+      id-token: write
       packages: write
 
   test-action-helm-test-chart:

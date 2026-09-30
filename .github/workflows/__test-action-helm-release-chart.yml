@@ -13,10 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
       packages: write
     strategy:
       fail-fast: false
       matrix:
+        sign: [false, true]
         chart:
           - name: application
             values: |
@@ -44,11 +46,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: |
-          if [ -z "${{ github.token }}" ]; then
-            echo "GitHub token is not set"
-            exit 1
-          fi
+      - name: Arrange isolated chart version
+        id: arrange
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SIGN: ${{ matrix.sign }}
+        with:
+          script: |
+            // Different chart contents prevent an unsigned scenario from sharing a signed digest.
+            core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.${process.env.SIGN}`);
 
       - id: release-chart
         uses: ./actions/helm/release-chart
@@ -58,30 +64,131 @@ jobs:
           chart: ${{ matrix.chart.name }}-test
           path: tests/charts/${{ matrix.chart.name }}
           values: ${{ matrix.chart.values }}
-          tag: 0.1.0
+          tag: ${{ steps.arrange.outputs.tag }}
+          sign: ${{ matrix.sign }}
           helm-repositories: |
             valkey https://valkey.io/valkey-helm/
 
       - name: Check release chart output
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASED_IMAGE: ${{ steps.release-chart.outputs.image }}
-          EXPECTED_RELEASED_IMAGE: "ghcr.io/hoverkraft-tech/ci-github-container/charts/${{ matrix.chart.name }}-test/ci-github-container:0.1.0"
+          RELEASED_DIGEST: ${{ steps.release-chart.outputs.digest }}
+          RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
           CHART_NAME: ${{ matrix.chart.name }}
-        run: |
-          if [ "$RELEASED_IMAGE" != "$EXPECTED_RELEASED_IMAGE" ]; then
-            echo "Unexpected chart image name"
-            exit 1
-          fi
+          CHART_TAG: ${{ steps.arrange.outputs.tag }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const image = `ghcr.io/${context.repo.owner}/${context.repo.repo}/charts/${process.env.CHART_NAME}-test/${context.repo.repo}`;
+            assert.equal(process.env.RELEASED_IMAGE, `${image}:${process.env.CHART_TAG}`);
+            assert.match(process.env.RELEASED_DIGEST, /^sha256:[a-f0-9]{64}$/);
+            assert.equal(process.env.RELEASED_IMAGE_DIGEST, `${image}@${process.env.RELEASED_DIGEST}`);
 
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-
-      - name: Check chart status
+      - name: Pull chart by immutable digest
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
-          CHART_NAME: ${{ matrix.chart.name }}
-          HELM_EXPERIMENTAL_OCI: "1"
-        run: |
-          echo "$GH_TOKEN" | helm registry login -u "$REPOSITORY_OWNER" --password-stdin ghcr.io
-          helm pull --version "0.1.0" "oci://ghcr.io/hoverkraft-tech/ci-github-container/charts/$CHART_NAME-test/ci-github-container"
-    # yamllint enable rule:line-length
+          RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
+        with:
+          script: |
+            await exec.exec('helm', ['registry', 'login', '-u', process.env.REPOSITORY_OWNER, '--password-stdin', 'ghcr.io'], {
+              input: Buffer.from(process.env.GH_TOKEN),
+            });
+            await exec.exec('helm', ['pull', `oci://${process.env.RELEASED_IMAGE_DIGEST}`]);
+
+      - name: Install Cosign for unsigned scenario verification
+        if: ${{ !matrix.sign }}
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Authenticate Cosign for unsigned scenario verification
+        if: ${{ !matrix.sign }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Verify chart signature
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SIGN: ${{ matrix.sign }}
+          RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const verify = (identity) => exec.getExecOutput('cosign', [
+              'verify',
+              '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+              '--certificate-identity', identity,
+              process.env.RELEASED_IMAGE_DIGEST,
+            ], { ignoreReturnCode: true });
+
+            const result = await verify(process.env.CERTIFICATE_IDENTITY);
+            const output = `${result.stderr}\n${result.stdout}`;
+            if (process.env.SIGN !== 'true') {
+              assert.notEqual(result.exitCode, 0, 'Unsigned chart unexpectedly passed signature verification');
+              assert.match(output, /no signatures found|no valid bundles (?:found|exist)/i);
+              return;
+            }
+
+            assert.equal(result.exitCode, 0, `Chart signature verification failed: ${output}`);
+
+  default-signing:
+    name: Release application (default sign=true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange isolated chart version
+        id: arrange
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.default`);
+
+      - id: release-chart
+        uses: ./actions/helm/release-chart
+        with:
+          oci-registry: ghcr.io
+          oci-registry-password: ${{ github.token }}
+          chart: application-default-test
+          path: tests/charts/application
+          values: |
+            [
+              { "path": ".image.registry", "value": "ghcr.io" },
+              {
+                "path": ".image.repository",
+                "value": "hoverkraft-tech/ci-github-container/application"
+              },
+              { "path": ".image.tag", "value": "0.1.0" }
+            ]
+          tag: ${{ steps.arrange.outputs.tag }}
+          helm-repositories: |
+            valkey https://valkey.io/valkey-helm/
+
+      - name: Verify chart signature with default signing
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const result = await exec.getExecOutput('cosign', [
+              'verify',
+              '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+              '--certificate-identity', process.env.CERTIFICATE_IDENTITY,
+              process.env.RELEASED_IMAGE_DIGEST,
+            ], { ignoreReturnCode: true });
+
+            const output = `${result.stderr}\n${result.stdout}`;
+            assert.equal(result.exitCode, 0, `Chart signature verification failed when sign input was omitted: ${output}`);

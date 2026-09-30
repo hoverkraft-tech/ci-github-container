@@ -1,0 +1,118 @@
+---
+name: "Sign Helm Chart"
+description: |
+  Action to sign OCI Helm charts.
+  It signs chart references with Cosign and the GitHub Actions OIDC token.
+  It reuses the Docker sign-images action under the hood.
+author: hoverkraft
+branding:
+  icon: award
+  color: blue
+
+inputs:
+  charts:
+    description: |
+      Charts to sign.
+      Can be a single chart or a list of charts separated by commas or newlines or spaces.
+      The charts must be in the format `registry/name:tag@digest`.
+      It can also be a list of charts in JSON format.
+      Example:
+
+      ```json
+      [
+        "ghcr.io/my-org/my-repo/charts/application/my-repo:1.2.3@sha256:d31aa93410434ac9dcfc9179cac2cb1fd4d7c27f11527addc40299c7c675f49d"
+      ]
+      ```
+    required: true
+  oci-registry:
+    description: |
+      OCI registry where the charts are stored.
+      All provided chart references must use this registry.
+    required: false
+    default: "ghcr.io"
+  oci-registry-username:
+    description: |
+      Username used to log against the OCI registry before signing.
+      See https://github.com/docker/login-action#usage.
+    required: false
+    default: ${{ github.repository_owner }}
+  oci-registry-password:
+    description: |
+      Password or GitHub token used to log against the OCI registry before signing.
+      Requires write access to publish signatures.
+    required: false
+    default: ${{ github.token }}
+  github-token:
+    description: |
+      GitHub Token used by Cosign to obtain the GitHub Actions OIDC identity token.
+      Permissions:
+      - `id-token`: `write`
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: validate-inputs
+      name: Validate chart references
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_CHARTS: ${{ inputs.charts }}
+        INPUT_REGISTRY: ${{ inputs.oci-registry }}
+      with:
+        script: |
+          const chartsInput = process.env.INPUT_CHARTS || '';
+          let charts = null;
+
+          try {
+            charts = JSON.parse(chartsInput);
+          } catch (error) {
+            charts = chartsInput.split(/[\s,]+/).filter((chart) => chart.trim() !== '');
+          }
+
+          if (!Array.isArray(charts) || charts.length === 0) {
+            return core.setFailed(`"charts" input is not a valid JSON array or a non-empty string: ${charts}`);
+          }
+
+          const registryPart = String.raw`(?<registry>[a-zA-Z0-9._-]+(?:\.[a-zA-Z0-9._-]+)*(?::[0-9]+)?)`;
+          const repositoryPart = String.raw`(?<repository>[a-z0-9._\/-]+)`;
+          const tagPart = String.raw`(?<tag>[a-zA-Z0-9._-]+)`;
+          const digestPart = String.raw`(?<digest>sha256:[a-f0-9]{64})`;
+          const chartRegex = new RegExp(`^${registryPart}/${repositoryPart}:${tagPart}@${digestPart}$`);
+
+          for (const chart of charts) {
+            if (typeof chart !== 'string') {
+              return core.setFailed(`Invalid chart format: ${chart}. Expected a string.`);
+            }
+
+            const match = chart.match(chartRegex);
+            if (!match || !match.groups) {
+              return core.setFailed(`Invalid chart format: ${chart}. Expected format: registry/name:tag@digest`);
+            }
+
+            if (match.groups.registry !== process.env.INPUT_REGISTRY) {
+              return core.setFailed(
+                `Chart registry mismatch for ${chart}. Expected registry: ${process.env.INPUT_REGISTRY}.`,
+              );
+            }
+          }
+
+          core.setOutput('charts', JSON.stringify(charts));
+
+    - name: Log in to the registry for signing
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ${{ inputs.oci-registry }}
+        username: ${{ inputs.oci-registry-username }}
+        password: ${{ inputs.oci-registry-password }}
+
+    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      with:
+        source-path: ${{ github.action_path }}/../..
+        destination-directory-name: self-actions-sign-chart
+
+    - name: Sign chart refs
+      uses: ./../self-actions-sign-chart/docker/sign-images
+      with:
+        images: ${{ steps.validate-inputs.outputs.charts }}
+        github-token: ${{ inputs.github-token }}

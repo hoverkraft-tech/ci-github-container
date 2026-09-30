@@ -43,11 +43,13 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 ### Helm
 
-_Actions dedicated to packaging, validating, and publishing Helm charts for Kubernetes deployments._
+_Actions dedicated to packaging, validating, signing, and publishing Helm charts for Kubernetes deployments._
 
 #### - [Generate chart documentation](actions/helm/generate-docs/README.md)
 
 #### - [Parse chart URI](actions/helm/parse-chart-uri/README.md)
+
+#### - [Sign chart](actions/helm/sign-chart/README.md)
 
 #### - [Update chart values](actions/helm/update-chart-values/README.md)
 
@@ -62,6 +64,10 @@ _Orchestrated workflows you can plug directly into repositories to automate cont
 ### - [Docker build images](.github/workflows/docker-build-images.md)
 
 ### - [Prune pull requests images tags](.github/workflows/prune-pull-requests-images-tags.md)
+
+## Architecture Decisions
+
+- [ADR 0001 - Sign OCI Helm Charts With Keyless Cosign](docs/adr/0001-sign-oci-helm-charts-with-keyless-cosign.md)
 
 ## Contributing
 
