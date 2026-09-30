@@ -62,10 +62,16 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-sign-chart.yml@${{ github.ref }}
         with:
           script: |
             const assert = require('node:assert/strict');
-            const result = await exec.getExecOutput('cosign', ['verify', process.env.RELEASED_IMAGE_DIGEST], { ignoreReturnCode: true });
+            const result = await exec.getExecOutput('cosign', [
+              'verify',
+              '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+              '--certificate-identity', process.env.CERTIFICATE_IDENTITY,
+              process.env.RELEASED_IMAGE_DIGEST,
+            ], { ignoreReturnCode: true });
 
             const output = `${result.stderr}\n${result.stdout}`;
             assert.notEqual(result.exitCode, 0, 'Unsigned chart unexpectedly passed signature verification before helm/sign-chart');
