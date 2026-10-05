@@ -49,6 +49,7 @@ inputs:
   docker-version:
     description: |
       Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
+      When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.
     default: "29.7.2"
     required: false
   # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
@@ -423,6 +424,14 @@ runs:
               }
             } catch (error) {
               core.warning(`Failed to detect Docker version: ${error}`);
+            }
+
+            // DOCKER_HOST takes precedence over the Docker context created by the installation:
+            // a locally installed daemon would never be used, and may not even start on such runners.
+            const dockerHost = `${process.env.DOCKER_HOST || ''}`.trim();
+            if (dockerHost.length) {
+              core.info(`Keeping the Docker daemon managed outside of the runner (DOCKER_HOST=${dockerHost})`);
+              return;
             }
           }
 
