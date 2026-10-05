@@ -145,3 +145,52 @@ jobs:
             const buildxNode = buildxNodes.find(node => node.Endpoint === expectedDockerEndpoint);
             assert(buildxNode, 'Configured Buildx builder is not attached to the current Docker context endpoint');
             assert.equal(buildxNode.Status, 'running', 'Configured Buildx node is not running');
+
+  tests-external-docker-daemon:
+    name: Test for "docker/setup" action with an externally managed Docker daemon
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DOCKER_HOST: unix:///var/run/docker.sock
+    steps:
+      - name: Arrange - Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange - Resolve the Docker version provided by the runner
+        id: resolve-docker-version
+        shell: bash
+        run: |
+          echo "docker-version=$(docker version --format '{{.Client.Version}}|{{.Server.Version}}')" >> "$GITHUB_OUTPUT"
+
+      - name: Act - Setup Docker
+        id: docker-setup
+        uses: ./actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ github.token }}
+
+      - name: Assert - Check that the Docker daemon is kept
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED_DOCKER_VERSION: ${{ steps.resolve-docker-version.outputs.docker-version }}
+          BUILDX_NAME: ${{ steps.docker-setup.outputs.buildx-name }}
+        with:
+          script: |
+            const assert = require("assert");
+
+            const dockerVersionResult = await exec.getExecOutput(
+              "docker",
+              ["version", "--format", "{{.Client.Version}}|{{.Server.Version}}"],
+              { silent: true },
+            );
+            assert.equal(
+              dockerVersionResult.stdout.trim(),
+              process.env.EXPECTED_DOCKER_VERSION,
+              'Docker client and daemon provided by the runner must be kept',
+            );
+
+            assert(`${process.env.BUILDX_NAME || ''}`.trim().length, '"buildx-name" output is empty');
