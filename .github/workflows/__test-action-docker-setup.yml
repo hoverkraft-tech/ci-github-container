@@ -172,6 +172,9 @@ jobs:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ github.token }}
+          # Not a Docker release: it never matches the versions provided by the runner, and installing it fails.
+          # Only the DOCKER_HOST guard can make this step succeed.
+          docker-version: "0.0.0"
 
       - name: Assert - Check that the Docker daemon is kept
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
