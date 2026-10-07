@@ -132,6 +132,7 @@ make ci                   # Run all CI checks
 make lint                 # Run the dockerized Super Linter
 make lint-fix             # Attempt auto-fixes for lint findings
 make npm-audit-fix        # Fix npm audit issues in action packages
+make npm-update           # Interactively update npm dependencies in action packages
 
 # Container & Helm validation helpers
 make test-build-application  # Build and push the sample test application image

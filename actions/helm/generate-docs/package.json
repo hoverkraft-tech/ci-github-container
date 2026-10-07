@@ -3,10 +3,18 @@
 
 	"dependencies": {
 		"@textlint/textlint-plugin-markdown": "^15.8.0",
-		"markdownlint-cli2": "^0.23.2",
+		"markdownlint-cli2": "^0.23.3",
 		"prettier": "^3.9.9",
 		"textlint": "^15.8.0",
 		"textlint-filter-rule-comments": "^1.3.0",
 		"textlint-rule-terminology": "^5.2.16"
+	},
+	"overrides": {
+		"markdownlint-cli2": {
+			"smol-toml": "^1.9.0"
+		},
+		"micromark-extension-math": {
+			"katex": "^0.19.0"
+		}
 	}
 }

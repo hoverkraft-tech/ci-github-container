@@ -1,4 +1,4 @@
-.PHONY: help
+.PHONY: help npm-update
 
 help: ## Display help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
@@ -32,6 +32,15 @@ npm-audit-fix: ## Execute npm audit fix
 		fi; \
 	done; \
 	exit $$overall_status
+
+npm-update: ## Interactively update npm dependencies in action packages
+	@set -eu; \
+	packages="$$(find actions -type f -name package.json -not -path '*/node_modules/*' -print | sort)"; \
+	for pkg in $$packages; do \
+		pkg_dir="$$(dirname "$$pkg")"; \
+		echo "Updating npm dependencies in $$pkg_dir"; \
+		npx --yes npm-check-updates@latest --cwd "$$pkg_dir" --interactive --install always; \
+	done
 
 ci: ## Execute CI tasks
 	$(MAKE) npm-audit-fix || true
