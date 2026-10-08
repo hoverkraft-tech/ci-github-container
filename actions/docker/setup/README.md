@@ -69,6 +69,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
     setup-buildx: true
 
     # Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
+    # When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.
     #
     # Default: `29.7.2`
     docker-version: 29.7.2
@@ -106,6 +107,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
 |                               | When provided, registry authentication targets are inferred from the built image data.                                                           |              |                         |
 | **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`                  |
 | **`docker-version`**          | Required Docker version. The action installs it when the active Docker client or daemon reports a different version.                             | **false**    | `29.7.2`                |
+|                               | When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.               |              |                         |
 | **`buildx-version`**          | Buildx version used by docker/setup-buildx-action.                                                                                               | **false**    | `v0.36.1`               |
 | **`buildkit-image`**          | BuildKit image used by docker/setup-buildx-action.                                                                                               | **false**    | `moby/buildkit:v0.32.2` |
 
