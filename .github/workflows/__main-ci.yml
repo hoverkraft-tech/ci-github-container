@@ -97,6 +97,8 @@ jobs:
     with:
       update-all: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
       github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
+      documentation-files: |
+        docs/**/*.md
       # yamllint disable rule:line-length
       extra-badges: |
         [
