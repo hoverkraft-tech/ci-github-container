@@ -1,4 +1,17 @@
 ---
+vulnerabilities:
+  # FIXME: remove this exception once a patched release is available
+  - id: CVE-2026-93687
+    paths:
+      - "actions/helm/generate-docs/package-lock.json"
+    expired_at: 2026-11-07
+    statement: >-
+      braces 3.0.3 is a transitive dependency of markdownlint-cli2 with no patched
+      release as of 2026-10-08. Accept the stack-overflow risk for documentation
+      tooling using workflow- and repository-controlled glob patterns. This
+      exception assumes those patterns are trusted. Remove it when a patched
+      release is available: https://github.com/micromatch/braces/issues/70.
+
 misconfigurations:
   - id: KSV-0110
     paths:
