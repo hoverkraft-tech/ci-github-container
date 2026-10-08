@@ -3,7 +3,6 @@
 - Status: Accepted
 - Date: 2026-09-30
 - Deciders: Maintainers of this repository
-- Implemented in: [actions/helm/release-chart/action.yml](../../actions/helm/release-chart/action.yml) and [.github/workflows/\_\_test-action-helm-release-chart.yml](../../.github/workflows/__test-action-helm-release-chart.yml)
 
 ## Context
 
