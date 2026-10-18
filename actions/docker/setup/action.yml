@@ -52,16 +52,16 @@ inputs:
       When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.
     default: "29.7.2"
     required: false
-  # FIXME: upgrade version when available (https://github.com/docker/buildx/releases)
   buildx-version:
     description: |
       Buildx version used by docker/setup-buildx-action.
+    # renovate: datasource=github-releases depName=docker/buildx versioning=semver
     default: "v0.36.1"
     required: false
-  # FIXME: upgrade version when available (https://hub.docker.com/r/moby/buildkit)
   buildkit-image:
     description: |
       BuildKit image used by docker/setup-buildx-action.
+    # renovate: datasource=docker depName=moby/buildkit versioning=docker
     default: "moby/buildkit:v0.32.2"
     required: false
 

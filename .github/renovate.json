@@ -1,0 +1,22 @@
+{
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"extends": ["config:recommended"],
+	"enabledManagers": ["custom.regex"],
+	"semanticCommits": "enabled",
+	"minimumReleaseAge": "7 days",
+	"packageRules": [
+		{
+			"matchManagers": ["custom.regex"],
+			"groupName": "Docker build tooling"
+		}
+	],
+	"customManagers": [
+		{
+			"customType": "regex",
+			"managerFilePatterns": ["/^actions/docker/setup/action\\.yml$/"],
+			"matchStrings": [
+				"# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+default: \"(?:[^\"\\s]+:)?(?<currentValue>[^\"\\s]+)\""
+			]
+		}
+	]
+}
