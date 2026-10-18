@@ -123,6 +123,28 @@ actions/{category}/{action-name}/
 
 ### Development Workflow
 
+#### Dependency Updates
+
+[Dependabot](.github/dependabot.yml) manages dependencies in supported manifests.
+[Renovate](.github/renovate.json) manages the annotated Buildx and BuildKit defaults in
+[Docker Setup](actions/docker/setup/action.yml), using GitHub releases and Docker image tags respectively.
+The [Renovate workflow](.github/workflows/__renovate.yml) runs
+[`renovatebot/github-action`](https://github.com/renovatebot/github-action) every Friday at 04:23 UTC
+and supports manual runs through `workflow_dispatch`. It reads the configuration from the default
+branch and groups updates into pull requests with a minimum release age of seven days.
+Updates require review and CI validation before merging.
+
+The workflow uses the `CI_BOT_APP_CLIENT_ID` variable and `CI_BOT_APP_PRIVATE_KEY` secret
+from the repository or organization. The CI bot must be installed on this repository with
+read access to checks and write access to contents, issues, pull requests, and commit statuses.
+Its installation token is scoped to this repository, and Renovate uses GitHub API commits for signing.
+
+Validate configuration changes with a Node.js version supported by Renovate:
+
+```bash
+npx --yes --package renovate renovate-config-validator --strict --no-global .github/renovate.json
+```
+
 #### Linting & Testing
 
 ```bash
