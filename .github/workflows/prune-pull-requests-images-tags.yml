@@ -106,7 +106,7 @@ jobs:
       packages: write
     steps:
       - id: is-organization-or-user
-        uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+        uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@ab69f41f76e77ec84e733dedb03492b3ee95a05f # 0.39.0
 
       - name: Wait for package visibility
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -153,7 +153,7 @@ jobs:
             }
 
       - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@ab69f41f76e77ec84e733dedb03492b3ee95a05f # 0.39.0
         with:
           actions-path: actions
 
