@@ -3,6 +3,7 @@
 	"extends": ["config:recommended"],
 	"enabledManagers": ["custom.regex"],
 	"semanticCommits": "enabled",
+	"semanticCommitType": "build",
 	"minimumReleaseAge": "7 days",
 	"packageRules": [
 		{
