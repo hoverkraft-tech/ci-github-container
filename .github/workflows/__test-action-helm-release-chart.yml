@@ -57,7 +57,7 @@ jobs:
             core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.${process.env.SIGN}`);
 
       - id: release-chart
-        uses: ./actions/helm/release-chart
+        uses: $/actions/helm/release-chart
         with:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}
@@ -156,7 +156,7 @@ jobs:
             core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.default`);
 
       - id: release-chart
-        uses: ./actions/helm/release-chart
+        uses: $/actions/helm/release-chart
         with:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}

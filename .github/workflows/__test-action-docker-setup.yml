@@ -34,7 +34,7 @@ jobs:
 
       - name: Act - Setup Docker with defaults
         id: docker-setup
-        uses: ./actions/docker/setup
+        uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
@@ -42,7 +42,7 @@ jobs:
 
       - name: Act - Reuse pinned Docker with multiple registries and no Buildx
         id: docker-setup-without-buildx
-        uses: ./actions/docker/setup
+        uses: $/actions/docker/setup
         with:
           oci-registry: |
             {"pull":"docker.io","pull:private":"ghcr.io","push":"ghcr.io"}
@@ -167,7 +167,7 @@ jobs:
 
       - name: Act - Setup Docker
         id: docker-setup
-        uses: ./actions/docker/setup
+        uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}

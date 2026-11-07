@@ -28,7 +28,7 @@ jobs:
             core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.sign-chart`);
 
       - id: release-chart
-        uses: ./actions/helm/release-chart
+        uses: $/actions/helm/release-chart
         with:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}
@@ -78,7 +78,7 @@ jobs:
             assert.match(output, /no signatures found|no valid bundles (?:found|exist)/i);
 
       - name: Act - Sign chart
-        uses: ./actions/helm/sign-chart
+        uses: $/actions/helm/sign-chart
         with:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}

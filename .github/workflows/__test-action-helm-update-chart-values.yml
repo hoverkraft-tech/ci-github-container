@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
 
       - name: Act
-        uses: ./actions/helm/update-chart-values
+        uses: $/actions/helm/update-chart-values
         with:
           path: tests/charts/application
           values: |
@@ -60,7 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: Act
-        uses: ./actions/helm/update-chart-values
+        uses: $/actions/helm/update-chart-values
         with:
           path: tests/charts/umbrella-application
           values: |

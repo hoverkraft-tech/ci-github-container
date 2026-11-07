@@ -67,7 +67,7 @@ jobs:
   arrange-build-images:
     name: Arrange - Build images
     needs: arrange-prepare-variables
-    uses: ./.github/workflows/docker-build-images.yml
+    uses: $/.github/workflows/docker-build-images.yml
     permissions:
       attestations: write
       contents: read
@@ -196,7 +196,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./actions/docker/setup
+      - uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
@@ -216,7 +216,7 @@ jobs:
             "$BASE_IMAGE"
 
       - id: prune-pull-requests-image-tags
-        uses: ./actions/docker/prune-pull-requests-image-tags
+        uses: $/actions/docker/prune-pull-requests-image-tags
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           image: ${{ env.IMAGE_NAME }}
@@ -323,7 +323,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./actions/docker/setup
+      - uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}

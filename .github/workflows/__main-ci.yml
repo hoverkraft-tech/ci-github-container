@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   ci:
-    uses: ./.github/workflows/__shared-ci.yml
+    uses: $/.github/workflows/__shared-ci.yml
     permissions:
       actions: read
       attestations: write
@@ -37,7 +37,7 @@ jobs:
   # both the base packages and their /cache packages.
   clean:
     needs: ci
-    uses: ./.github/workflows/prune-pull-requests-images-tags.yml
+    uses: $/.github/workflows/prune-pull-requests-images-tags.yml
     permissions:
       contents: read
       pull-requests: read
@@ -55,7 +55,7 @@ jobs:
 
   clean-with-cache:
     needs: ci
-    uses: ./.github/workflows/prune-pull-requests-images-tags.yml
+    uses: $/.github/workflows/prune-pull-requests-images-tags.yml
     permissions:
       contents: read
       pull-requests: read
@@ -82,7 +82,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./actions/helm/generate-docs
+      - uses: $/actions/helm/generate-docs
         with:
           working-directory: ./tests/charts
           github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}

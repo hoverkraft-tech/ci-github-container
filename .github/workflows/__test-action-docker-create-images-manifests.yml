@@ -10,7 +10,7 @@ permissions: {}
 jobs:
   build-original-tag:
     name: Arrange - Build original tag
-    uses: ./.github/workflows/docker-build-images.yml
+    uses: $/.github/workflows/docker-build-images.yml
     permissions:
       attestations: write
       contents: read
@@ -46,7 +46,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./actions/docker/setup
+      - uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
@@ -78,7 +78,7 @@ jobs:
             core.setOutput("built-images", JSON.stringify(cloneInput));
 
       - id: clone-tag
-        uses: ./actions/docker/create-images-manifests
+        uses: $/actions/docker/create-images-manifests
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
