@@ -20,7 +20,7 @@ jobs:
 
       - name: Act
         id: parse-chart-uri
-        uses: ./actions/helm/parse-chart-uri
+        uses: $/actions/helm/parse-chart-uri
         with:
           uri: "ghcr.io/my-org/my-repo/charts/application/my-repo:0.1.0"
 

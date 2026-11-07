@@ -2,6 +2,9 @@
 version: 2
 updates:
   - package-ecosystem: docker
+    commit-message:
+      prefix: build
+      include: scope
     open-pull-requests-limit: 20
     directory: "/"
     cooldown:
@@ -16,6 +19,9 @@ updates:
           - "*"
 
   - package-ecosystem: github-actions
+    commit-message:
+      prefix: build
+      include: scope
     open-pull-requests-limit: 20
     directories:
       - "/"
@@ -32,6 +38,9 @@ updates:
           - "*"
 
   - package-ecosystem: helm
+    commit-message:
+      prefix: build
+      include: scope
     open-pull-requests-limit: 20
     directories:
       - "/tests/charts/*/*"
@@ -47,6 +56,9 @@ updates:
           - "*"
 
   - package-ecosystem: "devcontainers"
+    commit-message:
+      prefix: build
+      include: scope
     open-pull-requests-limit: 20
     directory: "/"
     cooldown:
@@ -61,6 +73,9 @@ updates:
           - "*"
 
   - package-ecosystem: npm
+    commit-message:
+      prefix: build
+      include: scope
     open-pull-requests-limit: 20
     directories:
       - "/actions/**/*"

@@ -13,7 +13,7 @@ permissions: {}
 jobs:
   act-build-images-multi-registry:
     name: Act - Build images with structured registry inputs
-    uses: ./.github/workflows/docker-build-images.yml
+    uses: $/.github/workflows/docker-build-images.yml
     permissions:
       attestations: write
       contents: read
@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./actions/docker/setup
+      - uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}

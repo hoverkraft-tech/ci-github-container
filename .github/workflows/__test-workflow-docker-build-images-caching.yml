@@ -62,7 +62,7 @@ jobs:
   act-build-images-registry:
     name: Act - Build images - registry cache
     needs: arrange
-    uses: ./.github/workflows/docker-build-images.yml
+    uses: $/.github/workflows/docker-build-images.yml
     permissions:
       attestations: write
       contents: read
@@ -99,7 +99,7 @@ jobs:
   act-build-images-gha:
     name: Act - Build images - gha cache
     needs: arrange
-    uses: ./.github/workflows/docker-build-images.yml
+    uses: $/.github/workflows/docker-build-images.yml
     permissions:
       attestations: write
       contents: read
@@ -147,7 +147,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./actions/docker/setup
+      - uses: $/actions/docker/setup
         with:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}

@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
 
       - id: get-image-name
-        uses: ./actions/docker/get-image-name
+        uses: $/actions/docker/get-image-name
         with:
           oci-registry: ghcr.io
           image: application-test
@@ -63,7 +63,7 @@ jobs:
           persist-credentials: false
 
       - id: get-image-name
-        uses: ./actions/docker/get-image-name
+        uses: $/actions/docker/get-image-name
         with:
           oci-registry: docker.io
           image: application-test

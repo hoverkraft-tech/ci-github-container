@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   build-test-images:
-    uses: ./.github/workflows/docker-build-images.yml
+    uses: $/.github/workflows/docker-build-images.yml
     permissions:
       attestations: write
       contents: read
@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - id: test-chart
-        uses: ./actions/helm/test-chart
+        uses: $/actions/helm/test-chart
         with:
           check-diff-only: false
           namespace: chart-testing

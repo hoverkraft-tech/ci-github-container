@@ -20,7 +20,7 @@ jobs:
 
       - name: Act
         id: get-image-metadata
-        uses: ./actions/docker/get-image-metadata
+        uses: $/actions/docker/get-image-metadata
         with:
           oci-registry: ghcr.io
           image: application-test
@@ -134,7 +134,7 @@ jobs:
 
       - name: Act
         id: get-image-metadata
-        uses: ./actions/docker/get-image-metadata
+        uses: $/actions/docker/get-image-metadata
         with:
           oci-registry: ghcr.io
           image: application-test
