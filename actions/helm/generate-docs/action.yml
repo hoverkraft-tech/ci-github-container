@@ -145,7 +145,7 @@ runs:
           core.setOutput("markdownlint-config-path", markdownlintConfigPath);
 
     - if: ${{ inputs.checkout-ref != '' }}
-      uses: hoverkraft-tech/ci-github-common/actions/checkout@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      uses: hoverkraft-tech/ci-github-common/actions/checkout@4a6ed33ba735d57ebbcd89fe8ed35134de599a67 # 0.39.2
       with:
         ref: ${{ inputs.checkout-ref }}
 
@@ -160,7 +160,7 @@ runs:
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@df348077afa4e79725151d50606e9dc63f86dcb6 # 0.24.4
+      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@97f64bc080b78daca8fb3ece49de448aaac83429 # 1.1.0
       with:
         working-directory: ${{ github.action_path }}
 
@@ -242,7 +242,7 @@ runs:
             cwd: process.env.WORKING_DIRECTORY,
           });
 
-    - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+    - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
       if: inputs.github-app-client-id
       id: generate-token
       with:
@@ -251,7 +251,7 @@ runs:
         permission-contents: write
         permission-pull-requests: write
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@4a6ed33ba735d57ebbcd89fe8ed35134de599a67 # 0.39.2
       id: create-and-merge-pull-request
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
