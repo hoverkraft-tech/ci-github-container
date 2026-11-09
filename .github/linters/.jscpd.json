@@ -6,6 +6,7 @@
 		"**/node_modules/**",
 		"**/package-lock.json",
 		"actions/**/README.md",
-		".github/workflows/*.md"
+		".github/workflows/*.md",
+		"actions/**/dist/**"
 	]
 }

@@ -5,7 +5,8 @@
 			"!.devcontainer/devcontainer-lock.json",
 			"!.github/logo.svg",
 			"!.github/social-preview.svg",
-			"!**/node_modules"
+			"!**/node_modules",
+			"!actions/**/dist"
 		]
 	}
 }

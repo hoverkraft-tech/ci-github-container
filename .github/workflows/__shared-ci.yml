@@ -10,8 +10,14 @@ on: # yamllint disable-line rule:truthy
 permissions: {}
 
 jobs:
-  linter:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@90211d735aa0289702ddbd7eb95b218020ccadad # 2.0.2
+  test-action-distributions:
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/test-action-distributions.yml@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
+    permissions:
+      contents: read
+
+  lint:
+    name: linter
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
     permissions:
       actions: read
       contents: read
@@ -20,16 +26,18 @@ jobs:
       pull-requests: write
       security-events: write
       statuses: write
+    with:
+      comment: false
 
   test-action-docker-build-image:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-docker-build-image.yml
     permissions:
       contents: read
       packages: write
 
   test-action-docker-create-images-manifests:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-docker-create-images-manifests.yml
     permissions:
       attestations: write
@@ -40,13 +48,13 @@ jobs:
       pull-requests: read
 
   test-action-docker-setup:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-docker-setup.yml
     permissions:
       contents: read
 
   test-action-docker-prune-pull-requests-image-tags:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-docker-prune-pull-requests-image-tags.yml
     permissions:
       attestations: write
@@ -57,25 +65,25 @@ jobs:
       pull-requests: read
 
   test-action-get-image-metadata:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-get-image-metadata.yml
     permissions:
       contents: read
 
   test-action-action-get-image-name:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-get-image-name.yml
     permissions:
       contents: read
 
   test-action-helm-parse-chart-uri:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-helm-parse-chart-uri.yml
     permissions:
       contents: read
 
   test-action-helm-sign-chart:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-helm-sign-chart.yml
     permissions:
       contents: read
@@ -83,21 +91,23 @@ jobs:
       packages: write
 
   test-action-helm-update-chart-values:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-helm-update-chart-values.yml
     permissions:
       contents: read
 
   test-action-helm-release-chart:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-helm-release-chart.yml
     permissions:
       contents: read
       id-token: write
       packages: write
+      pull-requests: write
+      security-events: write
 
   test-action-helm-test-chart:
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-action-helm-test-chart.yml
     permissions:
       attestations: write
@@ -109,7 +119,7 @@ jobs:
 
   test-workflow-docker-build-images-building:
     name: Test docker build images - Building
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-workflow-docker-build-images-building.yml
     permissions:
       attestations: write
@@ -123,7 +133,7 @@ jobs:
 
   test-workflow-docker-build-images-caching:
     name: Test docker build images - Caching
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-workflow-docker-build-images-caching.yml
     permissions:
       attestations: write
@@ -137,7 +147,7 @@ jobs:
 
   test-workflow-docker-build-images-multi-registry:
     name: Test docker build images - Multi registry inputs
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-workflow-docker-build-images-multi-registry.yml
     permissions:
       attestations: write
@@ -151,7 +161,7 @@ jobs:
 
   test-workflow-docker-build-images-platforms-and-signing:
     name: Test docker build images - Platforms and Signing
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-workflow-docker-build-images-platforms-and-signing.yml
     permissions:
       attestations: write
@@ -165,7 +175,7 @@ jobs:
 
   test-workflow-docker-build-images-attestation:
     name: Test docker build images - Attestation
-    needs: linter
+    needs: lint
     uses: $/.github/workflows/__test-workflow-docker-build-images-attestation.yml
     permissions:
       attestations: write
@@ -176,3 +186,15 @@ jobs:
       pull-requests: read
     secrets:
       CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+
+  reports:
+    needs:
+      - lint
+      - test-action-helm-release-chart
+    if: always()
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/ci-reports.yml@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      job-results: ${{ toJSON(needs) }}

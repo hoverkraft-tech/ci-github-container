@@ -107,7 +107,7 @@ runs:
             throw new Error('Signing charts requires the workflow job to grant id-token: write.');
           }
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
       with:
         ref: ${{ inputs.ref }}
 
@@ -183,119 +183,28 @@ runs:
 
           core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-      with:
-        source-path: ${{ github.action_path }}/../..
-        destination-directory-name: self-actions-release-chart
-
-    - uses: ./../self-actions-release-chart/helm/update-chart-values
+    - uses: $/actions/helm/update-chart-values
       with:
         path: ${{ inputs.path }}
         values: ${{ steps.chart-tag-updates.outputs.values }}
-
-    - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@df348077afa4e79725151d50606e9dc63f86dcb6 # 0.24.4
-      with:
-        working-directory: ${{ github.action_path }}
 
     - name: Rewrite the Chart.lock to match with updated umbrella dependencies if any
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUT_PATH: ${{ inputs.path }}
         INPUT_TAG: ${{ inputs.tag }}
-        NODE_PATH: ${{ github.action_path }}/node_modules
+        ACTION_PATH: ${{ github.action_path }}
       with:
         script: |
-          const fs = require('node:fs');
-          const crypto = require('node:crypto');
-          const yaml = require('yaml');
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { run } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist', 'index.js')));
+          run({ core, chartPath: process.env.INPUT_PATH, tag: process.env.INPUT_TAG });
 
-          const rootChartFile = process.env.INPUT_PATH + '/Chart.yaml';
-          const rootChartFileContent = yaml.parse(fs.readFileSync(rootChartFile, 'utf8'));
-
-          if (!rootChartFileContent.dependencies || rootChartFileContent.dependencies.length === 0) {
-            core.debug(`No dependencies found in Chart.yaml file: ${rootChartFile}`);
-            return;
-          }
-
-          const chartLockFile = process.env.INPUT_PATH + '/Chart.lock';
-          if (!fs.existsSync(chartLockFile)) {
-            core.debug(`Chart.lock file not found: ${chartLockFile}`);
-            return core.setFailed(`Chart.lock file not found: ${chartLockFile}`);
-          }
-
-          const chartLockFileContent = yaml.parse(fs.readFileSync(chartLockFile, 'utf8'));
-
-          let hasLocalDependencies = false;
-          const dependencies = chartLockFileContent.dependencies;
-
-          for (const dependency of dependencies) {
-            const isLocalDependency = dependency.repository.startsWith('file://') && dependency.version === '0.0.0';
-            core.debug(`Dependency ${dependency.name} is local: ${isLocalDependency}`);
-
-            if (isLocalDependency) {
-              dependency.version = process.env.INPUT_TAG;
-              hasLocalDependencies = true;
-            }
-          }
-
-          if (!hasLocalDependencies) {
-            core.debug(`No local dependencies found in Chart.lock file: ${chartLockFile}`);
-            return;
-          }
-
-          chartLockFileContent.generated = new Date().toISOString();
-
-          function hashReq(req, lock) {
-            req = req.map(sortDependencyFields);
-            lock = lock.map(sortDependencyFields);
-
-            const data = JSON.stringify([req, lock]);
-            const hash = digest(data);
-            return `sha256:${hash}`;
-          }
-
-          function digest(input) {
-            const hash = crypto.createHash('sha256');
-            hash.update(input);
-            return hash.digest('hex');
-          }
-
-          function sortDependencyFields(dependency) {
-            const fieldOrder = [
-              'name',
-              'version',
-              'repository',
-              'condition',
-              'tags',
-              'enabled',
-              'import-values',
-              'alias',
-            ];
-            const sortedDependency = {};
-            for (const field of fieldOrder) {
-              if (Object.prototype.hasOwnProperty.call(dependency, field)) {
-                sortedDependency[field] = dependency[field];
-              }
-            }
-
-            return sortedDependency;
-          }
-
-          const req = rootChartFileContent.dependencies;
-          const lock = dependencies;
-
-          chartLockFileContent.digest = hashReq(req, lock);
-
-          const updatedChartLockFileContent = yaml.stringify(chartLockFileContent);
-          core.debug(`Updated Chart.lock file content:\n${updatedChartLockFileContent}`);
-
-          fs.writeFileSync(chartLockFile, updatedChartLockFileContent, 'utf8');
-
-    - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+    - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
 
     - name: Prepare chart dependencies
-      uses: ./../self-actions-release-chart/helm/prepare-chart
+      uses: $/actions/helm/prepare-chart
       with:
         path: ${{ inputs.path }}
         helm-repositories: >-
@@ -363,7 +272,7 @@ runs:
 
     - name: Sign chart digest
       if: inputs.sign == 'true'
-      uses: ./../self-actions-release-chart/helm/sign-chart
+      uses: $/actions/helm/sign-chart
       with:
         oci-registry: ${{ inputs.oci-registry }}
         oci-registry-username: ${{ inputs.oci-registry-username }}

@@ -400,7 +400,7 @@ jobs:
       issues: read
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -408,12 +408,7 @@ jobs:
         shell: bash
         run: git lfs pull
 
-      - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-        with:
-          actions-path: actions
-
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         if: inputs.build-secret-github-app-client-id
         id: generate-token
         with:
@@ -461,7 +456,7 @@ jobs:
             core.setOutput('secret-envs', secretEnvs.trim());
 
       - id: build
-        uses: ./../self-workflow/actions/docker/build-image
+        uses: $/actions/docker/build-image
         with:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -482,7 +477,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
@@ -501,7 +496,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
@@ -538,13 +533,8 @@ jobs:
 
             core.setOutput('built-images', JSON.stringify(images));
 
-      - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-        with:
-          actions-path: actions
-
       - id: create-images-manifests
-        uses: ./../self-workflow/actions/docker/create-images-manifests
+        uses: $/actions/docker/create-images-manifests
         with:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -570,7 +560,7 @@ jobs:
             const imagesToSign = Object.values(builtImages).map(image => image.images).flat();
             core.setOutput('images-to-sign', JSON.stringify(imagesToSign));
 
-      - uses: ./../self-workflow/actions/docker/sign-images
+      - uses: $/actions/docker/sign-images
         if: steps.get-images-to-sign.outputs.images-to-sign
         with:
           images: ${{ steps.get-images-to-sign.outputs.images-to-sign }}
@@ -621,12 +611,7 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.publish-manifests.outputs.attestation-images) }}
     steps:
-      - id: local-workflow-actions
-        uses: hoverkraft-tech/ci-github-common/actions/local-workflow-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-        with:
-          actions-path: actions
-
-      - uses: ./../self-workflow/actions/docker/setup
+      - uses: $/actions/docker/setup
         with:
           oci-registry: ${{ inputs.oci-registry }}
           oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -634,7 +619,7 @@ jobs:
           built-images: ${{ needs.publish-manifests.outputs.built-images }}
           setup-buildx: false
 
-      - uses: ./../self-workflow/actions/docker/attest-image
+      - uses: $/actions/docker/attest-image
         with:
           image: ${{ matrix.image }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

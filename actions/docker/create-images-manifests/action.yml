@@ -96,13 +96,8 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-      with:
-        source-path: ${{ github.action_path }}/../..
-        destination-directory-name: self-actions-create-images-manifests
-
     - id: docker-setup
-      uses: ./../self-actions-create-images-manifests/docker/setup
+      uses: $/actions/docker/setup
       with:
         oci-registry: ${{ inputs.oci-registry }}
         oci-registry-username: ${{ inputs.oci-registry-username }}
