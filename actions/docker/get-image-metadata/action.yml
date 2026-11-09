@@ -46,12 +46,8 @@ runs:
   steps:
     # #region Prepare build variables
 
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-      with:
-        source-path: ${{ github.action_path }}/../..
-
     - id: image-name
-      uses: ./../self-actions/docker/get-image-name
+      uses: $/actions/docker/get-image-name
       with:
         image: ${{ inputs.image }}
         repository: ${{ inputs.repository }}
@@ -59,7 +55,7 @@ runs:
 
     - id: get-issue-number
       if: inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment')
-      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      uses: hoverkraft-tech/ci-github-common/actions/get-issue-number@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
 
     - id: define-metadata-inputs
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

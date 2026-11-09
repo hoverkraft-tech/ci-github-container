@@ -1,2 +1,2 @@
 [codespell]
-skip = *.svg,**/package-lock.json,**/node_modules/**
+skip = *.svg,*actions/*/dist/*,**/package-lock.json,**/node_modules/**

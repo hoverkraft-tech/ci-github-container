@@ -1,0 +1,5 @@
+name: Maintained JavaScript sources
+
+# CI rebuilds distributions; dependency review checks their locked packages.
+paths-ignore:
+  - actions/**/dist/**

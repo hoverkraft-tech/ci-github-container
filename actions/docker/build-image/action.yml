@@ -151,17 +151,13 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-      with:
-        source-path: ${{ github.action_path }}/../..
-
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
       with:
         value: ${{ inputs.platform }}
 
     - id: docker-setup
-      uses: ./../self-actions/docker/setup
+      uses: $/actions/docker/setup
       with:
         oci-registry: ${{ inputs.oci-registry }}
         oci-registry-username: ${{ inputs.oci-registry-username }}
@@ -169,7 +165,7 @@ runs:
         buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
 
     - id: metadata
-      uses: ./../self-actions/docker/get-image-metadata
+      uses: $/actions/docker/get-image-metadata
       with:
         oci-registry: ${{ steps.docker-setup.outputs.push-registry }}
         repository: ${{ inputs.repository }}
@@ -330,7 +326,7 @@ runs:
     # Caching setup
     - if: steps.get-docker-config.outputs.cache-disabled != 'true'
       id: cache-arguments
-      uses: int128/docker-build-cache-config-action@97740da6c51c4bcd68c7519e2179e6a93389b027 # v1.71.0
+      uses: int128/docker-build-cache-config-action@7c213417f21aecb9c6e78743e90ffd55d5fa24ad # v1.74.0
       with:
         image: ${{ steps.get-docker-config.outputs.cache-image }}
         flavor: ${{ steps.get-docker-config.outputs.cache-flavor }}
@@ -368,7 +364,7 @@ runs:
     - id: build
       # Keep Docker-dependent post steps in a composite that runs after docker/setup.
       # GitHub then completes cache extraction and build summary generation before setup tears down Docker.
-      uses: ./../self-actions/docker/build-image/internal
+      uses: $/actions/docker/build-image/internal
       with:
         builder: ${{ steps.docker-setup.outputs.buildx-name }}
         cache-mounts-enabled: ${{ steps.get-docker-config.outputs.cache-type == 'gha' }}

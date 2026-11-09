@@ -39,17 +39,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/local-actions@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
-      with:
-        source-path: ${{ github.action_path }}/../..
-
     - id: image-name
-      uses: ./../self-actions/docker/get-image-name
+      uses: $/actions/docker/get-image-name
       with:
         image: ${{ inputs.image }}
 
     - id: is-organization-or-user
-      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@3a27d31e9ccefbe9609cc9165017ed100ff34a22 # 0.38.0
+      uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
 
     - id: get-tags-to-delete
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -110,7 +106,7 @@ runs:
           core.info(`Tags to delete: ${tagsString}`);
 
     - id: clean-images
-      uses: ./../self-actions/docker/clean-images
+      uses: $/actions/docker/clean-images
       if: steps.get-tags-to-delete.outputs.tags-to-delete
       with:
         github-token: ${{ inputs.github-token }}

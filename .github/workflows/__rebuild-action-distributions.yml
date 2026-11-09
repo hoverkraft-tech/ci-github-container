@@ -1,0 +1,18 @@
+name: Internal - Rebuild action distributions
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  distributions:
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/action-distributions.yml@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    with:
+      pull-request-authors: |
+        ["dependabot", "renovate", {"login":"hoverkraft-bot[bot]","id":128996893,"branch-prefix":"renovate/"}]

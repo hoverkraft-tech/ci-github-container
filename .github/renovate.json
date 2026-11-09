@@ -1,6 +1,9 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
 	"extends": ["config:recommended"],
+	"gitIgnoredAuthors": [
+		"128996893+hoverkraft-bot[bot]@users.noreply.github.com"
+	],
 	"enabledManagers": ["custom.regex"],
 	"semanticCommits": "enabled",
 	"semanticCommitType": "build",

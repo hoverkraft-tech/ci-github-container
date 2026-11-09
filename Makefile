@@ -20,7 +20,7 @@ lint-fix: ## Execute linting and fix
 npm-audit-fix: ## Execute npm audit fix
 	@set -uo pipefail; \
 	overall_status=0; \
-	packages="$$(find actions -type f -name package.json -not -path '*/node_modules/*' -print | sort)"; \
+	packages="$$(find actions -type f -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*' -print | sort)"; \
 	echo "Running npm audit fix for package.json files under actions/ ..."; \
 	for pkg in $$packages; do \
 		pkg_dir="$$(dirname "$$pkg")"; \
@@ -35,7 +35,7 @@ npm-audit-fix: ## Execute npm audit fix
 
 npm-update: ## Interactively update npm dependencies in action packages
 	@set -eu; \
-	packages="$$(find actions -type f -name package.json -not -path '*/node_modules/*' -print | sort)"; \
+	packages="$$(find actions -type f -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*' -print | sort)"; \
 	for pkg in $$packages; do \
 		pkg_dir="$$(dirname "$$pkg")"; \
 		echo "Updating npm dependencies in $$pkg_dir"; \
