@@ -145,7 +145,9 @@ runs:
             ];
 
             const maxAttempts = 6;
-            const delayMs = 5000;
+            // Registry visibility can lag a successful push by more than a minute.
+            // Exponential backoff allows 155 seconds of waiting across six attempts.
+            let delayMs = 5000;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
               const result = await exec.getExecOutput("docker", createManifestArgs, { ignoreReturnCode: true });
@@ -169,6 +171,7 @@ runs:
                 `Source manifest for "${builtImage.name}" not yet available (attempt ${attempt}/${maxAttempts}). Retrying in ${delayMs}ms...`,
               );
               await new Promise(resolve => setTimeout(resolve, delayMs));
+              delayMs *= 2;
             }
           }
 
@@ -239,7 +242,8 @@ runs:
 
             let stdout = "";
             const maxAttempts = 6;
-            const delayMs = 5000;
+            // Use the same visibility window as manifest creation.
+            let delayMs = 5000;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
               const result = await exec.getExecOutput(
@@ -276,6 +280,7 @@ runs:
                 ].join(" ")
               );
               await sleep(delayMs);
+              delayMs *= 2;
             }
 
             if (!stdout) {
