@@ -1,0 +1,72 @@
+---
+name: Internal - Release
+
+on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: force only bypasses the no-changes guard; source and CI settings stay fixed.
+    inputs:
+      force:
+        description: "Release even when no relevant changes are detected."
+        type: boolean
+        required: false
+        default: false
+
+  schedule:
+    - cron: "25 8 * * 1"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    if: github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch
+    uses: $/.github/workflows/__shared-ci.yml
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+      issues: write
+      packages: write
+      pull-requests: write
+      security-events: write
+      statuses: write
+    secrets:
+      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+
+  release:
+    name: Create and publish release
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # An app token lets the published tag trigger the documentation workflows.
+      - id: generate-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }} # zizmor: ignore[secrets-outside-env] CI bot authentication triggers tag workflows
+          permission-contents: write
+          permission-pull-requests: read
+
+      - name: Plan release
+        id: plan-release
+        uses: hoverkraft-tech/ci-github-publish/actions/release/plan@4193622a365c0ab0bcbd6645895fd2c3126b72ba # 3.0.2
+        with:
+          target-ref: ${{ github.sha }}
+          force: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          github-token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Create and publish release
+        if: steps.plan-release.outputs.should-release == 'true' && steps.plan-release.outputs.tag != ''
+        uses: hoverkraft-tech/ci-github-publish/actions/release/create@4193622a365c0ab0bcbd6645895fd2c3126b72ba # 3.0.2
+        with:
+          tag: ${{ steps.plan-release.outputs.tag }}
+          target-ref: ${{ github.sha }}
+          publish: "true"
+          github-token: ${{ steps.generate-token.outputs.token }}
