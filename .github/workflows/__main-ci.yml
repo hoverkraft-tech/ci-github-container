@@ -8,9 +8,6 @@ on: # yamllint disable-line rule:truthy
 
   workflow_dispatch:
 
-  schedule:
-    - cron: "25 8 * * 1"
-
 permissions: {}
 
 concurrency:
@@ -72,7 +69,6 @@ jobs:
 
   helm-docs:
     needs: ci
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -91,7 +87,6 @@ jobs:
 
   release:
     needs: ci
-    if: github.event_name != 'schedule'
     uses: hoverkraft-tech/ci-github-publish/.github/workflows/release-actions.yml@4193622a365c0ab0bcbd6645895fd2c3126b72ba # 3.0.2
     permissions:
       contents: read
@@ -114,7 +109,7 @@ jobs:
 
   sync-docs:
     needs: release
-    if: github.event_name != 'schedule' && github.ref_name == github.event.repository.default_branch && needs.release.outputs.artifact-id
+    if: (github.ref_type == 'tag' || github.ref_name == github.event.repository.default_branch) && needs.release.outputs.artifact-id
     uses: hoverkraft-tech/public-docs/.github/workflows/sync-docs-dispatcher.yml@f3c9291760d927e6214e8d5f0a376af2d537c369 # 0.4.0
     permissions:
       contents: read
