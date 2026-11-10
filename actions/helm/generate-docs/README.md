@@ -36,7 +36,7 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@5ffc3c81daacc57700a14bb91d67edbc67eedc1d # 0.39.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@5c8d46363ce898181a9b67ee01b369d071316958 # fix/helm-docs-signed-merge
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
@@ -52,6 +52,12 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
     # Path to the values file to use for generating the documentation.
     # See https://github.com/losisin/helm-values-schema-json-action.
     values-file: ""
+
+    # Merge strategy for the documentation pull request: `merge`, `rebase`, or `squash`.
+    # Use `squash` for branches requiring signed commits and enable squash merging in the repository settings.
+    #
+    # Default: `rebase`
+    merge-method: rebase
 
     # GitHub Token to create and merge pull request.
     # Permissions:
@@ -76,22 +82,24 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 
 ## Inputs
 
-| **Input**                  | **Description**                                                           | **Required** | **Default**               |
-| -------------------------- | ------------------------------------------------------------------------- | ------------ | ------------------------- |
-| **`working-directory`**    | Working directory                                                         | **false**    | `${{ github.workspace }}` |
-| **`checkout-ref`**         | The Git ref to checkout before generating documentation.                  | **false**    | `${{ github.ref }}`       |
-|                            | Can be a branch, tag or commit SHA.                                       |              |                           |
-|                            | Set to an empty string to skip checkout.                                  |              |                           |
-| **`values-file`**          | Path to the values file to use for generating the documentation.          | **false**    | -                         |
-|                            | See <https://github.com/losisin/helm-values-schema-json-action>.          |              |                           |
-| **`github-token`**         | GitHub Token to create and merge pull request.                            | **false**    | `${{ github.token }}`     |
-|                            | Permissions:                                                              |              |                           |
-|                            | - contents: write                                                         |              |                           |
-|                            | - pull-requests: write                                                    |              |                           |
-| **`github-app-client-id`** | GitHub App client ID to generate GitHub token in place of github-token.   | **false**    | -                         |
-|                            | See <https://github.com/actions/create-github-app-token>.                 |              |                           |
-| **`github-app-key`**       | GitHub App private key to generate GitHub token in place of github-token. | **false**    | -                         |
-|                            | See <https://github.com/actions/create-github-app-token>.                 |              |                           |
+| **Input**                  | **Description**                                                                                          | **Required** | **Default**               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- | ------------ | ------------------------- |
+| **`working-directory`**    | Working directory                                                                                        | **false**    | `${{ github.workspace }}` |
+| **`checkout-ref`**         | The Git ref to checkout before generating documentation.                                                 | **false**    | `${{ github.ref }}`       |
+|                            | Can be a branch, tag or commit SHA.                                                                      |              |                           |
+|                            | Set to an empty string to skip checkout.                                                                 |              |                           |
+| **`values-file`**          | Path to the values file to use for generating the documentation.                                         | **false**    | -                         |
+|                            | See <https://github.com/losisin/helm-values-schema-json-action>.                                         |              |                           |
+| **`merge-method`**         | Merge strategy for the documentation pull request: `merge`, `rebase`, or `squash`.                       | **false**    | `rebase`                  |
+|                            | Use `squash` for branches requiring signed commits and enable squash merging in the repository settings. |              |                           |
+| **`github-token`**         | GitHub Token to create and merge pull request.                                                           | **false**    | `${{ github.token }}`     |
+|                            | Permissions:                                                                                             |              |                           |
+|                            | - contents: write                                                                                        |              |                           |
+|                            | - pull-requests: write                                                                                   |              |                           |
+| **`github-app-client-id`** | GitHub App client ID to generate GitHub token in place of github-token.                                  | **false**    | -                         |
+|                            | See <https://github.com/actions/create-github-app-token>.                                                |              |                           |
+| **`github-app-key`**       | GitHub App private key to generate GitHub token in place of github-token.                                | **false**    | -                         |
+|                            | See <https://github.com/actions/create-github-app-token>.                                                |              |                           |
 
 <!-- inputs:end -->
 
