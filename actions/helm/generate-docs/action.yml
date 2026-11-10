@@ -264,7 +264,7 @@ runs:
         permission-contents: write
         permission-pull-requests: write
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@d205cae08e3bda0c21826d7ce92f352a485f364a
       id: create-and-merge-pull-request
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
