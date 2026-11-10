@@ -41,7 +41,7 @@ The output will be:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/parse-chart-uri@5ffc3c81daacc57700a14bb91d67edbc67eedc1d # 0.39.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/parse-chart-uri@ec1cd960fb1a1908ac21680756eb49a4c8f018d5 # 0.40.0
   with:
     # Chart URI to parse.
     # This input is required.
