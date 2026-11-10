@@ -11,7 +11,7 @@
 | `buildkit-image` | Docker Hub tags for `moby/buildkit`             |
 
 Keep each Renovate annotation immediately above its `default` value so the shared
-regex manager can extract it. Docker version updates retain a plain version number;
+regular expression manager can extract it. Docker version updates retain a plain version number;
 BuildKit updates retain the `moby/buildkit:` image prefix.
 
 The [Renovate workflow](../../.github/workflows/__renovate.yml) runs
