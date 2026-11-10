@@ -8,6 +8,116 @@ on: # yamllint disable-line rule:truthy
 permissions: {}
 
 jobs:
+  test-registry-retries:
+    name: Assert - Registry visibility retries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test manifest creation and inspection retries
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const { stdout } = await exec.getExecOutput('ruby', [
+              '-rjson', '-ryaml', '-e',
+              'puts JSON.generate(YAML.safe_load(File.read(ARGV[0])))',
+              'actions/docker/create-images-manifests/action.yml',
+            ]);
+            const action = JSON.parse(stdout);
+            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+            const digest = `sha256:${'a'.repeat(64)}`;
+            const image = 'registry.example.com/test/application';
+            const builtImages = {
+              application: {
+                name: 'application',
+                registry: 'registry.example.com',
+                repository: 'test/application',
+                images: [`${image}@${digest}`],
+                tags: ['test'],
+                annotations: {},
+                platforms: ['linux/amd64', 'linux/arm64'],
+                'multi-platform': true,
+              },
+            };
+
+            async function runStep(stepId, { visibleAfter = 0, error = 'manifest unknown' } = {}) {
+              const creating = stepId === 'create-images-manifests';
+              const input = structuredClone(builtImages);
+              if (!creating) {
+                input.application.images = [`${image}:test`];
+              }
+              const env = {
+                [creating ? 'INPUT_BUILT_IMAGES' : 'BUILT_IMAGES_OUTPUT']: JSON.stringify(input),
+              };
+              const result = { calls: 0, elapsed: 0, delays: [], outputs: {} };
+              const script = action.runs.steps.find(step => step.id === stepId).with.script;
+              const execute = new AsyncFunction('process', 'core', 'exec', 'setTimeout', script);
+              try {
+                await execute(
+                  { env },
+                  {
+                    debug() {},
+                    info() {},
+                    warning() {},
+                    setOutput: (name, value) => { result.outputs[name] = JSON.parse(value); },
+                  },
+                  {
+                    getExecOutput: async (command, args, options) => {
+                      result.calls++;
+                      assert.equal(command, 'docker');
+                      assert.deepEqual(args.slice(0, 3), ['buildx', 'imagetools', creating ? 'create' : 'inspect']);
+                      assert.equal(options.ignoreReturnCode, true);
+                      assert(args.includes(creating ? `${image}@${digest}` : `${image}:test`));
+                      return result.elapsed >= visibleAfter
+                        ? { exitCode: 0, stdout: creating ? '' : `Digest: ${digest}`, stderr: '' }
+                        : { exitCode: 1, stdout: '', stderr: error };
+                    },
+                  },
+                  (callback, delay) => {
+                    result.delays.push(delay);
+                    result.elapsed += delay;
+                    callback();
+                  },
+                );
+              } catch (error) {
+                result.error = error;
+              }
+              return result;
+            }
+
+            for (const stepId of ['create-images-manifests', 'get-built-images-digest']) {
+              const ready = await runStep(stepId);
+              assert.ifError(ready.error);
+              assert.equal(ready.calls, 1);
+              assert.deepEqual(ready.delays, []);
+
+              for (const error of ['not found', 'manifest unknown', 'no such manifest']) {
+                const delayed = await runStep(stepId, { visibleAfter: 90000, error });
+                assert.ifError(delayed.error);
+                assert(delayed.elapsed >= 90000 && delayed.elapsed <= 180000);
+                const expectedImage = stepId === 'create-images-manifests' ? `${image}:test` : `${image}:test@${digest}`;
+                assert.deepEqual(delayed.outputs['built-images'].application.images, [expectedImage]);
+              }
+
+              const missing = await runStep(stepId, { visibleAfter: Infinity });
+              assert.match(missing.error?.message ?? '', /manifest unknown/);
+              assert(missing.calls > 1 && missing.calls <= 6);
+              assert(missing.elapsed <= 180000);
+              assert.equal(missing.delays.length, missing.calls - 1);
+              assert.deepEqual(missing.outputs, {});
+
+              const denied = await runStep(stepId, { visibleAfter: Infinity, error: 'unauthorized' });
+              assert.match(denied.error?.message ?? '', /unauthorized/);
+              assert.equal(denied.calls, 1);
+              assert.deepEqual(denied.delays, []);
+              assert.deepEqual(denied.outputs, {});
+            }
+
   build-original-tag:
     name: Arrange - Build original tag
     uses: $/.github/workflows/docker-build-images.yml
