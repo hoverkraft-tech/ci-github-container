@@ -45,11 +45,11 @@ inputs:
       Whether to install and configure Docker Buildx.
     default: true
     required: false
-  # FIXME: upgrade version when available (https://github.com/docker/actions-toolkit/blob/main/.github/docker-releases.json)
   docker-version:
     description: |
       Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
       When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.
+    # renovate: datasource=docker depName=docker versioning=docker
     default: "29.7.2"
     required: false
   buildx-version:
