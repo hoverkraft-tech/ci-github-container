@@ -241,10 +241,31 @@ runs:
             if (packages.length !== 1) {
               throw new Error('Expected exactly one packaged chart.');
             }
-            const result = await exec.getExecOutput('helm', [
+            const pushArgs = [
               'push', path.join(destination, packages[0]), `oci://${registry}/${process.env.CHART_REPOSITORY}`,
               '--registry-config', registryConfig,
-            ]);
+            ];
+            const maxAttempts = 6;
+            let delayMs = 5000;
+            let result;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              result = await exec.getExecOutput('helm', pushArgs, { ignoreReturnCode: true });
+              if (result.exitCode === 0) {
+                break;
+              }
+
+              const pushError = `${result.stderr}\n${result.stdout}`.trim();
+              // Helm may upload a manifest before the registry can resolve it for tagging.
+              const tagNotFound = /failed to perform "Tag" on destination: sha256:[a-f0-9]{64}: not found/i.test(pushError);
+              if (!tagNotFound || attempt === maxAttempts) {
+                throw new Error(`Helm push failed (attempt ${attempt}/${maxAttempts}, exit code: ${result.exitCode}).\n${pushError}`);
+              }
+
+              core.warning(`Chart manifest is not yet available for tagging (attempt ${attempt}/${maxAttempts}). Retrying in ${delayMs}ms...`);
+              // Reuse the archive and its timestamp so retries publish the same manifest.
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+              delayMs *= 2;
+            }
             // Helm reports the pushed reference and manifest digest on stderr.
             // Capture the push result so a concurrent tag update cannot change what we sign.
             const output = `${result.stdout}\n${result.stderr}`;
