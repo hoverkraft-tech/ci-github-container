@@ -26,6 +26,12 @@ inputs:
       Path to the values file to use for generating the documentation.
       See https://github.com/losisin/helm-values-schema-json-action.
     required: false
+  merge-method:
+    description: |
+      Merge strategy for the documentation pull request: `merge`, `rebase`, or `squash`.
+      Use `squash` for branches requiring signed commits and enable squash merging in the repository settings.
+    required: false
+    default: rebase
   github-token:
     description: |
       GitHub Token to create and merge pull request.
@@ -160,9 +166,16 @@ runs:
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - name: Setup Node.js
-      uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@fbd3522b68c55a6314aadbededaa487825ba9b35 # 3.0.0
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
-        working-directory: ${{ github.action_path }}
+        # The action's tools live outside the caller's checkout. Avoid creating
+        # cache links or changing ignore files in the documentation pull request.
+        package-manager-cache: false
+
+    - name: Install documentation tools
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --ignore-scripts
 
     - name: Cache textlint
       id: cache-textlint
@@ -255,6 +268,7 @@ runs:
       id: create-and-merge-pull-request
       with:
         github-token: ${{ steps.generate-token.outputs.token || inputs.github-token }}
+        merge-method: ${{ inputs.merge-method }}
         branch: docs/update-helm-chart-docs-${{ steps.prepare-variables.outputs.working-directory-name }}
         title: "docs: update Helm chart documentation for ${{ steps.prepare-variables.outputs.working-directory-name }}"
         body: |

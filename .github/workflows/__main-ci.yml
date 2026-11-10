@@ -85,6 +85,7 @@ jobs:
       - uses: $/actions/helm/generate-docs
         with:
           working-directory: ./tests/charts
+          merge-method: squash
           github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
           github-app-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }} # zizmor: ignore[secrets-outside-env]
 
@@ -96,6 +97,7 @@ jobs:
       contents: read
     with:
       update-all: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
+      merge-method: squash
       github-app-client-id: ${{ vars.CI_BOT_APP_CLIENT_ID }}
       documentation-files: |
         docs/**/*.md
