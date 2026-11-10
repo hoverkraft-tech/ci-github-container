@@ -31,7 +31,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/setup@5ffc3c81daacc57700a14bb91d67edbc67eedc1d # 0.39.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/setup@ec1cd960fb1a1908ac21680756eb49a4c8f018d5 # 0.40.0
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string (default format) or a JSON object.
@@ -76,13 +76,13 @@ Shared action to configure Docker tooling and OCI registry authentication.
 
     # Buildx version used by docker/setup-buildx-action.
     #
-    # Default: `v0.38.0`
-    buildx-version: v0.38.0
+    # Default: `v0.38.1`
+    buildx-version: v0.38.1
 
     # BuildKit image used by docker/setup-buildx-action.
     #
-    # Default: `moby/buildkit:v0.34.0`
-    buildkit-image: moby/buildkit:v0.34.0
+    # Default: `moby/buildkit:v0.34.1`
+    buildkit-image: moby/buildkit:v0.34.1
 ````
 
 <!-- usage:end -->
@@ -108,8 +108,8 @@ Shared action to configure Docker tooling and OCI registry authentication.
 | **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`                  |
 | **`docker-version`**          | Required Docker version. The action installs it when the active Docker client or daemon reports a different version.                             | **false**    | `29.7.2`                |
 |                               | When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.               |              |                         |
-| **`buildx-version`**          | Buildx version used by docker/setup-buildx-action.                                                                                               | **false**    | `v0.38.0`               |
-| **`buildkit-image`**          | BuildKit image used by docker/setup-buildx-action.                                                                                               | **false**    | `moby/buildkit:v0.34.0` |
+| **`buildx-version`**          | Buildx version used by docker/setup-buildx-action.                                                                                               | **false**    | `v0.38.1`               |
+| **`buildkit-image`**          | BuildKit image used by docker/setup-buildx-action.                                                                                               | **false**    | `moby/buildkit:v0.34.1` |
 
 <!-- inputs:end -->
 
