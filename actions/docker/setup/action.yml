@@ -42,9 +42,10 @@ inputs:
     required: false
   setup-docker:
     description: |
-      Whether to detect and install the configured Docker client and daemon.
+      Whether to enforce the configured Docker client and daemon versions.
       Set this and `setup-buildx` to `false` for registry authentication only.
-      Registry authentication requires an existing Docker CLI, but no running daemon.
+      When disabled, reuse an existing Docker CLI without contacting its daemon.
+      If the CLI is missing, install the configured Docker version so authentication remains available.
     default: true
     required: false
   setup-buildx:
@@ -405,19 +406,24 @@ runs:
           });
 
     - id: detect-docker
-      if: inputs.setup-docker != 'false'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         EXPECTED_DOCKER_VERSION: ${{ inputs.docker-version }}
+        SETUP_DOCKER: ${{ inputs.setup-docker }}
       with:
         script: |
+          const dockerPath = await io.which('docker', false);
+          if (process.env.SETUP_DOCKER === 'false' && dockerPath) {
+            core.info('Reusing the Docker CLI for registry authentication without checking its daemon');
+            return;
+          }
+
           const requestedDockerVersion = `${process.env.EXPECTED_DOCKER_VERSION || ''}`.trim();
           if (!requestedDockerVersion.length) {
             throw new Error('"docker-version" input must not be empty');
           }
           const expectedDockerVersion = requestedDockerVersion.replace(/^v(?=\d)/, '');
 
-          const dockerPath = await io.which('docker', false);
           if (dockerPath) {
             try {
               const { stdout } = await exec.getExecOutput(

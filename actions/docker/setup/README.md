@@ -63,9 +63,10 @@ Shared action to configure Docker tooling and OCI registry authentication.
     # When provided, registry authentication targets are inferred from the built image data.
     built-images: ""
 
-    # Whether to detect and install the configured Docker client and daemon.
+    # Whether to enforce the configured Docker client and daemon versions.
     # Set this and `setup-buildx` to `false` for registry authentication only.
-    # Registry authentication requires an existing Docker CLI, but no running daemon.
+    # When disabled, reuse an existing Docker CLI without contacting its daemon.
+    # If the CLI is missing, install the configured Docker version so authentication remains available.
     #
     # Default: `true`
     setup-docker: true
@@ -112,9 +113,10 @@ Shared action to configure Docker tooling and OCI registry authentication.
 |                               | <!-- textlint-disable --><pre lang="ini">[registry."my-registry.local:5000"]&#13; http = true&#13; insecure = true</pre><!-- textlint-enable --> |              |                         |
 | **`built-images`**            | Optional built images payload used to resolve manifest publication registries.                                                                   | **false**    | -                       |
 |                               | When provided, registry authentication targets are inferred from the built image data.                                                           |              |                         |
-| **`setup-docker`**            | Whether to detect and install the configured Docker client and daemon.                                                                           | **false**    | `true`                  |
+| **`setup-docker`**            | Whether to enforce the configured Docker client and daemon versions.                                                                             | **false**    | `true`                  |
 |                               | Set this and `setup-buildx` to `false` for registry authentication only.                                                                         |              |                         |
-|                               | Registry authentication requires an existing Docker CLI, but no running daemon.                                                                  |              |                         |
+|                               | When disabled, reuse an existing Docker CLI without contacting its daemon.                                                                       |              |                         |
+|                               | If the CLI is missing, install the configured Docker version so authentication remains available.                                                |              |                         |
 | **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`                  |
 | **`docker-version`**          | Required Docker version. The action installs it when the active Docker client or daemon reports a different version.                             | **false**    | `29.7.2`                |
 |                               | When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.               |              |                         |

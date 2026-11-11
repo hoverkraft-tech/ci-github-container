@@ -21,9 +21,11 @@ Keep registry inspection for tag-only inputs, and manifest creation and inspecti
 for multi-platform inputs, including explicit tag cloning. Never reuse a platform
 digest as the digest of an assembled index.
 
-Add an opt-out for Docker installation to the existing setup action. Defaults
-retain the build toolchain contract. Registry-only callers disable both Docker
-and Buildx setup and use the runner's Docker CLI for login. Authentication and
+Add an opt-out for Docker version enforcement to the existing setup action.
+Defaults retain the build toolchain contract. Registry-only callers disable both
+Docker and Buildx setup and reuse the runner's Docker CLI without contacting its
+daemon. If no CLI is available, retain the installation fallback so existing
+custom runners remain supported. Authentication and
 logout continue through docker/login-action with the existing credential routing.
 Multi-platform or tag-inspection batches retain the configured Docker/Buildx setup.
 
@@ -39,8 +41,9 @@ Buildx version and weaken the multi-platform toolchain contract. Re-inspecting
 single-platform tags adds registry requests and can observe a concurrent tag move;
 using the build digest preserves the artifact that was actually built.
 
-Registry-only callers require an existing Docker CLI and credential helpers.
-They do not require a reachable daemon. Public single-platform inputs without an
+Registry-only callers with an existing Docker CLI and credential helpers do not
+require a reachable daemon. Runners without the CLI retain the installer's
+existing requirements. Public single-platform inputs without an
 immutable source retain their registry-inspection path. Cache behavior and build
 ordering are unchanged. Reverting the action pin restores previous behavior.
 
@@ -98,10 +101,11 @@ comparable. These observations support removing setup overhead; they do not
 establish a controlled end-to-end improvement for Pleey. Action downloads still
 occur even when runtime setup is skipped.
 
-The final revision adds rejection of malformed tags to the measured candidate.
-Its local contract and lint checks passed separately. No build, cache or
-publication operation was added for valid inputs. Downstream adoption and its
-full-workflow comparison follow upstream review and release.
+The final revision rejects malformed tags and preserves Docker installation when
+a custom runner has no CLI. Registry-only setup checks for the executable before
+returning, without contacting an existing daemon. Contract tests cover both paths.
+Downstream adoption and its full-workflow comparison follow upstream review and
+release.
 
 ## References
 
