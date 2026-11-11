@@ -64,13 +64,13 @@ inputs:
     description: |
       Buildx version used by docker/setup-buildx-action.
     # renovate: datasource=github-releases depName=docker/buildx versioning=semver
-    default: "v0.38.1"
+    default: "v0.38.2"
     required: false
   buildkit-image:
     description: |
       BuildKit image used by docker/setup-buildx-action.
     # renovate: datasource=docker depName=moby/buildkit versioning=docker
-    default: "moby/buildkit:v0.34.1"
+    default: "moby/buildkit:v0.34.2"
     required: false
 
 outputs:
