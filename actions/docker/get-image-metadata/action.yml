@@ -167,9 +167,8 @@ runs:
             })
             .join("\n");
 
-          core.setOutput('tags', sortedTags);
-
           if (process.env.INPUT_CANDIDATE !== 'true') {
+            core.setOutput('tags', sortedTags);
             return;
           }
 
