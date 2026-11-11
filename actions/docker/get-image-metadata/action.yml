@@ -24,6 +24,9 @@ outputs:
   tags:
     description: 'The image tags. Example: `pr-63-5222075\npr-63`'
     value: ${{ steps.generate-outputs.outputs.tags }}
+  candidate:
+    description: "JSON describing intended destinations, source and run identity when candidate mode is enabled; empty otherwise. This is not validation evidence."
+    value: ${{ steps.generate-outputs.outputs.candidate }}
 
 inputs:
   oci-registry:
@@ -38,7 +41,11 @@ inputs:
     description: "Additional image name. Example: `application`. See [Docker get-image-name action](../get-image-name/README.md)"
     required: false
   tag:
-    description: "Force image tag to publish"
+    description: "Force the intended image tag and OCI version. Candidate mode records this destination without publishing it."
+    required: false
+  candidate:
+    description: "Return a temporary publication tag while preserving normal labels, annotations and intended destinations."
+    default: "false"
     required: false
 
 runs:
@@ -61,12 +68,16 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUT_TAG: ${{ inputs.tag }}
+        INPUT_CANDIDATE: ${{ inputs.candidate }}
         GH_REF: ${{ github.ref }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         ISSUE_NUMBER: ${{ steps.get-issue-number.outputs.issue-number }}
       with:
         result-encoding: string
         script: |
+          if (!['true', 'false'].includes(process.env.INPUT_CANDIDATE)) {
+            throw new Error('"candidate" must be true or false');
+          }
           const tagInput = process.env.INPUT_TAG || "";
           if (tagInput.length) {
             core.setOutput('tags',`type=raw,value=${tagInput}`);
@@ -126,6 +137,7 @@ runs:
         DOCKER_METADATA_LABELS: ${{ steps.docker-metadata.outputs.labels }}
         DOCKER_METADATA_ANNOTATIONS: ${{ steps.docker-metadata.outputs.annotations }}
         DOCKER_METADATA_TAGS: ${{ steps.docker-metadata.outputs.tags }}
+        INPUT_CANDIDATE: ${{ inputs.candidate }}
       with:
         script: |
           const image = process.env.IMAGE_NAME_WITH_REGISTRY || "";
@@ -156,3 +168,35 @@ runs:
             .join("\n");
 
           core.setOutput('tags', sortedTags);
+
+          if (process.env.INPUT_CANDIDATE !== 'true') {
+            return;
+          }
+
+          const repositoryId = process.env.GITHUB_REPOSITORY_ID;
+          const runId = process.env.GITHUB_RUN_ID;
+          const attempt = process.env.GITHUB_RUN_ATTEMPT;
+          if (![repositoryId, runId, attempt].every(value => /^[1-9][0-9]*$/.test(value || ''))) {
+            throw new Error('Candidate publication requires repository, run and attempt IDs');
+          }
+          const repository = process.env.GITHUB_REPOSITORY;
+          const revision = labels.match(/^org\.opencontainers\.image\.revision=([a-f0-9]{40})$/m)?.[1];
+          if (!repository || !revision) {
+            throw new Error('Candidate publication requires a source repository and metadata revision');
+          }
+          const destinations = sortedTags.split('\n').filter(Boolean);
+          if (!destinations.length || destinations.some(tag => !tag.startsWith(`${image}:`))) {
+            throw new Error('Candidate publication requires destinations in the image repository');
+          }
+
+          const { randomUUID } = require('node:crypto');
+          const tag = `candidate-${repositoryId}-${runId}-${attempt}-${randomUUID()}`;
+          if (tag.length > 128 || destinations.includes(`${image}:${tag}`)) {
+            throw new Error('Invalid candidate publication tag');
+          }
+          core.setOutput('tags', `${image}:${tag}`);
+          core.setOutput('candidate', JSON.stringify({
+            destinations,
+            source: { repository, revision },
+            run: { id: runId, attempt },
+          }));
