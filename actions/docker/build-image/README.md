@@ -126,8 +126,17 @@ permissions:
     # See [Docker get-image-metadata action](../get-image-metadata/README.md).
     image: ""
 
-    # Force image tag to publish
+    # Force the intended image tag and OCI version. Candidate mode records this destination without publishing it.
     tag: ""
+
+    # Publish under a unique temporary tag, preserving normal OCI metadata.
+    # Normal tags are returned as `candidate.destinations` in `built-image` without
+    # publishing them. The additional `candidate.source` and `candidate.run` fields
+    # describe the build identity, not successful validation. No promotion or
+    # automatic cleanup is performed. Consume the returned digest reference.
+    #
+    # Default: `false`
+    candidate: "false"
 
     # Platform to build for. Example: `linux/amd64`.
     # See https://github.com/docker/build-push-action#inputs.
@@ -220,7 +229,12 @@ permissions:
 | **`image`**                   | Additional image name.                                                                                                                           | **false**    | -                                |
 |                               | Example: `application`.                                                                                                                          |              |                                  |
 |                               | See [Docker get-image-metadata action](../get-image-metadata/README.md).                                                                         |              |                                  |
-| **`tag`**                     | Force image tag to publish                                                                                                                       | **false**    | -                                |
+| **`tag`**                     | Force the intended image tag and OCI version. Candidate mode records this destination without publishing it.                                     | **false**    | -                                |
+| **`candidate`**               | Publish under a unique temporary tag, preserving normal OCI metadata.                                                                            | **false**    | `false`                          |
+|                               | Normal tags are returned as `candidate.destinations` in `built-image` without                                                                    |              |                                  |
+|                               | publishing them. The additional `candidate.source` and `candidate.run` fields                                                                    |              |                                  |
+|                               | describe the build identity, not successful validation. No promotion or                                                                          |              |                                  |
+|                               | automatic cleanup is performed. Consume the returned digest reference.                                                                           |              |                                  |
 | **`platform`**                | Platform to build for. Example: `linux/amd64`.                                                                                                   | **true**     | -                                |
 |                               | See <https://github.com/docker/build-push-action#inputs>.                                                                                        |              |                                  |
 | **`context`**                 | Build's context is the set of files located in the specified PATH or URL.                                                                        | **false**    | `.`                              |

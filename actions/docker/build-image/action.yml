@@ -87,7 +87,16 @@ inputs:
       See [Docker get-image-metadata action](../get-image-metadata/README.md).
     required: false
   tag:
-    description: "Force image tag to publish"
+    description: "Force the intended image tag and OCI version. Candidate mode records this destination without publishing it."
+    required: false
+  candidate:
+    description: |
+      Publish under a unique temporary tag, preserving normal OCI metadata.
+      Normal tags are returned as `candidate.destinations` in `built-image` without
+      publishing them. The additional `candidate.source` and `candidate.run` fields
+      describe the build identity, not successful validation. No promotion or
+      automatic cleanup is performed. Consume the returned digest reference.
+    default: "false"
     required: false
   platform:
     description: |
@@ -202,6 +211,7 @@ runs:
         repository: ${{ inputs.repository }}
         image: ${{ inputs.image }}
         tag: ${{ inputs.tag }}
+        candidate: ${{ inputs.candidate }}
 
     - id: get-docker-config
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -437,6 +447,7 @@ runs:
         METADATA_IMAGE: ${{ steps.metadata.outputs.image }}
         METADATA_TAGS: ${{ steps.metadata.outputs.tags }}
         METADATA_ANNOTATIONS: ${{ steps.metadata.outputs.annotations }}
+        METADATA_CANDIDATE: ${{ steps.metadata.outputs.candidate }}
         MULTI_PLATFORM: ${{ steps.get-docker-config.outputs.multi-platform }}
       with:
         script: |
@@ -544,5 +555,9 @@ runs:
             platform,
             "multi-platform": isMultiplatform,
           };
+
+          if (process.env.METADATA_CANDIDATE) {
+            builtImage.candidate = JSON.parse(process.env.METADATA_CANDIDATE);
+          }
 
           core.setOutput("built-image", JSON.stringify(builtImage));

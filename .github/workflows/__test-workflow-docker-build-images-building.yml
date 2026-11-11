@@ -12,6 +12,40 @@ permissions: {}
 
 # jscpd:ignore-start
 jobs:
+  candidate-inputs:
+    name: Assert candidate workflow image selection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const { stdout } = await exec.getExecOutput('ruby', [
+              '-rjson', '-ryaml', '-e', 'puts JSON.generate(YAML.safe_load(File.read(ARGV[0])))',
+              '.github/workflows/docker-build-images.yml',
+            ]);
+            const script = JSON.parse(stdout).jobs['prepare-variables'].steps.find(step => step.id === 'validate-inputs').with.script;
+            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+            async function validate(images) {
+              const outputs = {};
+              await new AsyncFunction('process', 'context', 'core', script)(
+                { env: { CANDIDATE_INPUT: 'true', OCI_REGISTRY_PASSWORD: 'fixture', RUNS_ON_INPUT: '["ubuntu-latest"]', IMAGES_INPUT: JSON.stringify(images) } },
+                { repo: { owner: 'example', repo: 'app' } }, { setOutput: (key, value) => { outputs[key] = value; } },
+              );
+              return JSON.parse(outputs.images);
+            }
+            const single = { name: 'single', platforms: ['linux/amd64'], tag: '1.2.3' };
+            const multi = { name: 'multi', platforms: ['linux/amd64', 'linux/arm64'] };
+            assert.equal((await validate([single, multi])).length, 2);
+            await assert.rejects(validate([]), /non-empty list with unique image names/);
+            await assert.rejects(validate([single, { ...single, target: 'other' }]), /unique image names/);
+
   act-build-images-args-secrets:
     name: Arrange - Build with args, secrets
     uses: $/.github/workflows/docker-build-images.yml
@@ -87,6 +121,163 @@ jobs:
 
             for (const image of expectedCreatedImages) {
               assert(builtImages[image], `"built-images" output does not contain "${image}" image`);
+            }
+
+  act-candidates:
+    name: Build signed candidates with final metadata
+    uses: $/.github/workflows/docker-build-images.yml
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      issues: read
+      packages: write
+      pull-requests: read
+    secrets:
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      candidate: true
+      images: |
+        [
+          {
+            "name": "test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-single",
+            "dockerfile": "tests/application/Dockerfile",
+            "target": "base",
+            "platforms": ["linux/amd64"],
+            "tag": "1.2.3"
+          },
+          {
+            "name": "test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-multi",
+            "dockerfile": "tests/application/Dockerfile",
+            "target": "base",
+            "platforms": ["linux/amd64", "linux/arm64"],
+            "tag": "1.2.3"
+          }
+        ]
+
+  assert-candidates:
+    name: Assert candidate outputs, tags and security metadata
+    needs: act-candidates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: $/actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUILT_IMAGES: ${{ needs.act-candidates.outputs.built-images }}
+          GH_TOKEN: ${{ github.token }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const images = Object.values(JSON.parse(process.env.BUILT_IMAGES));
+            assert.equal(images.length, 2);
+            for (const image of images) {
+              const repository = `${image.registry}/${image.repository}`;
+              assert.deepEqual(image.candidate.destinations, [`${repository}:1.2.3`]);
+              assert.equal(image.candidate.source.repository, process.env.GITHUB_REPOSITORY);
+              assert.match(image.candidate.source.revision, /^[a-f0-9]{40}$/);
+              assert.deepEqual(image.candidate.run, {
+                id: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
+              });
+              assert.equal(image.tags.length, 1);
+              assert(image.tags[0].startsWith(`candidate-${process.env.GITHUB_REPOSITORY_ID}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-`));
+              assert.deepEqual(image.images, [`${repository}:${image.tags[0]}@${image.digest}`]);
+              const reference = `${repository}@${image.digest}`;
+              const { stdout: inspected } = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', `${repository}:${image.tags[0]}`]);
+              assert.equal(inspected.match(/Digest:\s+(sha256:[a-f0-9]{64})/)[1], image.digest);
+              const { stdout: raw } = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', reference]);
+              const manifest = JSON.parse(raw);
+              if (image.name.endsWith('-multi')) {
+                assert.deepEqual(manifest.manifests.map(item => `${item.platform.os}/${item.platform.architecture}`).sort(), ['linux/amd64', 'linux/arm64']);
+                assert.equal(manifest.annotations['org.opencontainers.image.version'], '1.2.3');
+              } else {
+                assert(manifest.config, 'Single-platform candidate must retain its image manifest');
+              }
+              await exec.exec('docker', ['pull', '--platform', 'linux/amd64', reference]);
+              const { stdout: config } = await exec.getExecOutput('docker', ['image', 'inspect', reference]);
+              const labels = JSON.parse(config)[0].Config.Labels;
+              assert.equal(labels['org.opencontainers.image.version'], '1.2.3');
+              assert.equal(labels['org.opencontainers.image.revision'], image.candidate.source.revision);
+              const versions = await github.paginate(github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg, {
+                package_type: 'container', package_name: `${context.repo.repo}/${image.name}`,
+                org: context.repo.owner, per_page: 100,
+              });
+              const tags = versions.flatMap(version => version.metadata.container.tags);
+              assert(tags.includes(image.tags[0]));
+              assert(tags.every(tag => tag === image.tags[0] || tag.startsWith('sha256-')), `Unexpected consumer tag: ${tags}`);
+              await exec.exec('cosign', [
+                'verify', '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+                '--certificate-identity-regexp', `^https://github.com/${process.env.GITHUB_REPOSITORY}/`, reference,
+              ]);
+              await exec.exec('gh', ['attestation', 'verify', `oci://${reference}`, '--repo', process.env.GITHUB_REPOSITORY]);
+            }
+
+  failed-candidate:
+    name: Assert failed builds have no candidate output
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: failed-build
+        continue-on-error: true
+        uses: $/actions/docker/build-image
+        with:
+          image: test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-failed
+          dockerfile: tests/application/Dockerfile
+          target: test
+          platform: linux/amd64
+          candidate: true
+          tag: "1.2.3"
+          cache-type: "false"
+          # The existing test stage rejects missing mandatory build arguments.
+
+      - name: Assert failure without outputs
+        env:
+          OUTCOME: ${{ steps.failed-build.outcome }}
+          BUILT_IMAGE: ${{ steps.failed-build.outputs.built-image }}
+        run: |
+          test "$OUTCOME" = failure
+          test -z "$BUILT_IMAGE"
+
+  cleanup-candidates:
+    name: Clean isolated candidate test packages
+    if: always()
+    needs: [act-candidates, assert-candidates, failed-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            for (const suffix of ['single', 'multi', 'failed']) {
+              const name = `test-candidate-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-${suffix}`;
+              try {
+                await github.rest.packages.deletePackageForOrg({
+                  package_type: 'container', package_name: `${context.repo.repo}/${name}`, org: context.repo.owner,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
             }
 
 # jscpd:ignore-end

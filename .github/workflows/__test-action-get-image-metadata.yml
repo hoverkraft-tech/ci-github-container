@@ -8,6 +8,141 @@ on: # yamllint disable-line rule:truthy
 permissions: {}
 
 jobs:
+  candidate-contracts:
+    name: Assert candidate identity and metadata policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+            const { stdout } = await exec.getExecOutput('ruby', [
+              '-rjson', '-ryaml', '-e', 'puts JSON.generate(YAML.safe_load(File.read(ARGV[0])))',
+              'actions/docker/get-image-metadata/action.yml',
+            ]);
+            const steps = JSON.parse(stdout).runs.steps;
+            const image = 'ghcr.io/example/app';
+            const revision = 'a'.repeat(40);
+            const baseEnv = {
+              INPUT_CANDIDATE: 'true', GITHUB_REPOSITORY_ID: '123', GITHUB_REPOSITORY: 'example/app',
+              GITHUB_RUN_ID: '456', GITHUB_RUN_ATTEMPT: '1', IMAGE_NAME_WITH_REGISTRY: image,
+              DOCKER_METADATA_LABELS: `org.opencontainers.image.revision=${revision}\norg.opencontainers.image.version=main`,
+              DOCKER_METADATA_ANNOTATIONS: 'manifest:org.opencontainers.image.version=main',
+              DOCKER_METADATA_TAGS: `${image}:main\n${image}:latest`,
+              DEFAULT_BRANCH: 'main', GH_REF: 'refs/heads/main', ISSUE_NUMBER: '12',
+            };
+            async function evaluate(id, overrides = {}, eventName = 'push') {
+              const outputs = {};
+              const env = { ...baseEnv, ...overrides };
+              try {
+                await new AsyncFunction('require', 'process', 'context', 'core', steps.find(step => step.id === id).with.script)(
+                  require, { env }, { eventName, ref: env.GH_REF }, {
+                    setOutput: (key, value) => { outputs[key] = value; },
+                    setFailed: message => { throw new Error(message); },
+                  },
+                );
+              } catch (error) {
+                if (id === 'generate-outputs') assert.equal(outputs.tags, undefined, 'Invalid candidates must expose no publication tags');
+                throw error;
+              }
+              return outputs;
+            }
+            const first = await evaluate('generate-outputs');
+            const second = await evaluate('generate-outputs');
+            assert.match(first.tags, /^ghcr\.io\/example\/app:candidate-123-456-1-[a-f0-9-]{36}$/);
+            assert.notEqual(first.tags, second.tags, 'Repeated calls must not share a temporary tag');
+            assert.equal(first.labels, baseEnv.DOCKER_METADATA_LABELS);
+            assert.equal(first.annotations, baseEnv.DOCKER_METADATA_ANNOTATIONS);
+            assert.deepEqual(JSON.parse(first.candidate), {
+              destinations: [`${image}:main`, `${image}:latest`],
+              source: { repository: 'example/app', revision }, run: { id: '456', attempt: '1' },
+            });
+            const normal = await evaluate('generate-outputs', { INPUT_CANDIDATE: 'false' });
+            assert.equal(normal.tags, baseEnv.DOCKER_METADATA_TAGS);
+            assert.equal(normal.candidate, undefined);
+            for (const [key, value, prefix] of [
+              ['GITHUB_RUN_ATTEMPT', '2', 'candidate-123-456-2-'],
+              ['GITHUB_RUN_ID', '789', 'candidate-123-789-1-'],
+              ['GITHUB_REPOSITORY_ID', '987', 'candidate-987-456-1-'],
+            ]) {
+              assert((await evaluate('generate-outputs', { [key]: value })).tags.startsWith(`${image}:${prefix}`));
+            }
+            for (const key of ['GITHUB_REPOSITORY_ID', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT']) {
+              for (const value of ['', '0', '-1', '1\nother', 'no']) {
+                await assert.rejects(evaluate('generate-outputs', { [key]: value }), /requires repository, run and attempt IDs/);
+              }
+            }
+            for (const overrides of [
+              { GITHUB_REPOSITORY: '' }, { DOCKER_METADATA_LABELS: 'org.opencontainers.image.revision=invalid' },
+              { DOCKER_METADATA_TAGS: '' }, { DOCKER_METADATA_TAGS: 'ghcr.io/other/app:main' },
+            ]) {
+              await assert.rejects(evaluate('generate-outputs', overrides), /Candidate publication requires/);
+            }
+            for (const value of ['', 'yes', 'TRUE']) {
+              await assert.rejects(evaluate('define-metadata-inputs', { INPUT_CANDIDATE: value }), /must be true or false/);
+            }
+            for (const [event, overrides, expected] of [
+              ['push', {}, { flavor: 'latest=true', tags: 'type=ref,event=branch' }],
+              ['pull_request', { GH_REF: 'refs/pull/12/merge' }, { flavor: 'latest=false', tags: 'type=sha,prefix=pr-12-\ntype=ref,event=pr' }],
+              ['push', { GH_REF: 'refs/tags/v1.2.3' }, { flavor: 'latest=false', tags: 'type=ref,event=tag' }],
+              ['push', { INPUT_TAG: '1.2.3' }, { tags: 'type=raw,value=1.2.3', flavor: 'latest=false' }],
+            ]) {
+              assert.deepEqual(await evaluate('define-metadata-inputs', overrides, event), expected);
+            }
+
+  candidate-metadata:
+    name: Test candidate metadata (${{ matrix.tag || 'event tags' }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tag: ["", "1.2.3"]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: normal
+        uses: $/actions/docker/get-image-metadata
+        with:
+          image: application-test
+          tag: ${{ matrix.tag }}
+
+      - id: candidate
+        uses: $/actions/docker/get-image-metadata
+        with:
+          image: application-test
+          tag: ${{ matrix.tag }}
+          candidate: true
+
+      - name: Assert metadata and destinations
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          NORMAL: ${{ toJSON(steps.normal.outputs) }}
+          CANDIDATE: ${{ toJSON(steps.candidate.outputs) }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const normal = JSON.parse(process.env.NORMAL);
+            const candidate = JSON.parse(process.env.CANDIDATE);
+            const withoutCreationTime = value => value.split('\n').filter(line => !line.includes('org.opencontainers.image.created='));
+            assert.equal(candidate.image, normal.image);
+            for (const key of ['labels', 'annotations']) {
+              assert.deepEqual(withoutCreationTime(candidate[key]), withoutCreationTime(normal[key]));
+            }
+            assert.deepEqual(JSON.parse(candidate.candidate).destinations, normal.tags.split('\n'));
+            assert.equal(candidate.tags.split('\n').length, 1);
+            assert(candidate.tags.startsWith(`${normal.image}:candidate-${process.env.GITHUB_REPOSITORY_ID}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-`));
+            assert(!normal.tags.split('\n').includes(candidate.tags));
+
   tests:
     name: Test for "docker/get-image-metadata" action
     runs-on: ubuntu-latest

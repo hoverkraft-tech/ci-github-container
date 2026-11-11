@@ -2,6 +2,23 @@
 # Build images using [Docker build image](../../actions/docker/build-image/README.md).
 # This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build.
 # See [Build caches](../../actions/docker/build-image/README.md#build-caches) for cache behavior and recovery.
+#
+# ## Candidate builds
+#
+# Set `candidate: true` to publish temporary images for validation. Keep the existing
+# image configuration; `images[].tag`, when provided, describes the final tag and
+# OCI version. The workflow generates unique repository/run/attempt-scoped tags
+# and leaves normal PR, branch, release and `latest` tags untouched. Signing and
+# attestations follow the existing inputs. Use digest-qualified `built-images`
+# references in downstream tests.
+#
+# Each candidate entry adds `candidate.destinations` (normal full tagged references),
+# `candidate.source` (`repository` and metadata `revision`) and `candidate.run`
+# (`id` and `attempt` as strings). These describe the build, not successful validation.
+# The workflow does not promote candidates or delete them automatically. Keep
+# production publication gated until a validated promotion mechanism is available.
+# Never delete a registry version that has acquired consumer tags.
+# See [ADR 0005](../../docs/adr/0005-publish-candidates-with-final-image-metadata.md).
 ---
 name: Docker build images
 
@@ -75,6 +92,14 @@ on: # yamllint disable-line rule:truthy
           See https://github.com/actions/checkout?tab=readme-ov-file#usage.
         type: boolean
         default: true
+        required: false
+      candidate:
+        description: |
+          Publish under unique temporary tags while retaining intended OCI metadata.
+          Normal tags are recorded in `built-images` as `candidate.destinations` and
+          are not published. No promotion or automatic cleanup is performed.
+        type: boolean
+        default: false
         required: false
       build-secret-github-app-token-env:
         description: |
@@ -161,6 +186,8 @@ on: # yamllint disable-line rule:truthy
       built-images:
         description: |
           Built images data.
+          Candidate entries also contain intended destinations, source and run identity;
+          see Candidate builds above. This output does not certify validation success.
           Example:
           ```json
           {
@@ -200,6 +227,7 @@ jobs:
           OCI_REGISTRY_PASSWORD: ${{ secrets.oci-registry-password }} # zizmor: ignore[secrets-outside-env]
           RUNS_ON_INPUT: ${{ inputs.runs-on }}
           IMAGES_INPUT: ${{ inputs.images }}
+          CANDIDATE_INPUT: ${{ inputs.candidate }}
           BUILD_SECRET_GITHUB_APP_CLIENT_ID: ${{ inputs.build-secret-github-app-client-id }}
           BUILD_SECRET_GITHUB_APP_REPOSITORIES: ${{ inputs.build-secret-github-app-repositories }}
         with:
@@ -246,6 +274,10 @@ jobs:
             // jscpd:ignore-end
 
             // Check each item
+            if (process.env.CANDIDATE_INPUT === 'true' &&
+                (!images.length || new Set(images.map(image => image?.name)).size !== images.length)) {
+              throw new Error('Candidate builds require a non-empty list with unique image names');
+            }
             for (const key in images) {
               const image = images[key];
               if (typeof image !== 'object') {
@@ -465,6 +497,7 @@ jobs:
           repository: ${{ matrix.image.repository }}
           image: ${{ matrix.image.name }}
           tag: ${{ matrix.image.tag }}
+          candidate: ${{ inputs.candidate }}
           context: ${{ matrix.image.context }}
           dockerfile: ${{ matrix.image.dockerfile }}
           build-args: ${{ matrix.image.build-args }}

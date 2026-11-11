@@ -50,8 +50,12 @@ It uses the [docker/metadata-action](https://github.com/docker/metadata-action) 
     # Additional image name. Example: `application`. See [Docker get-image-name action](../get-image-name/README.md)
     image: ""
 
-    # Force image tag to publish
+    # Force the intended image tag and OCI version. Candidate mode records this destination without publishing it.
     tag: ""
+
+    # Return a temporary publication tag while preserving normal labels, annotations and intended destinations.
+    # Default: `false`
+    candidate: "false"
 ```
 
 <!-- usage:end -->
@@ -65,7 +69,8 @@ It uses the [docker/metadata-action](https://github.com/docker/metadata-action) 
 | **`oci-registry`** | OCI registry where to pull and push images                                                                     | **true**     | `ghcr.io`                  |
 | **`repository`**   | Repository name. Example: `my-org/my-repo`. See [Docker get-image-name action](../get-image-name/README.md)    | **false**    | `${{ github.repository }}` |
 | **`image`**        | Additional image name. Example: `application`. See [Docker get-image-name action](../get-image-name/README.md) | **false**    | -                          |
-| **`tag`**          | Force image tag to publish                                                                                     | **false**    | -                          |
+| **`tag`**          | Force the intended image tag and OCI version. Candidate mode records this destination without publishing it.   | **false**    | -                          |
+| **`candidate`**    | Return a temporary publication tag while preserving normal labels, annotations and intended destinations.      | **false**    | `false`                    |
 
 <!-- inputs:end -->
 
@@ -76,13 +81,14 @@ It uses the [docker/metadata-action](https://github.com/docker/metadata-action) 
 
 ## Outputs
 
-| **Output**        | **Description**                                 |
-| ----------------- | ----------------------------------------------- |
-| **`image`**       | Forged image name containing registry.          |
-|                   | Example: `ghcr.io/my-org/my-repo/application`   |
-| **`labels`**      | The image labels.                               |
-| **`annotations`** | The image annotations.                          |
-| **`tags`**        | The image tags. Example: `pr-63-5222075\npr-63` |
+| **Output**        | **Description**                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`image`**       | Forged image name containing registry.                                                                                                           |
+|                   | Example: `ghcr.io/my-org/my-repo/application`                                                                                                    |
+| **`labels`**      | The image labels.                                                                                                                                |
+| **`annotations`** | The image annotations.                                                                                                                           |
+| **`tags`**        | The image tags. Example: `pr-63-5222075\npr-63`                                                                                                  |
+| **`candidate`**   | JSON describing intended destinations, source and run identity when candidate mode is enabled; empty otherwise. This is not validation evidence. |
 
 <!-- outputs:end -->
 
