@@ -112,27 +112,6 @@ on: # yamllint disable-line rule:truthy
         default: "gha"
         type: string
         required: false
-      cache-from:
-        description: |
-          Additional cache imports, one per line: `type=gha,scope=...` or `type=registry,ref=...`.
-          Can be overridden by each image's `cache-from` string. Does not change exporters.
-          See [cache usage](../../docs/usage/build-cache.md).
-        type: string
-        required: false
-      cache-mode:
-        description: |
-          Export `min` (final-image layers) or `max` (all intermediate layers).
-          Can be overridden by each image's `cache-mode` string. Defaults to `max`.
-        type: string
-        default: "max"
-        required: false
-      cache-mount-key-files:
-        description: |
-          Newline-separated workspace-relative dependency file patterns for mount snapshots.
-          Can be overridden by each image's `cache-mount-key-files` string, including an empty string.
-          Configured patterns must match files. Pin toolchains in Dockerfiles or build arguments.
-        type: string
-        required: false
       buildkitd-config-inline:
         description: |
           Inline BuildKit daemon configuration.
@@ -220,9 +199,6 @@ jobs:
           OCI_REGISTRY_PASSWORD: ${{ secrets.oci-registry-password }} # zizmor: ignore[secrets-outside-env]
           RUNS_ON_INPUT: ${{ inputs.runs-on }}
           IMAGES_INPUT: ${{ inputs.images }}
-          CACHE_FROM_INPUT: ${{ inputs.cache-from }}
-          CACHE_MODE_INPUT: ${{ inputs.cache-mode }}
-          CACHE_MOUNT_KEY_FILES_INPUT: ${{ inputs.cache-mount-key-files }}
           BUILD_SECRET_GITHUB_APP_CLIENT_ID: ${{ inputs.build-secret-github-app-client-id }}
           BUILD_SECRET_GITHUB_APP_REPOSITORIES: ${{ inputs.build-secret-github-app-repositories }}
         with:
@@ -288,20 +264,6 @@ jobs:
 
               if (!Array.isArray(image['platforms'])) {
                 throw new Error(`"images[${key}].platforms" input is not an array`);
-              }
-
-              for (const [property, defaultValue] of Object.entries({
-                'cache-from': process.env.CACHE_FROM_INPUT || '',
-                'cache-mode': process.env.CACHE_MODE_INPUT ?? 'max',
-                'cache-mount-key-files': process.env.CACHE_MOUNT_KEY_FILES_INPUT || '',
-              })) {
-                if (!Object.hasOwn(image, property)) image[property] = defaultValue;
-                if (typeof image[property] !== 'string') {
-                  throw new Error(`"images[${key}].${property}" must be a string`);
-                }
-              }
-              if (!['min', 'max'].includes(image['cache-mode'])) {
-                throw new Error(`"images[${key}].cache-mode" must be "min" or "max"`);
               }
 
               // Format build-args object to string
@@ -510,9 +472,6 @@ jobs:
           secret-envs: ${{ steps.prepare-secret-envs.outputs.secret-envs }}
           secrets: ${{ secrets.build-secrets }} # zizmor: ignore[secrets-outside-env]
           cache-type: ${{ inputs.cache-type }}
-          cache-from: ${{ matrix.image.cache-from }}
-          cache-mode: ${{ matrix.image.cache-mode }}
-          cache-mount-key-files: ${{ matrix.image.cache-mount-key-files }}
           buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
           multi-platform: ${{ matrix.image.multi-platform }}
 

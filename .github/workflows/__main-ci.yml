@@ -46,8 +46,7 @@ jobs:
           "application-test",
           "test-build-args-secrets",
           "test-cache-ci",
-          "test-cache-prod-min",
-          "test-cache-prod-max",
+          "test-cache-isolated",
           "test-caching-mono-arch-gha",
           "test-caching-multi-arch-gha",
           "test-create-manifests-clone-tag"

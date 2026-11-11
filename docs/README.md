@@ -7,4 +7,4 @@
 - [Keyless OCI Helm signatures](adr/0001-sign-oci-helm-charts-with-keyless-cosign.md)
 - [Chart release distribution decision](adr/0002-bundle-chart-release-dependencies.md)
 - [Publication setup and build digest reuse](adr/0003-reuse-build-digests-and-limit-publication-setup.md)
-- [Build-cache imports and mount snapshots](adr/0004-scope-build-cache-imports-and-mount-snapshots.md)
+- [Build-cache mount isolation](adr/0004-scope-build-cache-imports-and-mount-snapshots.md)

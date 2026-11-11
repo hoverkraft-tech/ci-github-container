@@ -1,4 +1,4 @@
-# Scope build-cache imports and mount snapshots
+# Isolate build-cache mount snapshots
 
 Date: 2026-11-11
 
@@ -6,66 +6,78 @@ Status: Proposed
 
 ## Context
 
-Builds import only their own image cache and always export `mode=max`. A production
-target cannot explicitly import a completed CI target's intermediate layers.
 Mount snapshots use the Dockerfile hash and image/platform/target, but their
-fallback drops that identity. Dependency changes do not change the immutable
-snapshot key, so an exact hit prevents saving newly downloaded packages.
+fallback drops the image/platform/target identity. The shared local snapshot
+directory also lets separate builds in one job use the same files. GHA layer
+exports respect read-only triggers, while mount snapshots still register a save.
 
 Pleey's historical unchanged-input compilation misses remain unexplained. Its
 latest five baseline/candidate pairs retained dependency and compilation layers.
-Neither mount-key corrections nor additional imports establish the cause of those
-historical layer misses. Layer caches and download mounts are separate mechanisms.
+Layer caches and download mounts are separate mechanisms; these internal fixes
+do not establish the cause of those misses or an application speedup.
 
 ## Decision
 
-Expose `cache-from`, `cache-mode` and `cache-mount-key-files` through the build
-action and reusable workflow, with per-image overrides. Additional imports accept
-explicit GHA scopes or registry references; retain the existing inferred imports
-and exporter destinations. Validate `min`/`max`, retaining `max` by default.
-Keep CI's complete intermediate graph. Consumers select a production export mode
-only after comparing import/build/export cost and retained layers.
+Keep the public build action and reusable workflow inputs unchanged. Use an exact,
+versioned mount key containing image, context, target, platform, Dockerfile
+contents and build arguments. Remove the broad fallback entirely. Give each
+identity its own snapshot directory under the runner's temporary directory.
+Pin toolchains in Dockerfiles or build arguments so they affect this identity.
 
-Version mount keys. Their invariant prefix includes image, context, target,
-platform, Dockerfile contents and build arguments. Dockerfile pins and toolchain
-build arguments therefore remain part of every restore prefix. An optional
-workspace-relative file-pattern input fingerprints dependency manifests/locks.
-Reject configured patterns that match no files. Callers must declare their own
-dependency files; the action does not guess a package manager or scan all source.
-When dependencies change, restore a compatible older snapshot, run the invalidated
-install layer and save the refreshed downloads under the new key. Exact hits need
-no extraction or duplicate save. Give each invariant scope its own mount directory.
+Use restore-only cache access when the existing GHA event policy disables writes.
+Skip extraction for read-only builds and exact hits. Preserve extraction before
+builder teardown, successful-job-only snapshot saves and the existing cache
+bypass. Keep inferred layer imports/export destinations and their `max` mode.
+No caller needs to construct cache scopes or maintain additional configuration.
 
-Preserve the existing cache writer policy. Read-only GHA triggers restore mounts
-without registering a save or extraction; layer exports remain disabled. Cache
-bypass removes all imports, exports and mount persistence and forces execution.
-Keep extraction before builder teardown and successful-job-only snapshot saves.
-Cache data never authorizes skipping validation or freezing installed dependencies.
+## Consequences and deferred work
 
-## Consequences and alternatives
+Old snapshots start cold once because their keys cannot establish the new identity.
+Missing or bypassed caches remain valid build inputs. Dependency installers still
+execute whenever BuildKit invalidates their layer. A dependency-only change does
+not refresh an existing immutable download snapshot; automatic refresh remains
+unresolved and is explicitly outside this PR. This preserves existing freshness
+behavior without adding lockfile configuration or package-manager detection.
 
-Old mount snapshots become cold once because their fallback cannot establish the
-new identity. Dependency-file configuration is opt-in for existing consumers;
-Pleey adoption will supply each application's lockfile explicitly. Toolchain
-changes belong in pinned Dockerfiles/build arguments, not mutable undeclared
-environment state. Compatible dependency changes can reuse downloaded packages;
-Dockerfile/toolchain changes deliberately cannot reuse that fallback.
+Cross-image imports also remain deferred. A future design should hide branch,
+registry and platform bookkeeping, exposing at most the source image relationship.
+Do not add an automatic Dockerfile parser or change exporter scopes without a
+concrete need. Export-mode tuning has no demonstrated benefit in the fixture.
+Rollback uses the released pin or the existing cache bypass.
 
-Do not replace the existing branch/PR resolver, introduce registry caching, widen
-writer access, delete shared caches, or change publication/DAG ordering. Additional
-imports do not add exporters. Missing/evicted caches remain valid cold inputs.
-Rollback restores the released pin or disables caching for the affected caller.
+## Review revision, 2026-11-11
+
+The first proposal exposed `cache-from`, `cache-mode` and `cache-mount-key-files`,
+with workflow defaults and per-image overrides. Review rejected the caller burden
+of raw BuildKit scopes and dependency patterns. The revised scope removes all
+three inputs and their implementation/tests. The earlier measurements below are
+historical evidence for that proposal, not validation of the revised implementation.
+They do not justify retaining the extra public API.
 
 ## Validation requirements
 
-Exercise input validation, inferred/additional imports, both export modes,
-exact/partial/missing mount hits, dependency/Dockerfile/toolchain/platform changes,
-read-only triggers, bypass and failed builds. Use independent builders to prove
-cross-image layer reuse and mount extraction before teardown. Compare `min` and
-`max` on a multi-stage fixture and retain all attempts; record actual results here.
-Regenerate action/workflow readmes with the existing generator.
+Check stable exact keys, isolation across image/context/target/platform/Dockerfile/
+build-argument changes, separate local paths, read-only event policy and bypass.
+Use independent hosted runners to verify cold snapshot saving, mount restoration
+when an install layer changes, isolation and failed-build propagation. Confirm
+saving precedes builder teardown and exact hits skip extraction. Retain existing
+registry/GHA and single/multi-platform tests. Regenerate metadata documentation
+through CI Dokumentor. Record the revised candidate's actual results separately.
 
-## Local validation, 2026-11-11
+## Revised scope: local validation, 2026-11-11
+
+The actual configuration scripts passed local identity and cache-policy contracts.
+Stable builds retained their exact key; changed image, context, target, platform,
+Dockerfile or build arguments changed both key and local directory. Controlled
+read-only event contexts retained imports and disabled exports; bypass removed
+both. This does not claim live read-only-trigger permission testing.
+
+The public action inputs/outputs and complete reusable workflow match release
+0.41.0. Repository lint/security checks and changed Markdown file links passed.
+CI Dokumentor regenerated all three affected action/workflow readmes. Independent
+hosted lifecycle validation remains required for this revised candidate.
+
+## Earlier proposal: local validation, 2026-11-11
 
 Input and identity contracts passed locally, including per-image overrides,
 duplicate imports, both export modes, invalid inputs, changed dependency hashes,
@@ -101,7 +113,7 @@ archives/logs stay outside the repository. Hosted GHA mount lifecycle and existi
 integration suites are validated separately in
 [PR #957](https://github.com/hoverkraft-tech/ci-github-container/pull/957).
 
-## Hosted validation, 2026-11-11
+## Earlier proposal: hosted validation, 2026-11-11
 
 Candidate `ccda7aa3ac62f02b00f083d951ef2bff601b2c27` passed
 [CI run 43018820554](https://github.com/hoverkraft-tech/ci-github-container/actions/runs/43018820554):
