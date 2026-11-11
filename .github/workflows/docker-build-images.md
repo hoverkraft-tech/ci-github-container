@@ -25,8 +25,9 @@
 ## Overview
 
 Workflow to build multiple Docker images.
-Build images using [Docker build image](https://github.com/hoverkraft-tech/ci-github-container/blob/main/actions/docker/build-image/README.md).
+Build images using [Docker build image](../../actions/docker/build-image/README.md).
 This includes [multi-platform](https://docs.docker.com/build/building/multi-platform/) build.
+See [Build caches](../../actions/docker/build-image/README.md#build-caches) for cache behavior and recovery.
 
 ### Permissions
 
