@@ -74,8 +74,27 @@ both. This does not claim live read-only-trigger permission testing.
 
 The public action inputs/outputs and complete reusable workflow match release
 0.41.0. Repository lint/security checks and changed Markdown file links passed.
-CI Dokumentor regenerated all three affected action/workflow readmes. Independent
-hosted lifecycle validation remains required for this revised candidate.
+CI Dokumentor regenerated all three affected action/workflow readmes.
+
+## Revised scope: hosted validation, 2026-11-11
+
+Candidate `db0967b3f0980818d8ac53b10fcf755a1324270f` passed
+[CI run 43046729837](https://github.com/hoverkraft-tech/ci-github-container/actions/runs/43046729837):
+172 successful jobs and 10 intentional skips, without reruns. The four snapshot
+lifecycle jobs and configuration contract job passed alongside existing registry,
+GHA, single/multi-platform, signing, attestation and chart tests.
+
+The seed saved a cold snapshot before builder teardown. An independent runner
+restored that exact key, executed the changed install layer using the seed's
+download marker, and skipped extraction and duplicate saving. A different image
+received a different key with no restored marker and saved its own snapshot before
+teardown. Both bypass builds skipped mount restoration/saving and invoked Buildx
+with `--no-cache` and no layer imports/exports. The deliberate failing install
+propagated failure without an image output. Raw logs remain outside the repository.
+
+This fixture validates snapshot behavior, not an application performance gain or
+automatic dependency refresh. Read-only event checks use controlled contexts;
+live untrusted-trigger permissions and real application installers were not tested.
 
 ## Earlier proposal: local validation, 2026-11-11
 
