@@ -1,6 +1,6 @@
 # Documentation
 
-- [Build caches](usage/build-cache.md)
+- [Build caches](development/build-cache.md)
 - [Dependency updates](development/dependency-updates.md)
 - [Maintaining action distributions](development/action-distributions.md)
 - [Publishing releases](development/releases.md)
