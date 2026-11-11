@@ -11,8 +11,11 @@ inputs:
     description: "Whether to inject and extract Docker cache mounts."
     default: false
     required: false
-  cache-hit:
-    description: "Whether the Docker cache mounts were restored from an exact cache key."
+  cache-mount-path:
+    description: "Directory containing this build scope's cache-mount snapshot."
+    required: true
+  skip-cache-mount-extraction:
+    description: "Skip extraction after an exact hit or when cache writes are disabled."
     default: false
     required: false
   dockerfile:
@@ -75,10 +78,11 @@ runs:
         # Prefer its step outputs during post, and use the internal inputs during main.
         # See https://github.com/actions/runner/issues/2009.
         builder: ${{ steps.docker-setup.outputs.buildx-name || inputs.builder }}
-        # An empty cache-dir makes cache-dance treat container mount targets as host paths.
-        cache-dir: cache-mount
+        cache-dir: ${{ steps.get-docker-config.outputs.cache-mount-path || inputs.cache-mount-path }}
         dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path || inputs.dockerfile }}
-        skip-extraction: ${{ steps.cache.outputs.cache-hit || inputs.cache-hit }}
+        skip-extraction: >-
+          ${{ steps.get-docker-config.outputs.cache-export-disabled == 'true' ||
+          steps.cache.outputs.cache-hit == 'true' || inputs.skip-cache-mount-extraction == 'true' }}
 
     - id: build
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
