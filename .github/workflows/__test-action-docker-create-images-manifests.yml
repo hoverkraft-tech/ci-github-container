@@ -118,6 +118,99 @@ jobs:
               assert.deepEqual(denied.outputs, {});
             }
 
+      - name: Test publication digests and mixed batches
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const { stdout } = await exec.getExecOutput('ruby', [
+              '-rjson', '-ryaml', '-e',
+              'puts JSON.generate(YAML.safe_load(File.read(ARGV[0])))',
+              'actions/docker/create-images-manifests/action.yml',
+            ]);
+            const action = JSON.parse(stdout);
+            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+            const sourceDigest = `sha256:${'a'.repeat(64)}`;
+            const indexDigest = `sha256:${'b'.repeat(64)}`;
+            const repository = 'registry.example.com/test/application';
+            const single = {
+              name: 'application', registry: 'registry.example.com', repository: 'test/application',
+              images: [`${repository}@${sourceDigest}`], digest: sourceDigest,
+              tags: ['test', 'latest'], annotations: { description: 'Application' },
+              platforms: ['linux/amd64'], 'multi-platform': false,
+            };
+
+            async function publish(input) {
+              const calls = [];
+              let images = JSON.stringify(input);
+              let requiresBuildx;
+              for (const stepId of ['prepare-images', 'create-images-manifests', 'get-built-images-digest']) {
+                const script = action.runs.steps.find(step => step.id === stepId).with.script;
+                await new AsyncFunction('process', 'core', 'exec', script)(
+                  { env: { INPUT_BUILT_IMAGES: images, BUILT_IMAGES_OUTPUT: images } },
+                  {
+                    debug() {}, info() {},
+                    setOutput(name, value) {
+                      if (name === 'built-images') images = value;
+                      if (name === 'requires-buildx') requiresBuildx = value;
+                    },
+                  },
+                  { getExecOutput: async (command, args) => {
+                    calls.push([command, ...args]);
+                    return { exitCode: 0, stdout: `Digest: ${indexDigest}`, stderr: '' };
+                  } },
+                );
+              }
+              return { images: JSON.parse(images), calls, requiresBuildx };
+            }
+
+            const reused = await publish({ application: single });
+            assert.equal(reused.requiresBuildx, 'false');
+            assert.deepEqual(reused.calls, []);
+            assert.deepEqual(reused.images.application, {
+              ...single, images: single.tags.map(tag => `${repository}:${tag}@${sourceDigest}`),
+            });
+
+            const withoutDigest = { ...single };
+            delete withoutDigest.digest;
+            assert.deepEqual((await publish({ application: withoutDigest })).images, reused.images);
+            const taggedSource = { ...single, images: [`${repository}:test@${sourceDigest}`] };
+            assert.deepEqual((await publish({ application: taggedSource })).images, reused.images);
+
+            const multi = {
+              ...single, name: 'multi', 'multi-platform': true,
+              platforms: ['linux/amd64', 'linux/arm64'],
+              images: [`${repository}@${sourceDigest}`, `${repository}@${indexDigest}`],
+            };
+            const mixed = await publish({ application: single, multi });
+            assert.equal(mixed.requiresBuildx, 'true');
+            assert.deepEqual(Object.keys(mixed.images), ['application', 'multi']);
+            assert.deepEqual(mixed.images.application, reused.images.application);
+            assert.deepEqual(mixed.images.multi, {
+              ...multi, digest: indexDigest,
+              images: single.tags.map(tag => `${repository}:${tag}@${indexDigest}`),
+            });
+            assert.deepEqual(mixed.calls.map(call => call.slice(0, 4)), [
+              ['docker', 'buildx', 'imagetools', 'create'],
+              ['docker', 'buildx', 'imagetools', 'inspect'],
+            ]);
+
+            const tagOnly = await publish({ application: { ...single, images: [`${repository}:test`] } });
+            assert.equal(tagOnly.requiresBuildx, 'true');
+            assert.equal(tagOnly.images.application.digest, indexDigest);
+            assert.deepEqual(tagOnly.calls, [['docker', 'buildx', 'imagetools', 'inspect', `${repository}:test`]]);
+            const clone = await publish({ application: { ...single, 'multi-platform': true } });
+            assert.equal(clone.images.application.digest, indexDigest);
+            assert.equal(clone.calls.length, 2);
+
+            for (const invalid of [null, [], { application: null }, { application: { ...single, images: [] } }]) {
+              await assert.rejects(publish(invalid));
+            }
+            await assert.rejects(publish({ application: { ...single, digest: indexDigest } }), /Conflicting digest/);
+            for (const source of [`other.example.com/test/application@${sourceDigest}`, `${repository}@sha256:invalid`]) {
+              await assert.rejects(publish({ application: { ...single, images: [source] } }), /Invalid immutable source/);
+            }
+
   build-original-tag:
     name: Arrange - Build original tag
     uses: $/.github/workflows/docker-build-images.yml

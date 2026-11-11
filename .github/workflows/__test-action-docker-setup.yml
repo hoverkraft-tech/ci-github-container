@@ -8,6 +8,57 @@ on: # yamllint disable-line rule:truthy
 permissions: {}
 
 jobs:
+  tests-registry-only:
+    name: Test registry authentication without a Docker daemon
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DOCKER_HOST: unix:///tmp/ci-github-container-no-daemon.sock
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Act - Authenticate without initializing Docker or Buildx
+        id: registry-only
+        uses: $/actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ github.token }}
+          setup-docker: false
+          setup-buildx: false
+          docker-version: "0.0.0"
+
+      - name: Assert - Registry-only outputs
+        env:
+          PUSH_REGISTRY: ${{ steps.registry-only.outputs.push-registry }}
+          BUILDX_NAME: ${{ steps.registry-only.outputs.buildx-name }}
+        run: |
+          test "$PUSH_REGISTRY" = "ghcr.io"
+          test -z "$BUILDX_NAME"
+          if docker info >/dev/null 2>&1; then
+            echo "::error::Test requires an unreachable Docker daemon"
+            exit 1
+          fi
+
+      - name: Act - Reject invalid registry credentials
+        id: denied
+        continue-on-error: true
+        uses: $/actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: invalid-test-credential
+          setup-docker: false
+          setup-buildx: false
+
+      - name: Assert - Authentication failure propagates
+        env:
+          LOGIN_OUTCOME: ${{ steps.denied.outcome }}
+        run: test "$LOGIN_OUTCOME" = "failure"
+
   tests:
     name: Test for "docker/setup" action
     runs-on: ubuntu-latest

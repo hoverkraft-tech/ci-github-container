@@ -487,8 +487,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write # Needed for signing and attesting images
-      attestations: write # Needed for attesting images
+      id-token: write # Needed for signing images
     needs: [prepare-variables, build-images]
     runs-on: ${{ fromJson(inputs.runs-on) }}
     outputs:
@@ -617,6 +616,7 @@ jobs:
           oci-registry-username: ${{ inputs.oci-registry-username }}
           oci-registry-password: ${{ secrets.oci-registry-password }} # zizmor: ignore[secrets-outside-env]
           built-images: ${{ needs.publish-manifests.outputs.built-images }}
+          setup-docker: false
           setup-buildx: false
 
       - uses: $/actions/docker/attest-image

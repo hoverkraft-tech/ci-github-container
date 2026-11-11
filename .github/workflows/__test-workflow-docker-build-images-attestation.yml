@@ -60,11 +60,12 @@ jobs:
               };
             }
 
-            function createScenario({ name, imageNames, platforms, attest }) {
+            function createScenario({ name, imageNames, platforms, attest, mixed = false }) {
               return {
                 name,
                 attest,
-                images: JSON.stringify(imageNames.map(imageName => createImageDefinition(imageName, platforms))),
+                images: JSON.stringify(imageNames.map((imageName, index) =>
+                  createImageDefinition(imageName, mixed && index === 1 ? ['linux/amd64', 'linux/arm64'] : platforms))),
                 verify_images: JSON.stringify(imageNames.map(imageName => `${imageName}:${tag}`)),
                 package_names: JSON.stringify(imageNames),
               };
@@ -85,7 +86,8 @@ jobs:
                   attest: true,
                 }),
                 createScenario({
-                  name: 'multiple images - attested',
+                  name: 'mixed platforms - attested',
+                  mixed: true,
                   imageNames: [
                     `${imageNamePrefix}-multi-image-attested-a`,
                     `${imageNamePrefix}-multi-image-attested-b`,

@@ -25,8 +25,8 @@
 ## Overview
 
 Action to create built images manifests.
-It uses the Docker Buildx plugin to create manifests for the built images.
-It requires the Docker Buildx plugin to be installed and configured.
+It reuses immutable single-platform build digests without inspecting tags.
+It configures Docker Buildx when manifest creation or tag inspection is required.
 It supports creating manifests for multiple images and platforms at once.
 
 <!-- overview:end -->
