@@ -2,8 +2,8 @@
 name: "Docker - Create images manifests"
 description: |
   Action to create built images manifests.
-  It uses the Docker Buildx plugin to create manifests for the built images.
-  It requires the Docker Buildx plugin to be installed and configured.
+  It reuses immutable single-platform build digests without inspecting tags.
+  It configures Docker Buildx when manifest creation or tag inspection is required.
   It supports creating manifests for multiple images and platforms at once.
 author: hoverkraft
 branding:
@@ -96,6 +96,59 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - id: prepare-images
+      name: Validate images and resolve publication tooling
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUT_BUILT_IMAGES: ${{ inputs.built-images }}
+      with:
+        script: |
+          const builtImages = JSON.parse(process.env.INPUT_BUILT_IMAGES || '');
+          if (!builtImages || Array.isArray(builtImages) || typeof builtImages !== 'object') {
+            throw new Error('"built-images" must be a JSON object');
+          }
+
+          let requiresBuildx = false;
+          for (const [name, image] of Object.entries(builtImages)) {
+            if (!image || typeof image !== 'object' || Array.isArray(image)) {
+              throw new Error(`Invalid built image "${name}"`);
+            }
+            for (const field of ['registry', 'repository']) {
+              if (typeof image[field] !== 'string' || !image[field].trim()) {
+                throw new Error(`Missing "${field}" for "${name}"`);
+              }
+            }
+            for (const field of ['images', 'tags']) {
+              if (!Array.isArray(image[field]) || !image[field].length ||
+                  image[field].some(value => typeof value !== 'string' || !value.trim())) {
+                throw new Error(`Expected non-empty "${field}" for "${name}"`);
+              }
+            }
+
+            const previousDigest = image.digest;
+            delete image.digest;
+            if (!image['multi-platform'] && Array.isArray(image.platforms) &&
+                image.platforms.length === 1 && image.images.length === 1) {
+              const source = image.images[0];
+              const [reference, digest] = source.split('@');
+              const repository = `${image.registry}/${image.repository}`;
+              if (source.includes('@')) {
+                if (source.split('@').length !== 2 || !/^sha256:[a-f0-9]{64}$/.test(digest) ||
+                    (reference !== repository && !reference.startsWith(`${repository}:`))) {
+                  throw new Error(`Invalid immutable source for "${name}": ${source}`);
+                }
+                if (previousDigest !== undefined && previousDigest !== digest) {
+                  throw new Error(`Conflicting digest for "${name}"`);
+                }
+                image.digest = digest;
+              }
+            }
+            requiresBuildx ||= !image.digest;
+          }
+
+          core.setOutput('built-images', JSON.stringify(builtImages));
+          core.setOutput('requires-buildx', String(requiresBuildx));
+
     - id: docker-setup
       uses: $/actions/docker/setup
       with:
@@ -103,12 +156,14 @@ runs:
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
         built-images: ${{ inputs.built-images }}
+        setup-docker: ${{ steps.prepare-images.outputs.requires-buildx }}
+        setup-buildx: ${{ steps.prepare-images.outputs.requires-buildx }}
 
     - id: create-images-manifests
       name: Create images manifests and push
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        INPUT_BUILT_IMAGES: ${{ inputs.built-images }}
+        INPUT_BUILT_IMAGES: ${{ steps.prepare-images.outputs.built-images }}
       with:
         script: |
           const builtImagesInput = process.env.INPUT_BUILT_IMAGES || "";
@@ -117,13 +172,6 @@ runs:
             builtImages = JSON.parse(builtImagesInput);
           } catch (error) {
             throw new Error(`"built-images" input is not a valid JSON: ${error}`);
-          }
-
-          // Helper function to validate image data
-          function validateImage(builtImage) {
-            if (!builtImage.images || builtImage.images.length === 0) {
-              throw new Error(`No images found for "${builtImage.name}"`);
-            }
           }
 
           // Helper function to create multiarch manifest
@@ -230,12 +278,6 @@ runs:
             new Promise((resolve) => setTimeout(resolve, delayMs));
 
           const getImageDigest = async function(image) {
-            // Check if the image already has a digest
-            if (image.match(/@/)) {
-              core.debug(`Image "${image}" already has a digest, skipping inspection.`);
-              return image;
-            }
-
             const inspectImageArgs = ["buildx", "imagetools", "inspect", image];
             const inspectImageCommand = `docker ${inspectImageArgs.join(" ")}`;
             core.debug(`Inspecting image "${image}" with command: "${inspectImageCommand}"`);
@@ -305,7 +347,7 @@ runs:
 
           await Promise.all(Object.keys(builtImages).map(async (imageName) => {
             const builtImage = builtImages[imageName];
-            const digest = await getImageDigest(builtImage.images[0]);
+            const digest = builtImage.digest || await getImageDigest(builtImage.images[0]);
 
             // Update built image with the digest
             builtImage.digest = digest;
