@@ -81,7 +81,7 @@ runs:
             'input must be true',
           );
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@66882b24f9f13e45a6541896a5a7c638cb91c94c # 4.0.0
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
       with:
         fetch-depth: 0
 
