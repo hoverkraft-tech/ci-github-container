@@ -31,6 +31,30 @@ jobs:
           setup-buildx: false
           docker-version: "0.0.0"
 
+      - name: Assert - Registry-only CLI reuse and installation fallback
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const { stdout } = await exec.getExecOutput('ruby', [
+              '-rjson', '-ryaml', '-e',
+              'puts JSON.generate(YAML.safe_load(File.read(ARGV[0])))',
+              'actions/docker/setup/action.yml',
+            ]);
+            const action = JSON.parse(stdout);
+            const script = action.runs.steps.find(step => step.id === 'detect-docker').with.script;
+            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+            for (const dockerPath of ['/usr/bin/docker', '']) {
+              const outputs = {};
+              await new AsyncFunction('process', 'io', 'core', 'exec', script)(
+                { env: { SETUP_DOCKER: 'false', EXPECTED_DOCKER_VERSION: 'test-version' } },
+                { which: async () => dockerPath },
+                { info() {}, setOutput: (name, value) => { outputs[name] = value; } },
+                { getExecOutput: async () => { assert.fail('Registry-only setup must not contact the daemon'); } },
+              );
+              assert.deepEqual(outputs, dockerPath ? {} : { 'docker-install-version': 'test-version' });
+            }
+
       - name: Assert - Registry-only outputs
         env:
           PUSH_REGISTRY: ${{ steps.registry-only.outputs.push-registry }}
