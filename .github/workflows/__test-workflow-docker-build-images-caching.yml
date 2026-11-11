@@ -12,6 +12,371 @@ permissions: {}
 
 # jscpd:ignore-start
 jobs:
+  test-cache-contracts:
+    name: Assert cache scopes, controls and input validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const os = require('node:os');
+            const path = require('node:path');
+            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+            async function readManifest(file) {
+              const { stdout } = await exec.getExecOutput('ruby', [
+                '-rjson', '-ryaml', '-e',
+                'puts JSON.generate(YAML.safe_load(File.read(ARGV[0])))', file,
+              ]);
+              return JSON.parse(stdout);
+            }
+            const action = await readManifest('actions/docker/build-image/action.yml');
+            const configuration = action.runs.steps.find(step => step.id === 'get-docker-config').with.script;
+            const cacheInputs = action.runs.steps.find(step => step.id === 'cache-inputs').with.script;
+            const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'cache-contract-'));
+            fs.writeFileSync(path.join(workspace, 'Dockerfile'), 'FROM example:1@sha256:abc\n');
+            const baseEnv = {
+              GITHUB_WORKSPACE: workspace, RUNNER_TEMP: os.tmpdir(), CONTEXT_INPUT: '.',
+              DOCKERFILE_INPUT: 'Dockerfile', PLATFORM_INPUT: 'linux/amd64', SLUGIFIED_PLATFORM: 'linux-amd64',
+              METADATA_IMAGE: 'ghcr.io/example/app', TARGET_INPUT: 'prod', CACHE_TYPE_INPUT: 'gha',
+              DEFAULT_BRANCH: 'main', GH_REF: 'refs/pull/123/merge', CACHE_MOUNT_KEY_FILES: 'package-lock.json',
+            };
+            async function configure(overrides = {}, dependencyHash = 'dependencies-v1', eventName = 'pull_request') {
+              const outputs = {};
+              await new AsyncFunction('require', 'process', 'context', 'core', 'exec', 'glob', configuration)(
+                require, { env: { ...baseEnv, ...overrides } }, { eventName },
+                { setOutput: (key, value) => { outputs[key] = value; }, info() {}, debug() {}, warning() {},
+                  setFailed: message => { throw new Error(message); } },
+                { getExecOutput: async command => ({ stdout: command === 'uname -s' ? 'Linux' : 'x86_64' }) },
+                { hashFiles: async patterns => { assert.equal(patterns, 'package-lock.json'); return dependencyHash; } },
+              );
+              return outputs;
+            }
+            async function resolve(overrides = {}) {
+              const outputs = {};
+              await new AsyncFunction('process', 'core', cacheInputs)(
+                { env: {
+                  CACHE_MODE: 'max', CACHE_FROM: 'type=gha,scope=own',
+                  CACHE_TO: 'type=gha,scope=own,mode=max,image-manifest=true,oci-mediatypes=true',
+                  ADDITIONAL_CACHE_FROM: 'type=gha,scope=ci\ntype=registry,ref=example.test/app/cache:main\ntype=gha,scope=ci',
+                  ...overrides,
+                } },
+                { setOutput: (key, value) => { outputs[key] = value; } },
+              );
+              return outputs;
+            }
+            try {
+              const original = await configure();
+              assert.deepEqual(await configure(), original, 'Unchanged inputs must retain the exact key');
+              const changedDependencies = await configure({}, 'dependencies-v2');
+              assert.notEqual(changedDependencies['cache-mount-key'], original['cache-mount-key']);
+              assert.equal(changedDependencies['cache-mount-prefix'], original['cache-mount-prefix']);
+              assert.equal(changedDependencies['cache-mount-path'], original['cache-mount-path']);
+              assert.ok(changedDependencies['cache-mount-key'].startsWith(original['cache-mount-prefix']));
+              for (const overrides of [
+                { METADATA_IMAGE: 'ghcr.io/example/other' }, { PLATFORM_INPUT: 'linux/arm64' },
+                { TARGET_INPUT: 'ci' }, { BUILD_ARGS_INPUT: 'NODE_VERSION=next' },
+              ]) {
+                const changedScope = await configure(overrides);
+                assert.notEqual(changedScope['cache-mount-prefix'], original['cache-mount-prefix']);
+                assert.notEqual(changedScope['cache-mount-path'], original['cache-mount-path']);
+                assert.ok(!changedScope['cache-mount-key'].startsWith(original['cache-mount-prefix']));
+              }
+              fs.appendFileSync(path.join(workspace, 'Dockerfile'), 'ARG TOOLCHAIN=2\n');
+              assert.notEqual((await configure())['cache-mount-prefix'], original['cache-mount-prefix']);
+              await assert.rejects(configure({}, ''), /did not match any files/);
+              assert.match((await configure({ CACHE_MOUNT_KEY_FILES: '' }))['cache-mount-key'], /no-dependency-files$/);
+              for (const event of ['issue_comment', 'pull_request_target', 'issues']) {
+                assert.equal((await configure({ GH_REF: 'refs/heads/main' }, 'v1', event))['cache-export-disabled'], 'true');
+              }
+              assert.equal((await configure({ GH_REF: 'refs/heads/main' }, 'v1', 'push'))['cache-export-disabled'], 'false');
+              for (const cacheType of ['', 'false']) {
+                assert.equal((await configure({ CACHE_TYPE_INPUT: cacheType }))['cache-disabled'], 'true');
+              }
+              const defaults = await resolve();
+              assert.equal(defaults['cache-from'], 'type=gha,scope=own\ntype=gha,scope=ci\ntype=registry,ref=example.test/app/cache:main');
+              for (const mode of ['min', 'max']) {
+                const result = await resolve({ CACHE_MODE: mode });
+                assert.equal(result['cache-to'], `type=gha,scope=own,image-manifest=true,oci-mediatypes=true,mode=${mode}`);
+              }
+              assert.equal((await resolve({ CACHE_EXPORT_DISABLED: 'true' }))['cache-to'], '');
+              assert.equal((await resolve({ CACHE_EXPORT_DISABLED: 'true' }))['cache-from'], defaults['cache-from']);
+              assert.deepEqual(await resolve({ CACHE_DISABLED: 'true' }), { 'cache-from': '', 'cache-to': '' });
+              for (const mode of ['', 'other']) await assert.rejects(resolve({ CACHE_MODE: mode }), /cache-mode/);
+              for (const input of ['type=gha', 'type=gha,scope=', 'type=registry,scope=wrong', 'type=gha,scope=a,mode=max']) {
+                await assert.rejects(resolve({ ADDITIONAL_CACHE_FROM: input }), /cache-from/);
+              }
+              const workflow = await readManifest('.github/workflows/docker-build-images.yml');
+              const validate = workflow.jobs['prepare-variables'].steps.find(step => step.id === 'validate-inputs').with.script;
+              async function validateImages(image) {
+                const outputs = {};
+                await new AsyncFunction('process', 'context', 'core', validate)(
+                  { env: { OCI_REGISTRY_PASSWORD: 'fixture', RUNS_ON_INPUT: '["ubuntu-latest"]',
+                    IMAGES_INPUT: JSON.stringify([{ name: 'app', platforms: ['linux/amd64'], ...image }]),
+                    CACHE_FROM_INPUT: 'type=gha,scope=global', CACHE_MODE_INPUT: 'max', CACHE_MOUNT_KEY_FILES_INPUT: '**/lock',
+                  } }, { repo: { owner: 'example', repo: 'project' } },
+                  { setOutput: (key, value) => { outputs[key] = value; } },
+                );
+                return JSON.parse(outputs.images)[0];
+              }
+              assert.equal((await validateImages({}))['cache-from'], 'type=gha,scope=global');
+              const overrides = await validateImages({ 'cache-from': '', 'cache-mode': 'min', 'cache-mount-key-files': '' });
+              assert.equal(overrides['cache-from'], '');
+              assert.equal(overrides['cache-mode'], 'min');
+              assert.equal(overrides['cache-mount-key-files'], '');
+              for (const input of [ { 'cache-from': [] }, { 'cache-mode': 'invalid' }, { 'cache-mount-key-files': 42 } ]) {
+                await assert.rejects(validateImages(input), /must be/);
+              }
+            } finally {
+              fs.rmSync(workspace, { recursive: true, force: true });
+            }
+
+  cache-seed:
+    name: Cache lifecycle - seed
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      install-id: ${{ steps.inspect.outputs.install-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange dependency revision
+        run: printf '%s\n' 'v1 none' > tests/cache/dependencies.lock
+
+      - name: Act - Build with cache controls
+        id: build
+        uses: $/actions/docker/build-image
+        with:
+          context: tests/cache
+          dockerfile: Dockerfile
+          platform: linux/amd64
+          image: test-cache-ci
+          target: ci
+          cache-type: "gha"
+          cache-mode: "max"
+          cache-mount-key-files: tests/cache/dependencies.lock
+          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Assert build result
+        id: inspect
+        env:
+          BUILT_IMAGE: ${{ fromJSON(steps.build.outputs.built-image).image }}
+        run: |
+          install_id="$(docker run --rm --entrypoint cat "$BUILT_IMAGE" /install-id)"
+          test -n "$install_id"
+          echo "install-id=$install_id" >> "$GITHUB_OUTPUT"
+
+  cache-import:
+    name: Cache lifecycle - import (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [min, max]
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    needs: cache-seed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      install-id: ${{ steps.inspect.outputs.install-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange dependency revision
+        run: printf '%s\n' 'v1 none' > tests/cache/dependencies.lock
+
+      - name: Act - Build with cache controls
+        id: build
+        uses: $/actions/docker/build-image
+        with:
+          context: tests/cache
+          dockerfile: Dockerfile
+          platform: linux/amd64
+          image: test-cache-prod-${{ matrix.mode }}
+          target: prod
+          cache-type: "gha"
+          cache-mode: ${{ matrix.mode }}
+          cache-mount-key-files: tests/cache/dependencies.lock
+          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: >-
+            ${{ format('type=gha,scope=ghcr.io/{0}/test-cache-ci:{1}-linux-amd64', github.repository,
+            github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name) }}
+
+      - name: Assert build result
+        id: inspect
+        env:
+          BUILT_IMAGE: ${{ fromJSON(steps.build.outputs.built-image).image }}
+          EXPECTED_INSTALL_ID: ${{ needs.cache-seed.outputs.install-id }}
+        run: |
+          install_id="$(docker run --rm --entrypoint cat "$BUILT_IMAGE" /install-id)"
+          test -n "$install_id"
+          test "$install_id" = "$EXPECTED_INSTALL_ID"
+          echo "install-id=$install_id" >> "$GITHUB_OUTPUT"
+
+  cache-refresh:
+    name: Cache lifecycle - refresh
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    needs: cache-import
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      install-id: ${{ steps.inspect.outputs.install-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange dependency revision
+        run: printf '%s\n' 'v2 v1' > tests/cache/dependencies.lock
+
+      - name: Act - Build with cache controls
+        id: build
+        uses: $/actions/docker/build-image
+        with:
+          context: tests/cache
+          dockerfile: Dockerfile
+          platform: linux/amd64
+          image: test-cache-ci
+          target: ci
+          cache-type: "gha"
+          cache-mode: "max"
+          cache-mount-key-files: tests/cache/dependencies.lock
+          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Assert build result
+        id: inspect
+        env:
+          BUILT_IMAGE: ${{ fromJSON(steps.build.outputs.built-image).image }}
+        run: |
+          install_id="$(docker run --rm --entrypoint cat "$BUILT_IMAGE" /install-id)"
+          test -n "$install_id"
+          echo "install-id=$install_id" >> "$GITHUB_OUTPUT"
+
+  cache-exact:
+    name: Cache lifecycle - exact
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    needs: cache-refresh
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      install-id: ${{ steps.inspect.outputs.install-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange dependency revision
+        run: printf '%s\n' 'v2 v1' > tests/cache/dependencies.lock
+
+      - name: Act - Build with cache controls
+        id: build
+        uses: $/actions/docker/build-image
+        with:
+          context: tests/cache
+          dockerfile: Dockerfile
+          platform: linux/amd64
+          image: test-cache-ci
+          target: ci
+          cache-type: "gha"
+          cache-mode: "max"
+          cache-mount-key-files: tests/cache/dependencies.lock
+          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Assert build result
+        id: inspect
+        env:
+          BUILT_IMAGE: ${{ fromJSON(steps.build.outputs.built-image).image }}
+          EXPECTED_INSTALL_ID: ${{ needs.cache-refresh.outputs.install-id }}
+        run: |
+          install_id="$(docker run --rm --entrypoint cat "$BUILT_IMAGE" /install-id)"
+          test -n "$install_id"
+          test "$install_id" = "$EXPECTED_INSTALL_ID"
+          echo "install-id=$install_id" >> "$GITHUB_OUTPUT"
+
+  cache-bypass:
+    name: Cache lifecycle - bypass
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    needs: cache-exact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      install-id: ${{ steps.inspect.outputs.install-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Arrange dependency revision
+        run: printf '%s\n' 'v3 absent' > tests/cache/dependencies.lock
+
+      - name: Act - Build with cache controls
+        id: build
+        uses: $/actions/docker/build-image
+        with:
+          context: tests/cache
+          dockerfile: Dockerfile
+          platform: linux/amd64
+          image: test-cache-ci
+          target: ci
+          cache-type: "false"
+          cache-mode: "max"
+          cache-mount-key-files: tests/cache/dependencies.lock
+          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Assert build result
+        id: inspect
+        env:
+          BUILT_IMAGE: ${{ fromJSON(steps.build.outputs.built-image).image }}
+        run: |
+          install_id="$(docker run --rm --entrypoint cat "$BUILT_IMAGE" /install-id)"
+          test -n "$install_id"
+          echo "install-id=$install_id" >> "$GITHUB_OUTPUT"
+
+      - name: Arrange a failing dependency install
+        run: printf '%s\n' 'v4 missing-download' > tests/cache/dependencies.lock
+
+      - name: Act - Reject a failed build
+        id: failure
+        continue-on-error: true
+        uses: $/actions/docker/build-image
+        with:
+          context: tests/cache
+          dockerfile: Dockerfile
+          platform: linux/amd64
+          image: test-cache-ci
+          target: ci
+          cache-type: "false"
+          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Assert the failure propagates without an image
+        env:
+          OUTCOME: ${{ steps.failure.outcome }}
+          BUILT_IMAGE: ${{ steps.failure.outputs.built-image }}
+        run: |
+          test "$OUTCOME" = failure
+          test -z "$BUILT_IMAGE"
+
   arrange:
     name: Arrange
     runs-on: ubuntu-latest
@@ -117,6 +482,8 @@ jobs:
         [
           {
             "name": "test-caching-mono-arch-gha",
+            "cache-mode": "min",
+            "cache-mount-key-files": "tests/cache/dependencies.lock",
             "context": ".",
             "dockerfile": "./tests/application/Dockerfile",
             "build-args": { "BUILD_RUN_ID": "${{ github.run_id }}" },

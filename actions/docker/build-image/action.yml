@@ -103,6 +103,26 @@ inputs:
       See https://docs.docker.com/build/cache/backends.
     default: "gha"
     required: false
+  cache-from:
+    description: |
+      Additional cache imports, one per line: `type=gha,scope=...` or `type=registry,ref=...`.
+      Appended to inferred imports without adding export destinations. Ignored when caching is disabled.
+      See [cache usage](../../../docs/usage/build-cache.md).
+    required: false
+  cache-mode:
+    description: |
+      Cache export mode: `min` for final-image layers or `max` for all intermediate layers.
+      Existing export destinations and write restrictions are preserved.
+    default: "max"
+    required: false
+  cache-mount-key-files:
+    description: |
+      Newline-separated workspace-relative dependency file patterns for cache-mount snapshot keys.
+      Example: `application/package-lock.json`. Configured patterns must match at least one file.
+      Changing these files restores compatible downloads and saves a refreshed snapshot after success.
+      Keep toolchain versions in Dockerfile pins or build arguments so fallback keys retain their identity.
+      Empty preserves snapshots keyed only by image, context, target, platform, Dockerfile and build arguments.
+    required: false
   buildkitd-config-inline:
     description: |
       Inline BuildKit daemon configuration.
@@ -175,6 +195,8 @@ runs:
     - id: get-docker-config
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        BUILD_ARGS_INPUT: ${{ inputs.build-args }}
+        CACHE_MOUNT_KEY_FILES: ${{ inputs.cache-mount-key-files }}
         CACHE_REGISTRY: ${{ steps.docker-setup.outputs.cache-registry }}
         CACHE_TYPE_INPUT: ${{ inputs.cache-type }}
         CONTEXT_INPUT: ${{ inputs.context }}
@@ -214,15 +236,28 @@ runs:
           const resolvedDockerfilePath = fs.realpathSync(dockerfilePath);
           core.setOutput('dockerfile-path', resolvedDockerfilePath);
 
+          const dependencyPatterns = (process.env.CACHE_MOUNT_KEY_FILES || '').trim();
+          const dependencyHash = dependencyPatterns ? await glob.hashFiles(dependencyPatterns) : '';
+          if (dependencyPatterns && !dependencyHash) {
+            return core.setFailed('Input "cache-mount-key-files" did not match any files.');
+          }
           const cacheMountScope = JSON.stringify({
             image: process.env.METADATA_IMAGE || '',
             platform: process.env.PLATFORM_INPUT || '',
             target: process.env.TARGET_INPUT || '',
+            context: contextPath,
+            dockerfile: createHash('sha256').update(fs.readFileSync(resolvedDockerfilePath)).digest('hex'),
+            buildArgs: process.env.BUILD_ARGS_INPUT || '',
           });
           const cacheMountScopeHash = createHash('sha256')
             .update(cacheMountScope)
             .digest('hex');
-          core.setOutput('cache-mount-scope', cacheMountScopeHash);
+          const cacheMountPrefix = `cache-mount-v2-${cacheMountScopeHash}-`;
+          core.setOutput('cache-mount-prefix', cacheMountPrefix);
+          core.setOutput('cache-mount-key', `${cacheMountPrefix}${dependencyHash || 'no-dependency-files'}`);
+          core.setOutput('cache-mount-path', path.join(
+            process.env.RUNNER_TEMP || require('os').tmpdir(), `cache-mount-${cacheMountScopeHash}`
+          ));
 
           const slugifiedPlatform = process.env.SLUGIFIED_PLATFORM || '';
           const tagSuffix = `-${slugifiedPlatform}`;
@@ -334,18 +369,27 @@ runs:
         cache-type: ${{ steps.get-docker-config.outputs.cache-type }}
         extra-cache-to: "image-manifest=true,oci-mediatypes=true"
 
-    - if: steps.get-docker-config.outputs.cache-type == 'gha'
+    - if: steps.get-docker-config.outputs.cache-type == 'gha' && steps.get-docker-config.outputs.cache-export-disabled != 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: cache
       with:
-        path: cache-mount
-        key: cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-${{ steps.get-docker-config.outputs.cache-mount-scope }}
-        restore-keys: |
-          cache-mount-${{ hashFiles(steps.get-docker-config.outputs.dockerfile-path) }}-
+        path: ${{ steps.get-docker-config.outputs.cache-mount-path }}
+        key: ${{ steps.get-docker-config.outputs.cache-mount-key }}
+        restore-keys: ${{ steps.get-docker-config.outputs.cache-mount-prefix }}
+
+    - if: steps.get-docker-config.outputs.cache-type == 'gha' && steps.get-docker-config.outputs.cache-export-disabled == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: cache-read-only
+      with:
+        path: ${{ steps.get-docker-config.outputs.cache-mount-path }}
+        key: ${{ steps.get-docker-config.outputs.cache-mount-key }}
+        restore-keys: ${{ steps.get-docker-config.outputs.cache-mount-prefix }}
 
     - id: cache-inputs
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        ADDITIONAL_CACHE_FROM: ${{ inputs.cache-from }}
+        CACHE_MODE: ${{ inputs.cache-mode }}
         CACHE_DISABLED: ${{ steps.get-docker-config.outputs.cache-disabled }}
         CACHE_EXPORT_DISABLED: ${{ steps.get-docker-config.outputs.cache-export-disabled }}
         CACHE_FROM: ${{ steps.cache-arguments.outputs.cache-from }}
@@ -355,11 +399,23 @@ runs:
           const cacheDisabled = (process.env.CACHE_DISABLED || '') === 'true';
           const cacheExportDisabled = (process.env.CACHE_EXPORT_DISABLED || '') === 'true';
 
-          core.setOutput('cache-from', cacheDisabled ? '' : (process.env.CACHE_FROM || ''));
-          core.setOutput(
-            'cache-to',
-            cacheDisabled || cacheExportDisabled ? '' : (process.env.CACHE_TO || '')
-          );
+          const cacheMode = (process.env.CACHE_MODE || '').trim();
+          if (!['min', 'max'].includes(cacheMode)) {
+            throw new Error('Input "cache-mode" must be "min" or "max".');
+          }
+          const lines = value => (value || '').split('\n').map(line => line.trim()).filter(Boolean);
+          const additionalImports = lines(process.env.ADDITIONAL_CACHE_FROM);
+          for (const entry of additionalImports) {
+            if (!/^type=(gha,scope|registry,ref)=[a-zA-Z0-9][a-zA-Z0-9._/@:-]*$/.test(entry)) {
+              throw new Error('Input "cache-from" requires one "type=gha,scope=..." or "type=registry,ref=..." per line.');
+            }
+          }
+          const imports = [...new Set([...lines(process.env.CACHE_FROM), ...additionalImports])];
+          const exports = lines(process.env.CACHE_TO).map(entry => [
+            ...entry.split(',').filter(option => !option.startsWith('mode=')), `mode=${cacheMode}`,
+          ].join(','));
+          core.setOutput('cache-from', cacheDisabled ? '' : imports.join('\n'));
+          core.setOutput('cache-to', cacheDisabled || cacheExportDisabled ? '' : exports.join('\n'));
 
     - id: build
       # Keep Docker-dependent post steps in a composite that runs after docker/setup.
@@ -368,7 +424,8 @@ runs:
       with:
         builder: ${{ steps.docker-setup.outputs.buildx-name }}
         cache-mounts-enabled: ${{ steps.get-docker-config.outputs.cache-type == 'gha' }}
-        cache-hit: ${{ steps.cache.outputs.cache-hit }}
+        cache-mount-path: ${{ steps.get-docker-config.outputs.cache-mount-path }}
+        skip-cache-mount-extraction: ${{ steps.get-docker-config.outputs.cache-export-disabled == 'true' || steps.cache.outputs.cache-hit == 'true' }}
         dockerfile: ${{ steps.get-docker-config.outputs.dockerfile-path }}
         context: ${{ steps.get-docker-config.outputs.context-path }} # zizmor: ignore[template-injection]
         build-args: ${{ inputs.build-args }}

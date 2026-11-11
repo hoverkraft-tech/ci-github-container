@@ -47,7 +47,7 @@ permissions:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@ec1cd960fb1a1908ac21680756eb49a4c8f018d5 # 0.40.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image@bb7e3e5891e27a155182332537774b8653cf3531 # 0.41.0
   with:
     # OCI registry configuration used to pull, push and cache images.
     # Accepts either a registry hostname string (default format) or a JSON object.
@@ -140,6 +140,24 @@ permissions:
     # Default: `gha`
     cache-type: gha
 
+    # Additional cache imports, one per line: `type=gha,scope=...` or `type=registry,ref=...`.
+    # Appended to inferred imports without adding export destinations. Ignored when caching is disabled.
+    # See [cache usage](../../../docs/usage/build-cache.md).
+    cache-from: ""
+
+    # Cache export mode: `min` for final-image layers or `max` for all intermediate layers.
+    # Existing export destinations and write restrictions are preserved.
+    #
+    # Default: `max`
+    cache-mode: max
+
+    # Newline-separated workspace-relative dependency file patterns for cache-mount snapshot keys.
+    # Example: `application/package-lock.json`. Configured patterns must match at least one file.
+    # Changing these files restores compatible downloads and saves a refreshed snapshot after success.
+    # Keep toolchain versions in Dockerfile pins or build arguments so fallback keys retain their identity.
+    # Empty preserves snapshots keyed only by image, context, target, platform, Dockerfile and build arguments.
+    cache-mount-key-files: ""
+
     # Inline BuildKit daemon configuration.
     # See https://github.com/docker/setup-buildx-action#inputs.
     # Example for insecure registry:
@@ -208,6 +226,16 @@ permissions:
 |                               | For `gha`, cache restore remains enabled on untrusted default-branch-scoped triggers,                                                            |              |                                  |
 |                               | but cache export is skipped automatically because GitHub only grants read-only cache access there.                                               |              |                                  |
 |                               | See <https://docs.docker.com/build/cache/backends>.                                                                                              |              |                                  |
+| **`cache-from`**              | Additional cache imports, one per line: `type=gha,scope=...` or `type=registry,ref=...`.                                                         | **false**    | -                                |
+|                               | Appended to inferred imports without adding export destinations. Ignored when caching is disabled.                                               |              |                                  |
+|                               | See [cache usage](../../../docs/usage/build-cache.md).                                                                                           |              |                                  |
+| **`cache-mode`**              | Cache export mode: `min` for final-image layers or `max` for all intermediate layers.                                                            | **false**    | `max`                            |
+|                               | Existing export destinations and write restrictions are preserved.                                                                               |              |                                  |
+| **`cache-mount-key-files`**   | Newline-separated workspace-relative dependency file patterns for cache-mount snapshot keys.                                                     | **false**    | -                                |
+|                               | Example: `application/package-lock.json`. Configured patterns must match at least one file.                                                      |              |                                  |
+|                               | Changing these files restores compatible downloads and saves a refreshed snapshot after success.                                                 |              |                                  |
+|                               | Keep toolchain versions in Dockerfile pins or build arguments so fallback keys retain their identity.                                            |              |                                  |
+|                               | Empty preserves snapshots keyed only by image, context, target, platform, Dockerfile and build arguments.                                        |              |                                  |
 | **`buildkitd-config-inline`** | Inline BuildKit daemon configuration.                                                                                                            | **false**    | -                                |
 |                               | See <https://github.com/docker/setup-buildx-action#inputs>.                                                                                      |              |                                  |
 |                               | Example for insecure registry:                                                                                                                   |              |                                  |

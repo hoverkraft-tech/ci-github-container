@@ -31,7 +31,7 @@ Internal build-image implementation that keeps Docker-dependent post steps toget
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image/internal@ec1cd960fb1a1908ac21680756eb49a4c8f018d5 # 0.40.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/build-image/internal@bb7e3e5891e27a155182332537774b8653cf3531 # 0.41.0
   with:
     # Docker Buildx builder name.
     # This input is required.
@@ -40,8 +40,12 @@ Internal build-image implementation that keeps Docker-dependent post steps toget
     # Whether to inject and extract Docker cache mounts.
     cache-mounts-enabled: ""
 
-    # Whether the Docker cache mounts were restored from an exact cache key.
-    cache-hit: ""
+    # Directory containing this build scope's cache-mount snapshot.
+    # This input is required.
+    cache-mount-path: ""
+
+    # Skip extraction after an exact hit or when cache writes are disabled.
+    skip-cache-mount-extraction: ""
 
     # Resolved Dockerfile path.
     # This input is required.
@@ -96,25 +100,26 @@ Internal build-image implementation that keeps Docker-dependent post steps toget
 
 ## Inputs
 
-| **Input**                  | **Description**                                                        | **Required** | **Default** |
-| -------------------------- | ---------------------------------------------------------------------- | ------------ | ----------- |
-| **`builder`**              | Docker Buildx builder name.                                            | **true**     | -           |
-| **`cache-mounts-enabled`** | Whether to inject and extract Docker cache mounts.                     | **false**    | `false`     |
-| **`cache-hit`**            | Whether the Docker cache mounts were restored from an exact cache key. | **false**    | `false`     |
-| **`dockerfile`**           | Resolved Dockerfile path.                                              | **true**     | -           |
-| **`context`**              | Resolved Docker build context path.                                    | **true**     | -           |
-| **`build-args`**           | List of build-time variables.                                          | **false**    | -           |
-| **`target`**               | Dockerfile target stage.                                               | **false**    | -           |
-| **`secrets`**              | List of secrets exposed to the build.                                  | **false**    | -           |
-| **`secret-envs`**          | List of secret environment variables exposed to the build.             | **false**    | -           |
-| **`platform`**             | Platform to build for.                                                 | **true**     | -           |
-| **`cache-from`**           | External cache sources for BuildKit.                                   | **false**    | -           |
-| **`cache-to`**             | External cache destinations for BuildKit.                              | **false**    | -           |
-| **`no-cache`**             | Whether to disable the build cache.                                    | **false**    | `false`     |
-| **`image-outputs`**        | BuildKit image output configuration.                                   | **true**     | -           |
-| **`labels`**               | Image labels.                                                          | **false**    | -           |
-| **`annotations`**          | Image annotations.                                                     | **false**    | -           |
-| **`tags`**                 | Image tags.                                                            | **true**     | -           |
+| **Input**                         | **Description**                                                       | **Required** | **Default** |
+| --------------------------------- | --------------------------------------------------------------------- | ------------ | ----------- |
+| **`builder`**                     | Docker Buildx builder name.                                           | **true**     | -           |
+| **`cache-mounts-enabled`**        | Whether to inject and extract Docker cache mounts.                    | **false**    | `false`     |
+| **`cache-mount-path`**            | Directory containing this build scope's cache-mount snapshot.         | **true**     | -           |
+| **`skip-cache-mount-extraction`** | Skip extraction after an exact hit or when cache writes are disabled. | **false**    | `false`     |
+| **`dockerfile`**                  | Resolved Dockerfile path.                                             | **true**     | -           |
+| **`context`**                     | Resolved Docker build context path.                                   | **true**     | -           |
+| **`build-args`**                  | List of build-time variables.                                         | **false**    | -           |
+| **`target`**                      | Dockerfile target stage.                                              | **false**    | -           |
+| **`secrets`**                     | List of secrets exposed to the build.                                 | **false**    | -           |
+| **`secret-envs`**                 | List of secret environment variables exposed to the build.            | **false**    | -           |
+| **`platform`**                    | Platform to build for.                                                | **true**     | -           |
+| **`cache-from`**                  | External cache sources for BuildKit.                                  | **false**    | -           |
+| **`cache-to`**                    | External cache destinations for BuildKit.                             | **false**    | -           |
+| **`no-cache`**                    | Whether to disable the build cache.                                   | **false**    | `false`     |
+| **`image-outputs`**               | BuildKit image output configuration.                                  | **true**     | -           |
+| **`labels`**                      | Image labels.                                                         | **false**    | -           |
+| **`annotations`**                 | Image annotations.                                                    | **false**    | -           |
+| **`tags`**                        | Image tags.                                                           | **true**     | -           |
 
 <!-- inputs:end -->
 <!-- secrets:start -->
