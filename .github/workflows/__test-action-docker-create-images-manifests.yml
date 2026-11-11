@@ -207,7 +207,13 @@ jobs:
               await assert.rejects(publish(invalid));
             }
             await assert.rejects(publish({ application: { ...single, digest: indexDigest } }), /Conflicting digest/);
-            for (const source of [`other.example.com/test/application@${sourceDigest}`, `${repository}@sha256:invalid`]) {
+            for (const tag of ['bad tag', 'bad@tag', '-invalid', 'a'.repeat(129)]) {
+              await assert.rejects(publish({ application: { ...single, tags: [tag] } }), /Invalid tag/);
+            }
+            for (const source of [
+              `other.example.com/test/application@${sourceDigest}`, `${repository}@sha256:invalid`,
+              `${repository}:@${sourceDigest}`, `${repository}:bad tag@${sourceDigest}`,
+            ]) {
               await assert.rejects(publish({ application: { ...single, images: [source] } }), /Invalid immutable source/);
             }
 

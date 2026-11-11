@@ -108,6 +108,7 @@ runs:
             throw new Error('"built-images" must be a JSON object');
           }
 
+          const tagPattern = /^[\w][\w.-]{0,127}$/;
           let requiresBuildx = false;
           for (const [name, image] of Object.entries(builtImages)) {
             if (!image || typeof image !== 'object' || Array.isArray(image)) {
@@ -124,6 +125,9 @@ runs:
                 throw new Error(`Expected non-empty "${field}" for "${name}"`);
               }
             }
+            if (image.tags.some(tag => !tagPattern.test(tag))) {
+              throw new Error(`Invalid tag for "${name}"`);
+            }
 
             const previousDigest = image.digest;
             delete image.digest;
@@ -132,9 +136,10 @@ runs:
               const source = image.images[0];
               const [reference, digest] = source.split('@');
               const repository = `${image.registry}/${image.repository}`;
+              const sourceTag = reference.startsWith(`${repository}:`) ? reference.slice(repository.length + 1) : '';
               if (source.includes('@')) {
                 if (source.split('@').length !== 2 || !/^sha256:[a-f0-9]{64}$/.test(digest) ||
-                    (reference !== repository && !reference.startsWith(`${repository}:`))) {
+                    (reference !== repository && !tagPattern.test(sourceTag))) {
                   throw new Error(`Invalid immutable source for "${name}": ${source}`);
                 }
                 if (previousDigest !== undefined && previousDigest !== digest) {
