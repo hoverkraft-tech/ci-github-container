@@ -64,6 +64,24 @@ saving precedes builder teardown and exact hits skip extraction. Retain existing
 registry/GHA and single/multi-platform tests. Regenerate metadata documentation
 through CI Dokumentor. Record the revised candidate's actual results separately.
 
+## Fixture reuse review, 2026-11-11
+
+Reuse `tests/application/Dockerfile` for the snapshot lifecycle checks. A small
+`cache-test` target extends its existing production stage and probes the existing
+APT download mount. Reuse the caching workflow's mono-arch and multi-arch GHA
+image names, then remove the separate cache Dockerfile and extra cleanup entries.
+Run the lifecycle checks after the existing GHA builds so writers do not race on
+tags or layer-cache destinations. Existing image assertions use immutable digests
+and can run concurrently with these checks.
+
+Keep independent runners for seed, restore, isolation and bypass. A changed probe
+input forces its RUN instruction to execute and check the restored marker, so a
+layer-cache hit cannot stand in for mount restoration. Local cold/warm builds and
+the intentional missing-marker failure passed with a temporary builder. Cache
+contracts, workflow dependency checks and repository lint/security checks passed.
+The following dated results identify earlier candidates; use this revision's PR
+checks for hosted validation of the reused fixture.
+
 ## Revised scope: local validation, 2026-11-11
 
 The actual configuration scripts passed local identity and cache-policy contracts.

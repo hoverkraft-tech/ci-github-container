@@ -106,6 +106,8 @@ jobs:
   cache-seed:
     name: Cache lifecycle - seed
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    # Wait for existing GHA writers; their image assertions consume immutable digests.
+    needs: act-build-images-gha
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -117,20 +119,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Arrange dependency revision
-        run: printf '%s\n' 'v1 none' > tests/cache/dependencies.lock
+      - name: Arrange cache probe
+        run: printf '%s\n' 'v1 absent' > tests/application/cache-input.txt
 
       - name: Act - Build image
         id: build
         uses: $/actions/docker/build-image
         with:
-          context: tests/cache
-          dockerfile: Dockerfile
+          context: "."
+          dockerfile: tests/application/Dockerfile
           platform: linux/amd64
-          image: test-cache-ci
-          target: ci
+          image: test-caching-mono-arch-gha
+          target: cache-test
           cache-type: "gha"
-          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: BUILD_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assert build result
         id: inspect
@@ -154,20 +156,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Arrange dependency revision
-        run: printf '%s\n' 'v2 v1' > tests/cache/dependencies.lock
+      - name: Arrange cache probe
+        run: printf '%s\n' 'v2 v1' > tests/application/cache-input.txt
 
       - name: Act - Build image
         id: build
         uses: $/actions/docker/build-image
         with:
-          context: tests/cache
-          dockerfile: Dockerfile
+          context: "."
+          dockerfile: tests/application/Dockerfile
           platform: linux/amd64
-          image: test-cache-ci
-          target: ci
+          image: test-caching-mono-arch-gha
+          target: cache-test
           cache-type: "gha"
-          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: BUILD_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assert build result
         id: inspect
@@ -193,20 +195,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Arrange dependency revision
-        run: printf '%s\n' 'v2 absent' > tests/cache/dependencies.lock
+      - name: Arrange cache probe
+        run: printf '%s\n' 'v2 absent' > tests/application/cache-input.txt
 
       - name: Act - Build image
         id: build
         uses: $/actions/docker/build-image
         with:
-          context: tests/cache
-          dockerfile: Dockerfile
+          context: "."
+          dockerfile: tests/application/Dockerfile
           platform: linux/amd64
-          image: test-cache-isolated
-          target: ci
+          image: test-caching-multi-arch-gha
+          target: cache-test
           cache-type: "gha"
-          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: BUILD_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assert build result
         id: inspect
@@ -230,20 +232,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Arrange dependency revision
-        run: printf '%s\n' 'v3 absent' > tests/cache/dependencies.lock
+      - name: Arrange cache probe
+        run: printf '%s\n' 'v3 absent' > tests/application/cache-input.txt
 
       - name: Act - Build image
         id: build
         uses: $/actions/docker/build-image
         with:
-          context: tests/cache
-          dockerfile: Dockerfile
+          context: "."
+          dockerfile: tests/application/Dockerfile
           platform: linux/amd64
-          image: test-cache-ci
-          target: ci
+          image: test-caching-mono-arch-gha
+          target: cache-test
           cache-type: "false"
-          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: BUILD_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assert build result
         id: inspect
@@ -254,21 +256,21 @@ jobs:
           test -n "$install_id"
           echo "install-id=$install_id" >> "$GITHUB_OUTPUT"
 
-      - name: Arrange a failing dependency install
-        run: printf '%s\n' 'v4 missing-download' > tests/cache/dependencies.lock
+      - name: Arrange a failing cache probe
+        run: printf '%s\n' 'v4 missing-download' > tests/application/cache-input.txt
 
       - name: Act - Reject a failed build
         id: failure
         continue-on-error: true
         uses: $/actions/docker/build-image
         with:
-          context: tests/cache
-          dockerfile: Dockerfile
+          context: "."
+          dockerfile: tests/application/Dockerfile
           platform: linux/amd64
-          image: test-cache-ci
-          target: ci
+          image: test-caching-mono-arch-gha
+          target: cache-test
           cache-type: "false"
-          build-args: CACHE_TEST_ID=${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: BUILD_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assert the failure propagates without an image
         env:
