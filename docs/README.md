@@ -1,6 +1,6 @@
 # Documentation
 
-- [Build caches](development/build-cache.md)
+- [Build caches](../actions/docker/build-image/README.md#build-caches)
 - [Dependency updates](development/dependency-updates.md)
 - [Maintaining action distributions](development/action-distributions.md)
 - [Publishing releases](development/releases.md)
