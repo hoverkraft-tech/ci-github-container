@@ -25,6 +25,21 @@ RUN mkdir -p /usr/share/nginx/html/health/check && echo "<html><body><h1>OK</h1>
 
 EXPOSE 8080
 
+FROM prod AS cache-test
+
+ARG BUILD_RUN_ID
+COPY tests/application/cache-input.txt /cache-input.txt
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    test -n "$BUILD_RUN_ID" && \
+    read -r revision previous </cache-input.txt && \
+    if [ "$previous" = "absent" ]; then test ! -f /var/cache/apt/cache-test-v1; \
+    elif [ "$previous" != "none" ]; then test -f "/var/cache/apt/cache-test-$previous"; fi && \
+    touch "/var/cache/apt/cache-test-$revision" && \
+    cat /proc/sys/kernel/random/uuid >/install-id
+
+USER 1000
+HEALTHCHECK CMD ["test", "-s", "/install-id"]
+
 FROM alpine:3 AS test
 
 # Create user and group
