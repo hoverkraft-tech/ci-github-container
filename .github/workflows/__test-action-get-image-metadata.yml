@@ -41,12 +41,17 @@ jobs:
             async function evaluate(id, overrides = {}, eventName = 'push') {
               const outputs = {};
               const env = { ...baseEnv, ...overrides };
-              await new AsyncFunction('require', 'process', 'context', 'core', steps.find(step => step.id === id).with.script)(
-                require, { env }, { eventName, ref: env.GH_REF }, {
-                  setOutput: (key, value) => { outputs[key] = value; },
-                  setFailed: message => { throw new Error(message); },
-                },
-              );
+              try {
+                await new AsyncFunction('require', 'process', 'context', 'core', steps.find(step => step.id === id).with.script)(
+                  require, { env }, { eventName, ref: env.GH_REF }, {
+                    setOutput: (key, value) => { outputs[key] = value; },
+                    setFailed: message => { throw new Error(message); },
+                  },
+                );
+              } catch (error) {
+                if (id === 'generate-outputs') assert.equal(outputs.tags, undefined, 'Invalid candidates must expose no publication tags');
+                throw error;
+              }
               return outputs;
             }
             const first = await evaluate('generate-outputs');
