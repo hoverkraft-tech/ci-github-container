@@ -115,18 +115,20 @@ jobs:
               }
               const workflow = await readManifest('.github/workflows/docker-build-images.yml');
               const validate = workflow.jobs['prepare-variables'].steps.find(step => step.id === 'validate-inputs').with.script;
-              async function validateImages(image) {
+              async function validateImages(image, environment = {}) {
                 const outputs = {};
                 await new AsyncFunction('process', 'context', 'core', validate)(
                   { env: { OCI_REGISTRY_PASSWORD: 'fixture', RUNS_ON_INPUT: '["ubuntu-latest"]',
                     IMAGES_INPUT: JSON.stringify([{ name: 'app', platforms: ['linux/amd64'], ...image }]),
                     CACHE_FROM_INPUT: 'type=gha,scope=global', CACHE_MODE_INPUT: 'max', CACHE_MOUNT_KEY_FILES_INPUT: '**/lock',
+                    ...environment,
                   } }, { repo: { owner: 'example', repo: 'project' } },
                   { setOutput: (key, value) => { outputs[key] = value; } },
                 );
                 return JSON.parse(outputs.images)[0];
               }
               assert.equal((await validateImages({}))['cache-from'], 'type=gha,scope=global');
+              await assert.rejects(validateImages({}, { CACHE_MODE_INPUT: '' }), /cache-mode/);
               const overrides = await validateImages({ 'cache-from': '', 'cache-mode': 'min', 'cache-mount-key-files': '' });
               assert.equal(overrides['cache-from'], '');
               assert.equal(overrides['cache-mode'], 'min');

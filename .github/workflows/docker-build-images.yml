@@ -292,7 +292,7 @@ jobs:
 
               for (const [property, defaultValue] of Object.entries({
                 'cache-from': process.env.CACHE_FROM_INPUT || '',
-                'cache-mode': process.env.CACHE_MODE_INPUT || 'max',
+                'cache-mode': process.env.CACHE_MODE_INPUT ?? 'max',
                 'cache-mount-key-files': process.env.CACHE_MOUNT_KEY_FILES_INPUT || '',
               })) {
                 if (!Object.hasOwn(image, property)) image[property] = defaultValue;
