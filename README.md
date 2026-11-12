@@ -35,6 +35,8 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 #### - [Get image name](actions/docker/get-image-name/README.md)
 
+#### - [Promote images](actions/docker/promote-images/README.md)
+
 #### - [Prune pull requests image tags](actions/docker/prune-pull-requests-image-tags/README.md)
 
 #### - [Setup](actions/docker/setup/README.md)

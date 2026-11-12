@@ -112,7 +112,7 @@ jobs:
       built-images: ${{ job.status == 'success' && steps.promote.outputs.built-images || '' }}
     steps:
       - id: promote
-        uses: $/actions/docker/promote-images/internal
+        uses: $/actions/docker/promote-images
         with:
           job-results: ${{ inputs.job-results }}
           oci-registry: ${{ inputs.oci-registry }}

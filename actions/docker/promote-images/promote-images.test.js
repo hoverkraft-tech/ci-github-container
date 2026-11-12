@@ -1,12 +1,8 @@
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
 const { test } = require("node:test");
-const {
-	promotionContract,
-} = require("../actions/docker/promote-images/internal/contract");
-const {
-	ImagePromotion,
-} = require("../actions/docker/promote-images/internal/promotion");
+const { promotionContract } = require("./contract");
+const { ImagePromotion } = require("./promotion");
 
 const raw =
 	'{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{}}';

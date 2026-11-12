@@ -107,7 +107,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
 |                               | Accepts either a single username string (default format) or a JSON object using the same keys as `oci-registry`.                                 |              |                         |
 | **`oci-registry-password`**   | Password or personal access token configuration used to log against OCI registries.                                                              | **false**    | -                       |
 |                               | Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.                           |              |                         |
-| **`buildkitd-config-inline`** | Inline BuildKit daemon configuration.                                                                                                            | **false**    | -                       |
+| **`buildkitd-config-inline`** | Inline BuildKit daemon configuration for the `docker-container` driver; ignored with `docker`.                                                   | **false**    | -                       |
 |                               | See <https://github.com/docker/setup-buildx-action#inputs>.                                                                                      |              |                         |
 |                               | Example for insecure registry:                                                                                                                   |              |                         |
 |                               | <!-- textlint-disable --><pre lang="ini">[registry."my-registry.local:5000"]&#13; http = true&#13; insecure = true</pre><!-- textlint-enable --> |              |                         |
@@ -118,10 +118,13 @@ Shared action to configure Docker tooling and OCI registry authentication.
 |                               | When disabled, reuse an existing Docker CLI without contacting its daemon.                                                                       |              |                         |
 |                               | If the CLI is missing, install the configured Docker version so authentication remains available.                                                |              |                         |
 | **`setup-buildx`**            | Whether to install and configure Docker Buildx.                                                                                                  | **false**    | `true`                  |
+| **`buildx-driver`**           | Buildx driver: `docker-container` (default) or `docker`.                                                                                         | **false**    | `docker-container`      |
+|                               | Use `docker` to reuse the Docker daemon's builder without pulling or starting a BuildKit container.                                              |              |                         |
+|                               | The Buildx version remains managed by this action. Ignored when `setup-buildx` is `false`.                                                       |              |                         |
 | **`docker-version`**          | Required Docker version. The action installs it when the active Docker client or daemon reports a different version.                             | **false**    | `29.7.2`                |
 |                               | When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.               |              |                         |
 | **`buildx-version`**          | Buildx version used by docker/setup-buildx-action.                                                                                               | **false**    | `v0.38.2`               |
-| **`buildkit-image`**          | BuildKit image used by docker/setup-buildx-action.                                                                                               | **false**    | `moby/buildkit:v0.34.2` |
+| **`buildkit-image`**          | BuildKit image used by the `docker-container` driver; ignored with `docker`.                                                                     | **false**    | `moby/buildkit:v0.34.2` |
 
 <!-- inputs:end -->
 

@@ -64,6 +64,14 @@ Verify every destination digest after writing; return normal `built-images` only
 when all destinations succeed. Existing digest-addressed signatures and provenance
 remain reachable in the same repository.
 
+Keep the action and its unit tests together under `actions/docker/promote-images/`.
+The reusable workflow owns serialization; the action's directory name does not
+enforce that lock. Use shared Docker setup with its `docker` Buildx driver for
+promotion, avoiding a separate BuildKit container while centralizing tool versions.
+Existing build callers retain the default `docker-container` driver. Install
+Cosign for verification only: `sign-images` creates new signatures and requires
+OIDC write permission, so it cannot replace verification of the original builder.
+
 ## Recovery and cleanup
 
 - Tag writes are individually visible, not atomic as a group. Failure returns no
