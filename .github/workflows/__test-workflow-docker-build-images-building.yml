@@ -242,7 +242,7 @@ jobs:
     with:
       job-results: ${{ toJSON(needs) }}
     secrets:
-      oci-registry-password: ${{ github.token }}
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   assert-promotion:
     name: Assert exact-digest promotion and retained security evidence
@@ -258,7 +258,7 @@ jobs:
       - uses: $/actions/docker/setup
         with:
           oci-registry-username: ${{ github.repository_owner }}
-          oci-registry-password: ${{ github.token }}
+          oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
           setup-docker: false
           setup-buildx: false
 
@@ -308,12 +308,14 @@ jobs:
     with:
       job-results: ${{ toJSON(needs) }}
     secrets:
-      oci-registry-password: ${{ github.token }}
+      oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   assert-repeat-promotion:
     name: Assert idempotent promotion
     needs: [promote-candidates, repeat-promotion]
     runs-on: ubuntu-latest
+    permissions:
+      deployments: read
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -321,7 +323,22 @@ jobs:
           SECOND: ${{ needs.repeat-promotion.outputs.built-images }}
         with:
           script: |
-            require('node:assert/strict').deepEqual(JSON.parse(process.env.FIRST), JSON.parse(process.env.SECOND));
+            const assert = require('node:assert/strict');
+            const images = JSON.parse(process.env.FIRST);
+            assert.deepEqual(images, JSON.parse(process.env.SECOND));
+            const destinations = Object.fromEntries(Object.values(images).flatMap(image =>
+              image.tags.map(tag => [`${image.registry}/${image.repository}:${tag}`, image.digest])));
+            const records = await github.paginate(github.rest.repos.listDeployments, {
+              ...context.repo, environment: 'ci-image-promotion', task: 'ci-image-promotion', per_page: 100,
+            });
+            const current = records.filter(record => record.payload?.runId === String(context.runId) && record.payload.attempt === process.env.GITHUB_RUN_ATTEMPT);
+            assert.equal(current.length, 2, 'Both serialized promotion calls must retain their claims');
+            for (const record of current) {
+              assert.deepEqual(record.payload.destinations, destinations);
+              assert.equal(record.payload.revision, context.sha);
+              const { data: statuses } = await github.rest.repos.listDeploymentStatuses({ ...context.repo, deployment_id: record.id });
+              assert.equal(statuses[0].state, 'success');
+            }
 
   failed-candidate:
     name: Assert failed builds have no candidate output

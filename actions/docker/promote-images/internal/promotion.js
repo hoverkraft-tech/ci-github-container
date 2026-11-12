@@ -82,9 +82,7 @@ class ImagePromotion {
 	}
 
 	async command(command, args) {
-		const result = await this.exec.getExecOutput(command, args, {
-			silent: true,
-		});
+		const result = await this.exec.getExecOutput(command, args);
 		return result.stdout;
 	}
 
