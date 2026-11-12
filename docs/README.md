@@ -8,3 +8,4 @@
 - [Publication setup and build digest reuse](adr/0003-reuse-build-digests-and-limit-publication-setup.md)
 - [Build-cache mount isolation](adr/0004-scope-build-cache-imports-and-mount-snapshots.md)
 - [Candidate publication and final image metadata](adr/0005-publish-candidates-with-final-image-metadata.md)
+- [Validated digest promotion](adr/0006-promote-validated-image-digests.md)

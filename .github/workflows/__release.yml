@@ -26,6 +26,7 @@ jobs:
     uses: $/.github/workflows/__shared-ci.yml
     permissions:
       actions: read
+      deployments: write
       attestations: write
       contents: read
       id-token: write

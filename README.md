@@ -63,6 +63,8 @@ _Orchestrated workflows you can plug directly into repositories to automate cont
 
 ### - [Docker build images](.github/workflows/docker-build-images.md)
 
+### - [Docker promote images](.github/workflows/docker-promote-images.md)
+
 ### - [Prune pull requests images tags](.github/workflows/prune-pull-requests-images-tags.md)
 
 ## Architecture Decisions

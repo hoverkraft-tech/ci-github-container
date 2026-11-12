@@ -158,6 +158,8 @@ jobs:
   assert-candidates:
     name: Assert candidate outputs, tags and security metadata
     needs: act-candidates
+    outputs:
+      validated-images: ${{ needs.act-candidates.outputs.built-images }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -226,6 +228,101 @@ jobs:
               await exec.exec('gh', ['attestation', 'verify', `oci://${reference}`, '--repo', process.env.GITHUB_REPOSITORY]);
             }
 
+  promote-candidates:
+    name: Promote validated candidates
+    needs: [act-candidates, assert-candidates]
+    uses: $/.github/workflows/docker-promote-images.yml
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+      deployments: write
+      packages: write
+      pull-requests: read
+    with:
+      job-results: ${{ toJSON(needs) }}
+    secrets:
+      oci-registry-password: ${{ github.token }}
+
+  assert-promotion:
+    name: Assert exact-digest promotion and retained security evidence
+    needs: [act-candidates, promote-candidates]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    outputs:
+      validated-images: ${{ needs.act-candidates.outputs.built-images }}
+    steps:
+      - uses: $/actions/docker/setup
+        with:
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ github.token }}
+          setup-docker: false
+          setup-buildx: false
+
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CANDIDATES: ${{ needs.act-candidates.outputs.built-images }}
+          PROMOTED: ${{ needs.promote-candidates.outputs.built-images }}
+          GH_TOKEN: ${{ github.token }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const candidates = JSON.parse(process.env.CANDIDATES);
+            const promoted = JSON.parse(process.env.PROMOTED);
+            assert.deepEqual(Object.keys(promoted).sort(), Object.keys(candidates).sort());
+            for (const [name, candidate] of Object.entries(candidates)) {
+              const image = promoted[name];
+              assert.equal(image.digest, candidate.digest);
+              assert.equal(image.candidate, undefined);
+              assert.deepEqual(image.annotations, candidate.annotations);
+              assert.deepEqual(image.platforms, candidate.platforms);
+              assert.deepEqual(image.tags, ['1.2.3']);
+              assert.deepEqual(image.images, candidate.candidate.destinations.map(tag => `${tag}@${candidate.digest}`));
+              const reference = `${image.registry}/${image.repository}`;
+              const before = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', `${reference}@${candidate.digest}`]);
+              const after = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', `${reference}:1.2.3`]);
+              assert.equal(after.stdout, before.stdout, 'Promotion must retain exact manifest bytes');
+              await exec.exec('cosign', [
+                'verify', '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+                '--certificate-identity-regexp', `^https://github.com/${process.env.GITHUB_REPOSITORY}/`, image.images[0],
+              ]);
+              await exec.exec('gh', ['attestation', 'verify', `oci://${image.images[0]}`, '--repo', process.env.GITHUB_REPOSITORY]);
+            }
+
+  repeat-promotion:
+    name: Repeat identical promotion
+    needs: [act-candidates, assert-promotion]
+    uses: $/.github/workflows/docker-promote-images.yml
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+      deployments: write
+      packages: write
+      pull-requests: read
+    with:
+      job-results: ${{ toJSON(needs) }}
+    secrets:
+      oci-registry-password: ${{ github.token }}
+
+  assert-repeat-promotion:
+    name: Assert idempotent promotion
+    needs: [promote-candidates, repeat-promotion]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          FIRST: ${{ needs.promote-candidates.outputs.built-images }}
+          SECOND: ${{ needs.repeat-promotion.outputs.built-images }}
+        with:
+          script: |
+            require('node:assert/strict').deepEqual(JSON.parse(process.env.FIRST), JSON.parse(process.env.SECOND));
+
   failed-candidate:
     name: Assert failed builds have no candidate output
     runs-on: ubuntu-latest
@@ -259,12 +356,22 @@ jobs:
           test -z "$BUILT_IMAGE"
 
   cleanup-candidates:
-    name: Clean isolated candidate test packages
+    name: Clean isolated candidate test packages and publication records
     if: always()
-    needs: [act-candidates, assert-candidates, failed-candidate]
+    needs:
+      [
+        act-candidates,
+        assert-candidates,
+        failed-candidate,
+        promote-candidates,
+        assert-promotion,
+        repeat-promotion,
+        assert-repeat-promotion,
+      ]
     runs-on: ubuntu-latest
     permissions:
       packages: write
+      deployments: write
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -278,6 +385,19 @@ jobs:
               } catch (error) {
                 if (error.status !== 404) throw error;
               }
+            }
+
+            const records = await github.paginate(github.rest.repos.listDeployments, {
+              ...context.repo, environment: 'ci-image-promotion', task: 'ci-image-promotion', per_page: 100,
+            });
+            const prefix = `ghcr.io/${process.env.GITHUB_REPOSITORY.toLowerCase()}/test-candidate-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-`;
+            for (const record of records) {
+              const payload = record.payload;
+              if (payload?.runId !== String(context.runId) || payload.attempt !== process.env.GITHUB_RUN_ATTEMPT) continue;
+              const destinations = Object.keys(payload.destinations || {});
+              if (!destinations.length || !destinations.every(destination => destination.startsWith(prefix))) continue;
+              await github.rest.repos.createDeploymentStatus({ ...context.repo, deployment_id: record.id, state: 'inactive', auto_inactive: false });
+              await github.rest.repos.deleteDeployment({ ...context.repo, deployment_id: record.id });
             }
 
 # jscpd:ignore-end

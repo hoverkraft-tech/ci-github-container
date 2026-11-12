@@ -29,6 +29,18 @@ jobs:
     with:
       comment: false
 
+  test-image-promotion-contracts:
+    name: Test image promotion contracts
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: node --test tests/promote-images.test.js
+
   test-action-docker-build-image:
     needs: lint
     uses: $/.github/workflows/__test-action-docker-build-image.yml
@@ -124,6 +136,8 @@ jobs:
     permissions:
       attestations: write
       contents: read
+      actions: read
+      deployments: write
       id-token: write
       issues: read
       packages: write
