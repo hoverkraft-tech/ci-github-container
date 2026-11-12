@@ -49,7 +49,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
     # Accepts either a single password/token string (default format) or a JSON object using the same keys as `oci-registry`.
     oci-registry-password: ""
 
-    # Inline BuildKit daemon configuration.
+    # Inline BuildKit daemon configuration for the `docker-container` driver; ignored with `docker`.
     # See https://github.com/docker/setup-buildx-action#inputs.
     # Example for insecure registry:
     # ```ini
@@ -76,6 +76,13 @@ Shared action to configure Docker tooling and OCI registry authentication.
     # Default: `true`
     setup-buildx: true
 
+    # Buildx driver: `docker-container` (default) or `docker`.
+    # Use `docker` to reuse the Docker daemon's builder without pulling or starting a BuildKit container.
+    # The Buildx version remains managed by this action. Ignored when `setup-buildx` is `false`.
+    #
+    # Default: `docker-container`
+    buildx-driver: docker-container
+
     # Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
     # When `DOCKER_HOST` is set, the Docker daemon is managed outside of the runner (e.g. a Docker-in-Docker sidecar) and is kept as is.
     #
@@ -87,7 +94,7 @@ Shared action to configure Docker tooling and OCI registry authentication.
     # Default: `v0.38.2`
     buildx-version: v0.38.2
 
-    # BuildKit image used by docker/setup-buildx-action.
+    # BuildKit image used by the `docker-container` driver; ignored with `docker`.
     #
     # Default: `moby/buildkit:v0.34.2`
     buildkit-image: moby/buildkit:v0.34.2
