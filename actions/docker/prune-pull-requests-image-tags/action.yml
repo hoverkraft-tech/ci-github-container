@@ -57,6 +57,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       with:
         github-token: ${{ inputs.github-token }}
+        retries: 3
         script: |
           const pullRequestTagFilter = process.env.INPUT_PULL_REQUEST_TAG_FILTER || "";
           if (!pullRequestTagFilter.length) {
