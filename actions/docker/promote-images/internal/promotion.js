@@ -25,9 +25,10 @@ class ImagePromotion {
 			this.attempt,
 			"The current run attempt has changed",
 		);
-		assert.equal(
-			run.status,
-			"in_progress",
+		assert(
+			["queued", "in_progress", "waiting", "pending", "requested"].includes(
+				run.status,
+			),
 			"The workflow is no longer running",
 		);
 		assert.equal(run.conclusion, null, "The workflow has already concluded");

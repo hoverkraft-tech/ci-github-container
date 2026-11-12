@@ -577,3 +577,10 @@ for (const [eventName, ref] of [
 		assert.equal(state.statuses.at(-1), "success");
 	});
 }
+
+test("accepts a current run reported as queued while its promotion job executes", async () => {
+	const { state, promotion } = harness();
+	state.run.status = "queued";
+	await promotion.promote({ backend: candidate() });
+	assert.equal(state.statuses.at(-1), "success");
+});
