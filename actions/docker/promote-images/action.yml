@@ -19,8 +19,9 @@ inputs:
   build-workflow:
     description: >-
       Trusted builder as owner/repository/.github/workflows/file.yml, without a ref.
-      Used for both signatures and provenance; set this when using a fork of the build workflow.
-    default: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml
+      Defaults to docker-build-images.yml in this action's repository.
+      Used for both signatures and provenance; override when the builder lives elsewhere.
+    default: ""
   oci-registry:
     description: Authorized publication registry hostname.
     default: ghcr.io
@@ -48,11 +49,13 @@ runs:
         REGISTRY: ${{ inputs.oci-registry }}
         REPOSITORY: ${{ inputs.repository }}
         BUILD_WORKFLOW: ${{ inputs.build-workflow }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
       with:
         script: |
           const { pathToFileURL } = require('node:url');
           const { promotionContract } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/contract.js`));
-          const builder = promotionContract.builder(process.env.BUILD_WORKFLOW);
+          const builder = promotionContract.builder(process.env.BUILD_WORKFLOW, process.env.ACTION_REPOSITORY);
+          core.setOutput('build-workflow', builder.workflow);
           core.setOutput('builder-identity-regexp', builder.identityRegexp);
           const images = promotionContract.collect(process.env.JOB_RESULTS);
           promotionContract.validate(images, {
@@ -84,7 +87,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         IMAGES: ${{ steps.validate.outputs.images }}
         VERIFIED_IMAGES: ${{ steps.verify.outputs.verified-images }}
-        BUILD_WORKFLOW: ${{ inputs.build-workflow }}
+        BUILD_WORKFLOW: ${{ steps.validate.outputs.build-workflow }}
         GH_TOKEN: ${{ github.token }}
       with:
         script: |

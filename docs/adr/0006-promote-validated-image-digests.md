@@ -43,13 +43,16 @@ or unattested candidates are not supported by this promotion workflow.
 
 Expose one `build-workflow` input for the trusted builder's
 `owner/repository/.github/workflows/file.yml` path. Use it for both the escaped,
-anchored signature identity and the provenance signer policy. The default is the
-published Docker build images workflow; callers from any organization can use it
-unchanged. A fork selects its own builder explicitly. Do not infer the builder
-from the calling application's repository: reusable workflow signatures identify
-the called workflow. The candidate source, revision and run/attempt still have to
-match the caller, independently of the configured builder. Custom builders must
-preserve the same candidate and provenance contract.
+anchored signature identity and the provenance signer policy. With no override,
+resolve `docker-build-images.yml` from `github.action_repository`, captured in the
+composite step's environment. Forks then select their own builder automatically;
+an explicit override supports a builder hosted elsewhere. Resolve this once and
+forward the same value to signature and provenance verification. Do not infer
+the builder from the calling application's repository: reusable workflow signatures
+identify the called workflow. If the action repository context is unavailable,
+require an explicit builder instead of guessing. The candidate source, revision
+and run/attempt still have to match the caller, independently of the configured
+builder. Custom builders must preserve the same candidate and provenance contract.
 
 Serialize all promotion jobs in a calling repository with one internal concurrency
 group and `cancel-in-progress: false`. Use GitHub deployment records with task
@@ -138,3 +141,4 @@ cover PR, branch and release tags; hosted PR tests do not claim a real release r
 - [GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 - [GitHub deployments API](https://docs.github.com/en/rest/deployments/deployments)
 - [Attestation verification policy](https://cli.github.com/manual/gh_attestation_verify)
+- [Action repository context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context)

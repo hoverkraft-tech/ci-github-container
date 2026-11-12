@@ -161,6 +161,56 @@ function harness(overrides = {}) {
 	return { state, promotion, github };
 }
 
+for (const actionRepository of [
+	"builders/automation",
+	"Other-Org/container.ci",
+]) {
+	test(`defaults to the build workflow in ${actionRepository}`, async () => {
+		const builder = promotionContract.builder("", actionRepository);
+		const workflow = `${actionRepository}/.github/workflows/docker-build-images.yml`;
+		assert.equal(builder.workflow, workflow);
+		assert(
+			new RegExp(builder.identityRegexp).test(
+				`https://github.com/${workflow}@main`,
+			),
+		);
+		assert(
+			!new RegExp(builder.identityRegexp).test(
+				`https://github.com/example/application/.github/workflows/docker-build-images.yml@main`,
+			),
+		);
+		const { state, promotion } = harness({ buildWorkflow: builder.workflow });
+		await promotion.promote({ backend: candidate() });
+		const command = state.commands.find(([command]) => command === "gh");
+		assert.equal(command[command.indexOf("--signer-workflow") + 1], workflow);
+	});
+}
+
+test("an explicit builder takes precedence over action repository discovery", () => {
+	const workflow = "separate/builders/.github/workflows/build.yml";
+	const expected = promotionContract.builder(workflow);
+	assert.deepEqual(
+		promotionContract.builder(workflow, "fork/container"),
+		expected,
+	);
+	assert.deepEqual(promotionContract.builder(workflow, ""), expected);
+});
+
+for (const actionRepository of [
+	undefined,
+	"",
+	"owner",
+	"owner/repo@main",
+	"owner/repo/subdir",
+]) {
+	test(`requires an explicit builder with invalid action repository ${JSON.stringify(actionRepository)}`, () => {
+		assert.throws(
+			() => promotionContract.builder("", actionRepository),
+			/build-workflow must/,
+		);
+	});
+}
+
 for (const workflow of [
 	"builders/automation/.github/workflows/build-images.yml",
 	"Other-Org/container.ci/.github/workflows/build.v2.yaml",

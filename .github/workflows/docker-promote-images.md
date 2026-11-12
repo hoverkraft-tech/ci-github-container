@@ -58,12 +58,12 @@ Signatures and provenance from Docker build images are required. Promotion check
 the candidate tag/digest, exact manifest bytes, source ref and current run/attempt.
 Only same-repository tag updates within the configured registry/prefix are allowed.
 
-The trusted builder is the reusable workflow that built the images, not the
-calling application repository. Calls from other organizations use the default
-unchanged when building with the published Docker build images workflow. For a
-fork, set `build-workflow: my-org/ci-github-container/.github/workflows/docker-build-images.yml`.
-This one input selects both the signature identity and provenance signer. The
-builder must preserve the candidate metadata and current-run provenance contract.
+The trusted builder defaults to `docker-build-images.yml` in the promotion action's
+repository, resolved through `github.action_repository`. Forks therefore use their
+own build workflow automatically. When the builder lives in another repository,
+set `build-workflow: my-org/builders/.github/workflows/docker-build-images.yml`.
+The resolved value selects both the signature identity and provenance signer.
+The builder must preserve the candidate metadata and current-run provenance contract.
 
 ## Publication and recovery
 
@@ -99,14 +99,14 @@ retention that preserves consumer-tagged content. See [ADR 0006](../../docs/adr/
 
 ### Workflow Call Inputs
 
-| **Input**                   | **Description**                                                                                                                                             | **Required** | **Type**   | **Default**                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- | ------------------------------------------------------------------------------- |
-| **`job-results`**           | Direct dependency results from toJSON(needs), including candidate and validation outputs.                                                                   | **true**     | **string** | -                                                                               |
-| **`build-workflow`**        | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Used for both signatures and provenance; override when building with a fork. | **false**    | **string** | `hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml` |
-| **`oci-registry`**          | Authorized publication registry hostname.                                                                                                                   | **false**    | **string** | `ghcr.io`                                                                       |
-| **`repository`**            | Authorized image repository prefix; defaults to the calling repository.                                                                                     | **false**    | **string** | -                                                                               |
-| **`oci-registry-username`** | Registry username; defaults to the calling repository owner.                                                                                                | **false**    | **string** | -                                                                               |
-| **`runs-on`**               | JSON array of runner labels. Requires Docker and GitHub CLI.                                                                                                | **false**    | **string** | `["ubuntu-latest"]`                                                             |
+| **Input**                   | **Description**                                                                                                                                                                                                                              | **Required** | **Type**   | **Default**         |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- | ------------------- |
+| **`job-results`**           | Direct dependency results from toJSON(needs), including candidate and validation outputs.                                                                                                                                                    | **true**     | **string** | -                   |
+| **`build-workflow`**        | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in the promotion action's repository. Used for both signatures and provenance; override when the builder lives elsewhere. | **false**    | **string** | -                   |
+| **`oci-registry`**          | Authorized publication registry hostname.                                                                                                                                                                                                    | **false**    | **string** | `ghcr.io`           |
+| **`repository`**            | Authorized image repository prefix; defaults to the calling repository.                                                                                                                                                                      | **false**    | **string** | -                   |
+| **`oci-registry-username`** | Registry username; defaults to the calling repository owner.                                                                                                                                                                                 | **false**    | **string** | -                   |
+| **`runs-on`**               | JSON array of runner labels. Requires Docker and GitHub CLI.                                                                                                                                                                                 | **false**    | **string** | `["ubuntu-latest"]` |
 
 <!-- inputs:end -->
 <!-- outputs:start -->

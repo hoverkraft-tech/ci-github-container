@@ -12,7 +12,14 @@ const pathPattern =
 	/^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
 
 const promotionContract = {
-	builder(workflow) {
+	builder(workflow, actionRepository) {
+		if (workflow === "") {
+			assert(
+				typeof actionRepository === "string" && actionRepository,
+				"build-workflow must be provided when the action repository is unavailable",
+			);
+			workflow = `${actionRepository}/.github/workflows/docker-build-images.yml`;
+		}
 		assert(
 			typeof workflow === "string" &&
 				/^[a-z\d](?:[a-z\d-]*[a-z\d])?\/[\w.-]+\/\.github\/workflows\/[\w.-]+\.ya?ml$/i.test(
