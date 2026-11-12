@@ -35,7 +35,7 @@ for all charts found under a path.
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-chart@ca71afa42c37bdd67ec2ca685fd2ff73d76190e8 # 0.42.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-chart@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
   with:
     # Path containing the chart(s) to prepare
     # This input is required.

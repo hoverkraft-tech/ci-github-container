@@ -45,7 +45,7 @@ For other OCI registries, provide credentials with write access using the regist
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/sign-chart@ca71afa42c37bdd67ec2ca685fd2ff73d76190e8 # 0.42.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/sign-chart@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
   with:
     # Charts to sign.
     # Can be a single chart or a list of charts separated by commas or newlines or spaces.
