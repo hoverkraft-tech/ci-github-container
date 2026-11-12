@@ -27,7 +27,7 @@ inputs:
     required: false
   buildkitd-config-inline:
     description: |
-      Inline BuildKit daemon configuration.
+      Inline BuildKit daemon configuration for the `docker-container` driver; ignored with `docker`.
       See https://github.com/docker/setup-buildx-action#inputs.
       Example for insecure registry:
       ```ini
@@ -53,6 +53,13 @@ inputs:
       Whether to install and configure Docker Buildx.
     default: true
     required: false
+  buildx-driver:
+    description: |
+      Buildx driver: `docker-container` (default) or `docker`.
+      Use `docker` to reuse the Docker daemon's builder without pulling or starting a BuildKit container.
+      The Buildx version remains managed by this action. Ignored when `setup-buildx` is `false`.
+    default: docker-container
+    required: false
   docker-version:
     description: |
       Required Docker version. The action installs it when the active Docker client or daemon reports a different version.
@@ -68,7 +75,7 @@ inputs:
     required: false
   buildkit-image:
     description: |
-      BuildKit image used by docker/setup-buildx-action.
+      BuildKit image used by the `docker-container` driver; ignored with `docker`.
     # renovate: datasource=docker depName=moby/buildkit versioning=docker
     default: "moby/buildkit:v0.34.2"
     required: false
@@ -458,11 +465,19 @@ runs:
         version: ${{ steps.detect-docker.outputs.docker-install-version }}
 
     - if: inputs.setup-buildx != 'false'
+      id: prepare-buildx
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        BUILDX_DRIVER: ${{ inputs.buildx-driver }}
         BUILDKIT_IMAGE_INPUT: ${{ inputs.buildkit-image }}
       with:
         script: |
+          const driver = process.env.BUILDX_DRIVER;
+          if (!['docker', 'docker-container'].includes(driver)) {
+            throw new Error('"buildx-driver" must be "docker" or "docker-container"');
+          }
+          if (driver === 'docker') return;
+
           const buildkitImage = `${process.env.BUILDKIT_IMAGE_INPUT || ''}`.trim();
           if (!buildkitImage.length) {
             throw new Error('"buildkit-image" input must not be empty');
@@ -498,10 +513,10 @@ runs:
       id: setup-buildx
       with:
         version: ${{ inputs.buildx-version }}
+        driver: ${{ inputs.buildx-driver }}
         endpoint: ${{ steps.setup-docker.outputs.sock }}
-        driver-opts: |
-          image=${{ inputs.buildkit-image }}
-        buildkitd-config-inline: ${{ inputs.buildkitd-config-inline }}
+        driver-opts: ${{ inputs.buildx-driver == 'docker-container' && format('image={0}', inputs.buildkit-image) || '' }}
+        buildkitd-config-inline: ${{ inputs.buildx-driver == 'docker-container' && inputs.buildkitd-config-inline || '' }}
 
     - if: steps.resolve-oci-registries.outputs.has-registry-auth == 'true'
       uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0

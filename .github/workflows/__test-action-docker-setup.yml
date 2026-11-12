@@ -31,7 +31,7 @@ jobs:
           setup-buildx: false
           docker-version: "0.0.0"
 
-      - name: Assert - Registry-only CLI reuse and installation fallback
+      - name: Assert - Docker detection and Buildx driver contracts
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -53,6 +53,23 @@ jobs:
                 { getExecOutput: async () => { assert.fail('Registry-only setup must not contact the daemon'); } },
               );
               assert.deepEqual(outputs, dockerPath ? {} : { 'docker-install-version': 'test-version' });
+            }
+
+            const prepareBuildx = action.runs.steps.find(step => step.id === 'prepare-buildx').with.script;
+            for (const driver of ['docker', 'docker-container', 'unsupported']) {
+              const commands = [];
+              const prepare = () => new AsyncFunction('process', 'core', 'exec', prepareBuildx)(
+                { env: { BUILDX_DRIVER: driver, BUILDKIT_IMAGE_INPUT: 'test-buildkit-image' } },
+                { info() {} },
+                { getExecOutput: async (...args) => { commands.push(args.slice(0, 2)); return { exitCode: 0 }; } },
+              );
+              if (driver === 'unsupported') {
+                await assert.rejects(prepare, /"buildx-driver" must be/);
+                assert.deepEqual(commands, []);
+              } else {
+                await prepare();
+                assert.deepEqual(commands, driver === 'docker' ? [] : [['docker', ['pull', 'test-buildkit-image']]]);
+              }
             }
 
       - name: Assert - Registry-only outputs
@@ -220,6 +237,47 @@ jobs:
             const buildxNode = buildxNodes.find(node => node.Endpoint === expectedDockerEndpoint);
             assert(buildxNode, 'Configured Buildx builder is not attached to the current Docker context endpoint');
             assert.equal(buildxNode.Status, 'running', 'Configured Buildx node is not running');
+
+      - name: Arrange - Record existing containers
+        id: containers-before
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { stdout } = await exec.getExecOutput('docker', ['ps', '-aq']);
+            core.setOutput('ids', JSON.stringify(stdout.trim().split(/\s+/).filter(Boolean).sort()));
+
+      - name: Act - Setup Buildx with the Docker driver
+        id: docker-driver
+        uses: $/actions/docker/setup
+        with:
+          oci-registry: ghcr.io
+          oci-registry-username: ${{ github.repository_owner }}
+          oci-registry-password: ${{ github.token }}
+          setup-docker: false
+          buildx-driver: docker
+          # These settings must be ignored when reusing the Docker daemon's builder.
+          docker-version: "0.0.0"
+          buildkit-image: invalid-buildkit-image-for-docker-driver
+          buildkitd-config-inline: invalid-buildkit-config-for-docker-driver
+
+      - name: Assert - Docker driver reuses the daemon without creating containers
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUILDX_NAME: ${{ steps.docker-driver.outputs.buildx-name }}
+          PUSH_REGISTRY: ${{ steps.docker-driver.outputs.push-registry }}
+          CONTAINERS_BEFORE: ${{ steps.containers-before.outputs.ids }}
+          EXPECTED_DOCKER_VERSION: ${{ steps.resolve-docker-version.outputs.docker-version }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            assert.equal(process.env.PUSH_REGISTRY, 'ghcr.io');
+            const { stdout: builders } = await exec.getExecOutput('docker', ['buildx', 'ls', '--format', 'json']);
+            const builder = builders.trim().split(/\r?\n/).map(line => JSON.parse(line)).find(item => item.Name === process.env.BUILDX_NAME);
+            assert.equal(builder?.Driver, 'docker');
+            const { stdout: containers } = await exec.getExecOutput('docker', ['ps', '-aq']);
+            assert.deepEqual(containers.trim().split(/\s+/).filter(Boolean).sort(), JSON.parse(process.env.CONTAINERS_BEFORE));
+            const { stdout: version } = await exec.getExecOutput('docker', ['version', '--format', '{{.Client.Version}}|{{.Server.Version}}']);
+            assert.deepEqual(version.trim().split('|'), [process.env.EXPECTED_DOCKER_VERSION, process.env.EXPECTED_DOCKER_VERSION]);
 
   tests-external-docker-daemon:
     name: Test for "docker/setup" action with an externally managed Docker daemon

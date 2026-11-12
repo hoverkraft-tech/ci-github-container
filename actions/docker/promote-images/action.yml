@@ -1,0 +1,103 @@
+---
+name: Docker - Promote images
+description: |
+  Implementation of the [Docker promote images workflow](../../../.github/workflows/docker-promote-images.md).
+  Use that workflow to hold the repository publication lock throughout verification,
+  journal updates and registry writes. Calling this action directly does
+  not provide that serialization contract.
+  [Verify images](../verify-images/README.md) checks existing build signatures,
+  which remain attached to their digest. Promotion does not re-sign images
+  or require OIDC write permission.
+author: hoverkraft
+branding:
+  icon: upload-cloud
+  color: blue
+inputs:
+  job-results:
+    description: Direct dependency results, including built-images and validated-images outputs.
+    required: true
+  build-workflow:
+    description: >-
+      Trusted builder as owner/repository/.github/workflows/file.yml, without a ref.
+      Defaults to docker-build-images.yml in this action's repository.
+      Used for both signatures and provenance; override when the builder lives elsewhere.
+    default: ""
+  oci-registry:
+    description: Authorized publication registry hostname.
+    default: ghcr.io
+  repository:
+    description: Authorized image repository prefix.
+    default: ${{ github.repository }}
+  oci-registry-username:
+    description: Registry username.
+    default: ${{ github.repository_owner }}
+  oci-registry-password:
+    description: Registry password or token.
+    required: true
+outputs:
+  built-images:
+    description: Image metadata with verified consumer tags and unchanged digests; empty on failure.
+    value: ${{ steps.promote.outputs.built-images }}
+runs:
+  using: composite
+  steps:
+    - id: validate
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        JOB_RESULTS: ${{ inputs.job-results }}
+        REGISTRY: ${{ inputs.oci-registry }}
+        REPOSITORY: ${{ inputs.repository }}
+        BUILD_WORKFLOW: ${{ inputs.build-workflow }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+      with:
+        script: |
+          const { pathToFileURL } = require('node:url');
+          const { promotionContract } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/contract.js`));
+          const builder = promotionContract.builder(process.env.BUILD_WORKFLOW, process.env.ACTION_REPOSITORY);
+          core.setOutput('build-workflow', builder.workflow);
+          core.setOutput('builder-identity-regexp', builder.identityRegexp);
+          const images = promotionContract.collect(process.env.JOB_RESULTS);
+          promotionContract.validate(images, {
+            registry: process.env.REGISTRY, repository: process.env.REPOSITORY.toLowerCase(),
+            context, runId: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
+            repositoryId: process.env.GITHUB_REPOSITORY_ID,
+          });
+          core.setOutput('images', JSON.stringify(images));
+          core.setOutput('references', JSON.stringify(Object.values(images).flatMap(image => image.images)));
+
+    - uses: $/actions/docker/setup
+      with:
+        oci-registry: ${{ inputs.oci-registry }}
+        oci-registry-username: ${{ inputs.oci-registry-username }}
+        oci-registry-password: ${{ inputs.oci-registry-password }}
+        setup-docker: false
+        # Promotion only uses registry commands; no BuildKit container is needed.
+        buildx-driver: docker
+
+    - id: verify
+      uses: $/actions/docker/verify-images
+      with:
+        images: ${{ steps.validate.outputs.references }}
+        certificate-identity-regexp: ${{ steps.validate.outputs.builder-identity-regexp }}
+
+    - id: promote
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        IMAGES: ${{ steps.validate.outputs.images }}
+        VERIFIED_IMAGES: ${{ steps.verify.outputs.verified-images }}
+        BUILD_WORKFLOW: ${{ steps.validate.outputs.build-workflow }}
+        GH_TOKEN: ${{ github.token }}
+      with:
+        script: |
+          const { pathToFileURL } = require('node:url');
+          const { ImagePromotion } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/promotion.js`));
+          const promotion = new ImagePromotion({
+            github, context, core, exec,
+            runId: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
+            verifiedImages: JSON.parse(process.env.VERIFIED_IMAGES),
+            buildWorkflow: process.env.BUILD_WORKFLOW,
+          });
+          const images = await promotion.promote(JSON.parse(process.env.IMAGES));
+          core.setOutput('built-images', JSON.stringify(images));

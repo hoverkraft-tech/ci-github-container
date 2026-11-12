@@ -113,10 +113,6 @@ jobs:
             });
             await exec.exec('helm', ['pull', `oci://${process.env.RELEASED_IMAGE_DIGEST}`]);
 
-      - name: Install Cosign for unsigned scenario verification
-        if: ${{ !matrix.sign }}
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-
       - name: Authenticate Cosign for unsigned scenario verification
         if: ${{ !matrix.sign }}
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -126,30 +122,38 @@ jobs:
           password: ${{ github.token }}
 
       - name: Verify chart signature
+        id: verify-signature
+        continue-on-error: ${{ !matrix.sign }}
+        uses: $/actions/docker/verify-images
+        with:
+          images: ${{ steps.release-chart.outputs.image-digest }}
+          certificate-identity: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}
+
+      - name: Assert signature verification result
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SIGN: ${{ matrix.sign }}
+          OUTCOME: ${{ steps.verify-signature.outcome }}
+          VERIFIED: ${{ steps.verify-signature.outputs.verified-images }}
           RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}
         with:
           script: |
             const assert = require('node:assert/strict');
-            const verify = (identity) => exec.getExecOutput('cosign', [
-              'verify',
-              '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
-              '--certificate-identity', identity,
-              process.env.RELEASED_IMAGE_DIGEST,
-            ], { ignoreReturnCode: true });
-
-            const result = await verify(process.env.CERTIFICATE_IDENTITY);
-            const output = `${result.stderr}\n${result.stdout}`;
-            if (process.env.SIGN !== 'true') {
-              assert.notEqual(result.exitCode, 0, 'Unsigned chart unexpectedly passed signature verification');
-              assert.match(output, /no signatures found|no valid bundles (?:found|exist)/i);
+            if (process.env.SIGN === 'true') {
+              assert.equal(process.env.OUTCOME, 'success');
+              assert.deepEqual(JSON.parse(process.env.VERIFIED), [process.env.RELEASED_IMAGE_DIGEST]);
               return;
             }
-
-            assert.equal(result.exitCode, 0, `Chart signature verification failed: ${output}`);
+            assert.equal(process.env.OUTCOME, 'failure');
+            assert.equal(process.env.VERIFIED, '');
+            // Independently confirm the failure is an unsigned chart, not a setup or network error.
+            const result = await exec.getExecOutput('cosign', [
+              'verify', '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
+              '--certificate-identity', process.env.CERTIFICATE_IDENTITY, process.env.RELEASED_IMAGE_DIGEST,
+            ], { ignoreReturnCode: true });
+            assert.notEqual(result.exitCode, 0);
+            assert.match(`${result.stderr}\n${result.stdout}`, /no signatures found|no valid bundles (?:found|exist)/i);
 
   default-signing:
     name: Release application (default sign=true)
@@ -191,19 +195,7 @@ jobs:
             valkey https://valkey.io/valkey-helm/
 
       - name: Verify chart signature with default signing
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
-          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}
+        uses: $/actions/docker/verify-images
         with:
-          script: |
-            const assert = require('node:assert/strict');
-            const result = await exec.getExecOutput('cosign', [
-              'verify',
-              '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
-              '--certificate-identity', process.env.CERTIFICATE_IDENTITY,
-              process.env.RELEASED_IMAGE_DIGEST,
-            ], { ignoreReturnCode: true });
-
-            const output = `${result.stderr}\n${result.stdout}`;
-            assert.equal(result.exitCode, 0, `Chart signature verification failed when sign input was omitted: ${output}`);
+          images: ${{ steps.release-chart.outputs.image-digest }}
+          certificate-identity: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}

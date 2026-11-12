@@ -29,6 +29,26 @@ jobs:
     with:
       comment: false
 
+  test-action-docker-promote-images:
+    needs: lint
+    uses: $/.github/workflows/__test-action-docker-promote-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+
+  test-action-docker-verify-images:
+    needs: lint
+    uses: $/.github/workflows/__test-action-docker-verify-images.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+
   test-action-docker-build-image:
     needs: lint
     uses: $/.github/workflows/__test-action-docker-build-image.yml
@@ -124,6 +144,8 @@ jobs:
     permissions:
       attestations: write
       contents: read
+      actions: read
+      deployments: write
       id-token: write
       issues: read
       packages: write
@@ -191,6 +213,8 @@ jobs:
     needs:
       - lint
       - test-action-helm-release-chart
+      - test-action-docker-promote-images
+      - test-action-docker-verify-images
     if: always()
     uses: hoverkraft-tech/ci-github-common/.github/workflows/ci-reports.yml@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
     permissions:

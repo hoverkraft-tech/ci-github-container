@@ -18,7 +18,13 @@ and `test.report-group` to the outer calling job ID in `__shared-ci.yml`. One
 coverage comment with separate figures per action. Test results and lint summaries
 are consolidated too; individual producer comments stay disabled.
 
-For source or dependency changes, run these commands in the package directory:
+Dependency-free composite actions follow the same package and CI test pattern,
+and import ES modules directly from `src/` using `actions/github-script`. They do
+not need a bundle. Omit `build`, `check:dist` and `test:distribution` for these
+packages; distribution discovery selects only packages that declare the build
+and distribution check scripts.
+
+For bundled source or dependency changes, run these commands in the package directory:
 
 ```sh
 npm ci --ignore-scripts

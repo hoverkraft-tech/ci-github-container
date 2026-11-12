@@ -1,0 +1,63 @@
+---
+name: Docker - Verify images
+description: |
+  Verify existing keyless Cosign signatures on digest-qualified OCI images or Helm charts.
+  Configure registry authentication before calling this action, for example with
+  [Docker setup](../setup/README.md) in registry-only mode.
+  Specify exactly one certificate identity or regular expression, and the expected
+  OIDC issuer. Prefer an exact identity; anchor regular expressions to the trusted workflow.
+  Verification fails for unsigned images, mismatched identities/issuers and registry errors.
+  No images are signed or changed, and no OIDC write permission is needed.
+  This checks signatures only. Build provenance and application validation remain
+  separate policies; [Docker promote images](../../../.github/workflows/docker-promote-images.md)
+  applies those checks before publication.
+author: hoverkraft
+branding:
+  icon: shield
+  color: blue
+inputs:
+  images:
+    description: |
+      Digest-qualified references, as a JSON array or separated by commas, spaces or newlines.
+      Each reference must include a registry and SHA-256 digest, with an optional tag:
+      `ghcr.io/owner/repository/image@sha256:...` or `ghcr.io/owner/repository/image:tag@sha256:...`.
+      Tag-only references are rejected. Repeated digests in the same repository are verified once.
+    required: true
+  certificate-identity:
+    description: Exact expected Fulcio certificate identity. Required unless certificate-identity-regexp is set.
+    default: ""
+  certificate-identity-regexp:
+    description: Expected certificate identity as a Go regular expression. Mutually exclusive with certificate-identity.
+    default: ""
+  certificate-oidc-issuer:
+    description: Exact expected OIDC issuer.
+    default: https://token.actions.githubusercontent.com
+outputs:
+  verified-images:
+    description: JSON array of verified registry/repository@sha256 references, without tags; empty on failure.
+    value: ${{ steps.verify.outputs.verified-images }}
+runs:
+  using: composite
+  steps:
+    - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+    - id: verify
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        IMAGES: ${{ inputs.images }}
+        CERTIFICATE_IDENTITY: ${{ inputs.certificate-identity }}
+        CERTIFICATE_IDENTITY_REGEXP: ${{ inputs.certificate-identity-regexp }}
+        CERTIFICATE_OIDC_ISSUER: ${{ inputs.certificate-oidc-issuer }}
+      with:
+        script: |
+          const { pathToFileURL } = require('node:url');
+          const { ImageVerification } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/verification.js`));
+          const verification = new ImageVerification({
+            images: process.env.IMAGES,
+            identity: process.env.CERTIFICATE_IDENTITY,
+            identityRegexp: process.env.CERTIFICATE_IDENTITY_REGEXP,
+            issuer: process.env.CERTIFICATE_OIDC_ISSUER,
+          });
+          const images = await verification.verify(exec);
+          core.setOutput('verified-images', JSON.stringify(images));
