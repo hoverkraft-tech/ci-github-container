@@ -98,6 +98,8 @@ jobs:
   promote:
     name: Promote validated image digests
     runs-on: ${{ fromJSON(inputs.runs-on) }}
+    # One lock covers the whole candidate set: verification, claim and publication.
+    # Per-image jobs would repeat setup and release the lock between images.
     concurrency:
       group: ci-image-promotion-${{ github.repository_id }}
       cancel-in-progress: false

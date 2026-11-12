@@ -8,11 +8,18 @@ const journal = {
 };
 const builder =
 	"hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml";
-const issuer = "https://token.actions.githubusercontent.com";
 
 class ImagePromotion {
-	constructor({ github, context, core, exec, runId, attempt }) {
-		Object.assign(this, { github, context, core, exec, runId, attempt });
+	constructor({ github, context, core, exec, runId, attempt, verifiedImages }) {
+		Object.assign(this, {
+			github,
+			context,
+			core,
+			exec,
+			runId,
+			attempt,
+			verifiedImages,
+		});
 	}
 
 	async currentRun() {
@@ -119,15 +126,6 @@ class ImagePromotion {
 		assert(manifest.endsWith("\n"), "Unexpected Buildx dry-run output");
 		const digest = `sha256:${createHash("sha256").update(manifest.slice(0, -1)).digest("hex")}`;
 		assert.equal(digest, image.digest, "Promotion would change manifest bytes");
-		const signer = `^https://github\\.com/${builder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@.+$`;
-		await this.command("cosign", [
-			"verify",
-			"--certificate-oidc-issuer",
-			issuer,
-			"--certificate-identity-regexp",
-			signer,
-			reference,
-		]);
 		const output = await this.command("gh", [
 			"attestation",
 			"verify",
@@ -205,6 +203,19 @@ class ImagePromotion {
 	}
 
 	async promote(images) {
+		assert(
+			Array.isArray(this.verifiedImages),
+			"Missing signature verification output",
+		);
+		assert.deepEqual(
+			new Set(this.verifiedImages),
+			new Set(
+				Object.values(images).map(
+					(image) => `${image.registry}/${image.repository}@${image.digest}`,
+				),
+			),
+			"Signature verification must cover exactly the candidate digests",
+		);
 		await this.currentRun();
 		// Preflight every image before recording a claim or publishing any consumer tag.
 		for (const image of Object.values(images))

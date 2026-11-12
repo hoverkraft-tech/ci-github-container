@@ -43,6 +43,8 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 #### - [Sign images](actions/docker/sign-images/README.md)
 
+#### - [Verify images](actions/docker/verify-images/README.md)
+
 ### Helm
 
 _Actions dedicated to packaging, validating, signing, and publishing Helm charts for Kubernetes deployments._

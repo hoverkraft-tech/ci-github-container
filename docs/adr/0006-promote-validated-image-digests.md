@@ -68,9 +68,26 @@ Keep the action and its unit tests together under `actions/docker/promote-images
 The reusable workflow owns serialization; the action's directory name does not
 enforce that lock. Use shared Docker setup with its `docker` Buildx driver for
 promotion, avoiding a separate BuildKit container while centralizing tool versions.
-Existing build callers retain the default `docker-container` driver. Install
-Cosign for verification only: `sign-images` creates new signatures and requires
-OIDC write permission, so it cannot replace verification of the original builder.
+Existing build callers retain the default `docker-container` driver.
+
+Share signature verification through `actions/docker/verify-images/`, also used
+by candidate, promoted-image and Helm release checks. It requires digest-qualified
+OCI references and an explicit certificate identity or regular expression, with an
+exact OIDC issuer (GitHub by default). It installs Cosign, verifies every unique
+digest, and returns verified references only after all succeed. Registry login
+remains the caller's responsibility. It neither signs images nor requires OIDC
+write permission. Provenance policy stays in promotion because source/run/attempt
+checks are specific to its publication contract. Promotion requires the verifier's
+complete digest set before any publication claim or tag write.
+
+Keep one promotion job under the repository lock. A per-image matrix with that
+same lock serializes its jobs and repeats setup; separate locks would allow runs
+to interleave and images to publish before the complete candidate set passes
+preflight. The reviewed [run 43181291700](https://github.com/hoverkraft-tech/ci-github-container/actions/runs/43181291700)
+took 43 seconds for the two-image promotion job, with about 6 seconds spent in the
+two tag writes and their digest checks. This is one observation, not a matrix
+benchmark. Consider bounded verification concurrency within the lock only after
+representative measurements justify it; do not split the publication contract.
 
 ## Recovery and cleanup
 
@@ -92,6 +109,9 @@ OIDC write permission, so it cannot replace verification of the original builder
 
 Use focused unit contracts for gates, evidence, authorization, source freshness,
 supersession, conflicting claims, idempotency, partial failure and cancellation.
+Run each action's colocated unit tests through its dedicated reusable test workflow.
+Verify signature input/identity handling and fail-closed output independently;
+retain raw Cosign checks as an independent oracle for negative Helm scenarios.
 Extend the existing signed single/multi-platform candidate fixture for hosted
 promotion, unchanged bytes/OCI metadata, security verification and repeat calls.
 No additional Dockerfile or sample application is needed. Controlled contexts

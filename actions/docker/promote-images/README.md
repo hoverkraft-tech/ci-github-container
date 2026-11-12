@@ -17,8 +17,8 @@ Implementation of the [Docker promote images workflow](../../../.github/workflow
 Use that workflow to hold the repository publication lock throughout verification,
 journal updates and registry writes. Calling this action directly does
 not provide that serialization contract.
-Existing build signatures are verified with Cosign and retained by digest.
-The signing action creates new signatures; promotion does not re-sign images
+[Verify images](../verify-images/README.md) checks existing build signatures,
+which remain attached to their digest. Promotion does not re-sign images
 or require OIDC write permission.
 
 <!-- overview:end -->

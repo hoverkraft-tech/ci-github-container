@@ -73,6 +73,7 @@ function harness(overrides = {}) {
 		statuses: [],
 		commands: [],
 		manifest: raw,
+		verifiedImages: [`ghcr.io/example/application/backend@${digest}`],
 		source: context.sha,
 		run: {
 			status: "in_progress",
@@ -103,11 +104,6 @@ function harness(overrides = {}) {
 	const exec = {
 		getExecOutput: async (command, args) => {
 			state.commands.push([command, ...args]);
-			if (command === "cosign") {
-				if (state.badSignature)
-					throw new Error("Signature verification failed");
-				return { stdout: "verified" };
-			}
 			if (command === "gh") {
 				if (state.badProvenance)
 					throw new Error("Provenance verification failed");
@@ -158,6 +154,7 @@ function harness(overrides = {}) {
 		exec,
 		runId: "20",
 		attempt: "1",
+		verifiedImages: state.verifiedImages,
 	});
 	return { state, promotion, github };
 }
@@ -377,7 +374,16 @@ test("retains exact digest and returns consumer metadata only after successful p
 	);
 });
 for (const [name, overrides] of [
-	["missing signature", { badSignature: true }],
+	["missing signature verification", { verifiedImages: undefined }],
+	["unverified candidate", { verifiedImages: [] }],
+	[
+		"different verified digest",
+		{
+			verifiedImages: [
+				`ghcr.io/example/application/backend@sha256:${"b".repeat(64)}`,
+			],
+		},
+	],
 	["missing provenance", { badProvenance: true }],
 	["provenance from previous attempt", { provenanceAttempt: 2 }],
 	["rewritten manifest bytes", { manifest: `${raw} ` }],
@@ -542,7 +548,11 @@ for (const [name, request, current] of [
 }
 
 test("preflights every image before publishing any destination", async () => {
-	const { state, promotion } = harness();
+	const { state, promotion } = harness({
+		verifiedImages: ["backend", "frontend"].map(
+			(name) => `ghcr.io/example/application/${name}@${digest}`,
+		),
+	});
 	const frontend = candidate();
 	frontend.name = "frontend";
 	frontend.repository = "example/application/frontend";

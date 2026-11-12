@@ -176,9 +176,8 @@ jobs:
           oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - id: inspect-candidates
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BUILT_IMAGES: ${{ needs.act-candidates.outputs.built-images }}
           GH_TOKEN: ${{ github.token }}
@@ -221,12 +220,51 @@ jobs:
               const tags = versions.flatMap(version => version.metadata.container.tags);
               assert(tags.includes(image.tags[0]));
               assert(tags.every(tag => tag === image.tags[0] || tag.startsWith('sha256-')), `Unexpected consumer tag: ${tags}`);
-              await exec.exec('cosign', [
-                'verify', '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
-                '--certificate-identity-regexp', `^https://github.com/${process.env.GITHUB_REPOSITORY}/`, reference,
-              ]);
               await exec.exec('gh', ['attestation', 'verify', `oci://${reference}`, '--repo', process.env.GITHUB_REPOSITORY]);
             }
+            core.setOutput('references', JSON.stringify(images.map(image => `${image.registry}/${image.repository}@${image.digest}`)));
+
+      - name: Verify candidate signatures
+        id: verify-candidates
+        uses: $/actions/docker/verify-images
+        with:
+          images: ${{ steps.inspect-candidates.outputs.references }}
+          certificate-identity-regexp: '^https://github\.com/hoverkraft-tech/ci-github-container/\.github/workflows/docker-build-images\.yml@.+$'
+
+      - name: Reject a different signer
+        id: wrong-signer
+        continue-on-error: true
+        uses: $/actions/docker/verify-images
+        with:
+          images: ${{ steps.inspect-candidates.outputs.references }}
+          certificate-identity: https://github.com/untrusted/application/.github/workflows/build.yml@refs/heads/main
+
+      - name: Reject a different issuer
+        id: wrong-issuer
+        continue-on-error: true
+        uses: $/actions/docker/verify-images
+        with:
+          images: ${{ steps.inspect-candidates.outputs.references }}
+          certificate-identity-regexp: '^https://github\.com/hoverkraft-tech/ci-github-container/\.github/workflows/docker-build-images\.yml@.+$'
+          certificate-oidc-issuer: https://untrusted-issuer.example.com
+
+      - name: Assert verification output and policy failures
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED: ${{ steps.inspect-candidates.outputs.references }}
+          VERIFIED: ${{ steps.verify-candidates.outputs.verified-images }}
+          WRONG_SIGNER: ${{ steps.wrong-signer.outcome }}
+          WRONG_SIGNER_IMAGES: ${{ steps.wrong-signer.outputs.verified-images }}
+          WRONG_ISSUER: ${{ steps.wrong-issuer.outcome }}
+          WRONG_ISSUER_IMAGES: ${{ steps.wrong-issuer.outputs.verified-images }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            assert.deepEqual(JSON.parse(process.env.VERIFIED), JSON.parse(process.env.EXPECTED));
+            assert.equal(process.env.WRONG_SIGNER, 'failure');
+            assert.equal(process.env.WRONG_SIGNER_IMAGES, '');
+            assert.equal(process.env.WRONG_ISSUER, 'failure');
+            assert.equal(process.env.WRONG_ISSUER_IMAGES, '');
 
   promote-candidates:
     name: Promote validated candidates
@@ -262,9 +300,8 @@ jobs:
           setup-docker: false
           setup-buildx: false
 
-      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - id: inspect-promoted
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           CANDIDATES: ${{ needs.act-candidates.outputs.built-images }}
           PROMOTED: ${{ needs.promote-candidates.outputs.built-images }}
@@ -287,12 +324,15 @@ jobs:
               const before = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', `${reference}@${candidate.digest}`]);
               const after = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', `${reference}:1.2.3`]);
               assert.equal(after.stdout, before.stdout, 'Promotion must retain exact manifest bytes');
-              await exec.exec('cosign', [
-                'verify', '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
-                '--certificate-identity-regexp', `^https://github.com/${process.env.GITHUB_REPOSITORY}/`, image.images[0],
-              ]);
               await exec.exec('gh', ['attestation', 'verify', `oci://${image.images[0]}`, '--repo', process.env.GITHUB_REPOSITORY]);
             }
+            core.setOutput('references', JSON.stringify(Object.values(promoted).flatMap(image => image.images)));
+
+      - name: Verify retained image signatures
+        uses: $/actions/docker/verify-images
+        with:
+          images: ${{ steps.inspect-promoted.outputs.references }}
+          certificate-identity-regexp: '^https://github\.com/hoverkraft-tech/ci-github-container/\.github/workflows/docker-build-images\.yml@.+$'
 
   repeat-promotion:
     name: Repeat identical promotion
