@@ -34,7 +34,7 @@ Updates Helm chart values files before release.
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/update-chart-values@ca71afa42c37bdd67ec2ca685fd2ff73d76190e8 # 0.42.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/update-chart-values@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
   with:
     # Path to the chart to update
     # This input is required.

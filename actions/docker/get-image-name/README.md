@@ -34,7 +34,7 @@ Action to forge the name of a given image including registry, repository and giv
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-name@ca71afa42c37bdd67ec2ca685fd2ff73d76190e8 # 0.42.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/get-image-name@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
   with:
     # OCI registry to prefix the image full name
     oci-registry: ""
