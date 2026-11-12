@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+import assert from "node:assert/strict";
 
 class ImageVerification {
 	constructor({ images, identity = "", identityRegexp = "", issuer }) {
@@ -75,4 +75,4 @@ class ImageVerification {
 	}
 }
 
-module.exports = { ImageVerification };
+export { ImageVerification };

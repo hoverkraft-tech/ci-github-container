@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+import assert from "node:assert/strict";
 
 const object = (value, name) => {
 	assert(
@@ -12,6 +12,21 @@ const pathPattern =
 	/^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
 
 const promotionContract = {
+	builder(workflow) {
+		assert(
+			typeof workflow === "string" &&
+				/^[a-z\d](?:[a-z\d-]*[a-z\d])?\/[\w.-]+\/\.github\/workflows\/[\w.-]+\.ya?ml$/i.test(
+					workflow,
+				),
+			"build-workflow must be owner/repository/.github/workflows/file.yml without a ref",
+		);
+		const identity = `https://github.com/${workflow}`;
+		return {
+			workflow,
+			identityRegexp: `^${identity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@.+$`,
+		};
+	},
+
 	collect(rawResults) {
 		const results = parse(rawResults, "job-results");
 		assert(Object.keys(results).length, "job-results must not be empty");
@@ -189,4 +204,4 @@ const promotionContract = {
 	},
 };
 
-module.exports = { promotionContract };
+export { promotionContract };

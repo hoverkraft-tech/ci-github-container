@@ -1,6 +1,6 @@
-const assert = require("node:assert/strict");
-const { test } = require("node:test");
-const { ImageVerification } = require("./verification");
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { ImageVerification } from "./verification.js";
 
 const digest = `sha256:${"a".repeat(64)}`;
 const first = `ghcr.io/example/application/backend@${digest}`;

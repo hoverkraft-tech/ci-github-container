@@ -1,16 +1,23 @@
-const assert = require("node:assert/strict");
-const { createHash } = require("node:crypto");
-const { promotionContract } = require("./contract");
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { promotionContract } from "./contract.js";
 
 const journal = {
 	environment: "ci-image-promotion",
 	task: "ci-image-promotion",
 };
-const builder =
-	"hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml";
-
 class ImagePromotion {
-	constructor({ github, context, core, exec, runId, attempt, verifiedImages }) {
+	constructor({
+		github,
+		context,
+		core,
+		exec,
+		runId,
+		attempt,
+		verifiedImages,
+		buildWorkflow,
+	}) {
+		this.builder = promotionContract.builder(buildWorkflow);
 		Object.assign(this, {
 			github,
 			context,
@@ -133,7 +140,7 @@ class ImagePromotion {
 			"--repo",
 			`${this.context.repo.owner}/${this.context.repo.repo}`,
 			"--signer-workflow",
-			builder,
+			this.builder.workflow,
 			"--source-digest",
 			this.context.sha,
 			"--format",
@@ -270,4 +277,4 @@ class ImagePromotion {
 	}
 }
 
-module.exports = { ImagePromotion };
+export { ImagePromotion };

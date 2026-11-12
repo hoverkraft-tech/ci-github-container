@@ -16,6 +16,11 @@ inputs:
   job-results:
     description: Direct dependency results, including built-images and validated-images outputs.
     required: true
+  build-workflow:
+    description: >-
+      Trusted builder as owner/repository/.github/workflows/file.yml, without a ref.
+      Used for both signatures and provenance; set this when using a fork of the build workflow.
+    default: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml
   oci-registry:
     description: Authorized publication registry hostname.
     default: ghcr.io
@@ -42,9 +47,13 @@ runs:
         JOB_RESULTS: ${{ inputs.job-results }}
         REGISTRY: ${{ inputs.oci-registry }}
         REPOSITORY: ${{ inputs.repository }}
+        BUILD_WORKFLOW: ${{ inputs.build-workflow }}
       with:
         script: |
-          const { promotionContract } = require(`${process.env.ACTION_PATH}/contract.js`);
+          const { pathToFileURL } = require('node:url');
+          const { promotionContract } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/contract.js`));
+          const builder = promotionContract.builder(process.env.BUILD_WORKFLOW);
+          core.setOutput('builder-identity-regexp', builder.identityRegexp);
           const images = promotionContract.collect(process.env.JOB_RESULTS);
           promotionContract.validate(images, {
             registry: process.env.REGISTRY, repository: process.env.REPOSITORY.toLowerCase(),
@@ -67,7 +76,7 @@ runs:
       uses: $/actions/docker/verify-images
       with:
         images: ${{ steps.validate.outputs.references }}
-        certificate-identity-regexp: '^https://github\.com/hoverkraft-tech/ci-github-container/\.github/workflows/docker-build-images\.yml@.+$'
+        certificate-identity-regexp: ${{ steps.validate.outputs.builder-identity-regexp }}
 
     - id: promote
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -75,14 +84,17 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         IMAGES: ${{ steps.validate.outputs.images }}
         VERIFIED_IMAGES: ${{ steps.verify.outputs.verified-images }}
+        BUILD_WORKFLOW: ${{ inputs.build-workflow }}
         GH_TOKEN: ${{ github.token }}
       with:
         script: |
-          const { ImagePromotion } = require(`${process.env.ACTION_PATH}/promotion.js`);
+          const { pathToFileURL } = require('node:url');
+          const { ImagePromotion } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/promotion.js`));
           const promotion = new ImagePromotion({
             github, context, core, exec,
             runId: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
             verifiedImages: JSON.parse(process.env.VERIFIED_IMAGES),
+            buildWorkflow: process.env.BUILD_WORKFLOW,
           });
           const images = await promotion.promote(JSON.parse(process.env.IMAGES));
           core.setOutput('built-images', JSON.stringify(images));

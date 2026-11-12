@@ -26,13 +26,14 @@ or require OIDC write permission.
 
 ## Inputs
 
-| **Input**                   | **Description**                                                                 | **Required** | **Default**                      |
-| --------------------------- | ------------------------------------------------------------------------------- | ------------ | -------------------------------- |
-| **`job-results`**           | Direct dependency results, including built-images and validated-images outputs. | **true**     | -                                |
-| **`oci-registry`**          | Authorized publication registry hostname.                                       | **false**    | `ghcr.io`                        |
-| **`repository`**            | Authorized image repository prefix.                                             | **false**    | `${{ github.repository }}`       |
-| **`oci-registry-username`** | Registry username.                                                              | **false**    | `${{ github.repository_owner }}` |
-| **`oci-registry-password`** | Registry password or token.                                                     | **true**     | -                                |
+| **Input**                   | **Description**                                                                                                                                                           | **Required** | **Default**                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------- |
+| **`job-results`**           | Direct dependency results, including built-images and validated-images outputs.                                                                                           | **true**     | -                                                                               |
+| **`build-workflow`**        | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Used for both signatures and provenance; set this when using a fork of the build workflow. | **false**    | `hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml` |
+| **`oci-registry`**          | Authorized publication registry hostname.                                                                                                                                 | **false**    | `ghcr.io`                                                                       |
+| **`repository`**            | Authorized image repository prefix.                                                                                                                                       | **false**    | `${{ github.repository }}`                                                      |
+| **`oci-registry-username`** | Registry username.                                                                                                                                                        | **false**    | `${{ github.repository_owner }}`                                                |
+| **`oci-registry-password`** | Registry password or token.                                                                                                                                               | **true**     | -                                                                               |
 
 <!-- inputs:end -->
 <!-- outputs:start -->

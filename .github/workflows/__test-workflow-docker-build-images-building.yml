@@ -347,6 +347,7 @@ jobs:
       pull-requests: read
     with:
       job-results: ${{ toJSON(needs) }}
+      build-workflow: ${{ github.repository }}/.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 

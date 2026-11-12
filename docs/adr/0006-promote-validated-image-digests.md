@@ -41,6 +41,16 @@ Before any publication, verify every candidate's cosign signature and GitHub bui
 provenance, including the build workflow, source revision and run/attempt. Unsigned
 or unattested candidates are not supported by this promotion workflow.
 
+Expose one `build-workflow` input for the trusted builder's
+`owner/repository/.github/workflows/file.yml` path. Use it for both the escaped,
+anchored signature identity and the provenance signer policy. The default is the
+published Docker build images workflow; callers from any organization can use it
+unchanged. A fork selects its own builder explicitly. Do not infer the builder
+from the calling application's repository: reusable workflow signatures identify
+the called workflow. The candidate source, revision and run/attempt still have to
+match the caller, independently of the configured builder. Custom builders must
+preserve the same candidate and provenance contract.
+
 Serialize all promotion jobs in a calling repository with one internal concurrency
 group and `cancel-in-progress: false`. Use GitHub deployment records with task
 `ci-image-promotion` and environment `ci-image-promotion` as a durable publication
@@ -109,7 +119,12 @@ representative measurements justify it; do not split the publication contract.
 
 Use focused unit contracts for gates, evidence, authorization, source freshness,
 supersession, conflicting claims, idempotency, partial failure and cancellation.
-Run each action's colocated unit tests through its dedicated reusable test workflow.
+Run each action's colocated unit tests through its dedicated reusable test workflow,
+using the shared Node.js CI pattern for coverage, dependency review and CodeQL.
+Keep ES modules and their tests under each action's `src/`, with package scripts
+and a lockfile. These dependency-free composite actions import their source
+directly; no generated distribution or build step is needed. Consolidate their
+JUnit and LCOV reports in the existing shared reporting job.
 Verify signature input/identity handling and fail-closed output independently;
 retain raw Cosign checks as an independent oracle for negative Helm scenarios.
 Extend the existing signed single/multi-platform candidate fixture for hosted

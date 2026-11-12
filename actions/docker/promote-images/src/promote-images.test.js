@@ -1,8 +1,8 @@
-const assert = require("node:assert/strict");
-const { createHash } = require("node:crypto");
-const { test } = require("node:test");
-const { promotionContract } = require("./contract");
-const { ImagePromotion } = require("./promotion");
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { test } from "node:test";
+import { promotionContract } from "./contract.js";
+import { ImagePromotion } from "./promotion.js";
 
 const raw =
 	'{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{}}';
@@ -73,6 +73,7 @@ function harness(overrides = {}) {
 		statuses: [],
 		commands: [],
 		manifest: raw,
+		buildWorkflow: "builders/automation/.github/workflows/build-images.yml",
 		verifiedImages: [`ghcr.io/example/application/backend@${digest}`],
 		source: context.sha,
 		run: {
@@ -155,8 +156,54 @@ function harness(overrides = {}) {
 		runId: "20",
 		attempt: "1",
 		verifiedImages: state.verifiedImages,
+		buildWorkflow: state.buildWorkflow,
 	});
 	return { state, promotion, github };
+}
+
+for (const workflow of [
+	"builders/automation/.github/workflows/build-images.yml",
+	"Other-Org/container.ci/.github/workflows/build.v2.yaml",
+]) {
+	test(`trusts only the configured builder ${workflow}`, async () => {
+		const builder = promotionContract.builder(workflow);
+		const identity = new RegExp(builder.identityRegexp);
+		assert(identity.test(`https://github.com/${workflow}@refs/heads/main`));
+		assert(identity.test(`https://github.com/${workflow}@${"a".repeat(40)}`));
+		assert(!identity.test(`https://github.com/untrusted/${workflow}@main`));
+		assert(
+			!identity.test(
+				`https://github.com/${workflow.replaceAll(".", "x")}@main`,
+			),
+		);
+		assert(!identity.test(`https://github.com/${workflow}.other@main`));
+		assert(!identity.test(`https://github.com/${workflow}@`));
+
+		const { state, promotion } = harness({ buildWorkflow: workflow });
+		await promotion.promote({ backend: candidate() });
+		const command = state.commands.find(([command]) => command === "gh");
+		assert.equal(command[command.indexOf("--signer-workflow") + 1], workflow);
+		assert.equal(command[command.indexOf("--repo") + 1], "example/application");
+		assert.equal(command[command.indexOf("--source-digest") + 1], context.sha);
+	});
+}
+
+for (const workflow of [
+	undefined,
+	"",
+	42,
+	"https://github.com/builders/automation/.github/workflows/build.yml",
+	"builders/automation/.github/workflows/build.yml@main",
+	"builders/.*/.github/workflows/build.yml",
+	"builders/automation/.github/workflows/../build.yml",
+	"builders/automation/.github/workflows/build.yml\n",
+]) {
+	test(`rejects invalid builder ${JSON.stringify(workflow)}`, () => {
+		assert.throws(
+			() => harness({ buildWorkflow: workflow }),
+			/build-workflow must/,
+		);
+	});
 }
 
 test("requires all candidate producers, validation jobs and other checks to succeed", () => {

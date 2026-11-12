@@ -43,6 +43,13 @@
 # the candidate tag/digest, exact manifest bytes, source ref and current run/attempt.
 # Only same-repository tag updates within the configured registry/prefix are allowed.
 #
+# The trusted builder is the reusable workflow that built the images, not the
+# calling application repository. Calls from other organizations use the default
+# unchanged when building with the published Docker build images workflow. For a
+# fork, set `build-workflow: my-org/ci-github-container/.github/workflows/docker-build-images.yml`.
+# This one input selects both the signature identity and provenance signer. The
+# builder must preserve the candidate metadata and current-run provenance contract.
+#
 # ## Publication and recovery
 #
 # The workflow serializes promotions per calling repository and records validated
@@ -69,6 +76,12 @@ on: # yamllint disable-line rule:truthy
         description: Direct dependency results from toJSON(needs), including candidate and validation outputs.
         type: string
         required: true
+      build-workflow:
+        description: >-
+          Trusted builder as owner/repository/.github/workflows/file.yml, without a ref.
+          Used for both signatures and provenance; override when building with a fork.
+        type: string
+        default: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml
       oci-registry:
         description: Authorized publication registry hostname.
         type: string
@@ -117,6 +130,7 @@ jobs:
         uses: $/actions/docker/promote-images
         with:
           job-results: ${{ inputs.job-results }}
+          build-workflow: ${{ inputs.build-workflow }}
           oci-registry: ${{ inputs.oci-registry }}
           repository: ${{ inputs.repository || github.repository }}
           oci-registry-username: ${{ inputs.oci-registry-username || github.repository_owner }}

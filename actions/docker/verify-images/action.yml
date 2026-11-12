@@ -51,7 +51,8 @@ runs:
         CERTIFICATE_OIDC_ISSUER: ${{ inputs.certificate-oidc-issuer }}
       with:
         script: |
-          const { ImageVerification } = require(`${process.env.ACTION_PATH}/verification.js`);
+          const { pathToFileURL } = require('node:url');
+          const { ImageVerification } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/verification.js`));
           const verification = new ImageVerification({
             images: process.env.IMAGES,
             identity: process.env.CERTIFICATE_IDENTITY,
