@@ -49,7 +49,9 @@ The caller owns successful archive cleanup. Failed packaging removes its output.
     # Final root chart name. Omit to keep the name in Chart.yaml.
     name: ""
 
-    # Version to apply to the root and local charts. Omit to retain existing metadata.
+    # Final root archive version and tag for update-tag-paths in local charts.
+    # The archive version takes precedence over a values override of Chart.yaml version.
+    # Omit to retain existing metadata.
     tag: ""
 
     # Comma-separated YAML paths updated with tag in each local Chart.yaml.
@@ -78,7 +80,9 @@ The caller owns successful archive cleanup. Failed packaging removes its output.
 | ----------------------- | ---------------------------------------------------------------------------------------------------- | ------------ | ---------------------- |
 | **`path`**              | Path to one root chart containing Chart.yaml, not a directory of charts.                             | **true**     | -                      |
 | **`name`**              | Final root chart name. Omit to keep the name in Chart.yaml.                                          | **false**    | -                      |
-| **`tag`**               | Version to apply to the root and local charts. Omit to retain existing metadata.                     | **false**    | -                      |
+| **`tag`**               | Final root archive version and tag for update-tag-paths in local charts.                             | **false**    | -                      |
+|                         | The archive version takes precedence over a values override of Chart.yaml version.                   |              |                        |
+|                         | Omit to retain existing metadata.                                                                    |              |                        |
 | **`update-tag-paths`**  | Comma-separated YAML paths updated with tag in each local Chart.yaml.                                | **false**    | `.version,.appVersion` |
 | **`values`**            | Published defaults using the update-chart-values action format: `[{ file, path, value }]`.           | **false**    | -                      |
 |                         | Paths are relative to the root chart; file defaults to values.yaml.                                  |              |                        |

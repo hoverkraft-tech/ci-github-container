@@ -97,8 +97,10 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUT_SIGN: ${{ inputs.sign }}
+        INPUT_TAG: ${{ inputs.tag }}
       with:
         script: |
+          if (!process.env.INPUT_TAG?.trim()) throw new Error('"tag" input is missing');
           const sign = process.env.INPUT_SIGN;
           if (!['true', 'false'].includes(sign)) {
             throw new Error('"sign" must be "true" or "false".');

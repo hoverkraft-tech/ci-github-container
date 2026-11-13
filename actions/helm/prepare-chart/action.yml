@@ -21,7 +21,10 @@ inputs:
     description: "Final root chart name. Omit to keep the name in Chart.yaml."
     required: false
   tag:
-    description: "Version to apply to the root and local charts. Omit to retain existing metadata."
+    description: |
+      Final root archive version and tag for update-tag-paths in local charts.
+      The archive version takes precedence over a values override of Chart.yaml version.
+      Omit to retain existing metadata.
     required: false
   update-tag-paths:
     description: "Comma-separated YAML paths updated with tag in each local Chart.yaml."
@@ -91,6 +94,7 @@ runs:
         INPUT_PATH: ${{ inputs.path }}
         INPUT_HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
         CHARTS: ${{ steps.plan.outputs.charts }}
+        INPUT_TAG: ${{ inputs.tag }}
       with:
         script: |
           const { join } = require('node:path');
@@ -101,6 +105,7 @@ runs:
             charts: JSON.parse(process.env.CHARTS),
             chartPath: process.env.INPUT_PATH,
             runnerTemp: process.env.RUNNER_TEMP,
+            version: process.env.INPUT_TAG,
             repositories: process.env.INPUT_HELM_REPOSITORIES,
           });
           core.setOutput('archive', result.archive);
