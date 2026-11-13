@@ -33,8 +33,6 @@ function fixture(
 		errorStream = "stderr",
 		output = pushOutput,
 		logoutFails = false,
-		validationValues = "",
-		validationFailure,
 	} = {},
 ) {
 	const runnerTemp = fs.mkdtempSync(path.join(os.tmpdir(), "helm-push-test-"));
@@ -46,7 +44,6 @@ function fixture(
 		warnings: [],
 		delays: [],
 		elapsed: 0,
-		validations: [],
 	};
 	const core = {
 		setOutput: (name, value) => {
@@ -55,7 +52,7 @@ function fixture(
 		warning: (message) => state.warnings.push(message),
 	};
 	const exec = {
-		exec: async (command, args, options) => {
+		exec: async (command, args) => {
 			assert.equal(command, "helm");
 			state.commands.push(args);
 			if (args[0] === "package") {
@@ -64,16 +61,6 @@ function fixture(
 					path.join(destination, "application-1.2.3.tgz"),
 					"packaged chart",
 				);
-			} else if (["lint", "template"].includes(args[0])) {
-				const archive = args.find((arg) => arg.endsWith(".tgz"));
-				state.validations.push({
-					args,
-					options,
-					archive: fs.readFileSync(archive, "utf8"),
-				});
-				assert.equal(state.pushes.length, 0);
-				if (args[0] === validationFailure)
-					throw new Error(`${validationFailure} failed`);
 			} else if (args[1] === "login") {
 				const config = args[args.indexOf("--registry-config") + 1];
 				fs.writeFileSync(config, "test credentials");
@@ -109,7 +96,6 @@ function fixture(
 					INPUT_USERNAME: "test-user",
 					INPUT_PASSWORD: "test-password",
 					CHART_REPOSITORY: "charts",
-					INPUT_VALIDATION_VALUES: validationValues,
 				},
 			},
 			core,
@@ -144,48 +130,6 @@ test("successful chart pushes return the immutable digest without waiting", asyn
 	assert.deepEqual(f.state.delays, []);
 	assertCleanup(f);
 });
-
-test("validation checks the published archive with ordered values and hides rendered manifests", async (t) => {
-	const f = fixture(t, {
-		validationValues: " first values.yaml\r\n\nsecond.yaml ",
-	});
-	await f.run();
-	const archive = f.state.pushes[0].args[1];
-	const values = [
-		"--values",
-		path.resolve("first values.yaml"),
-		"--values",
-		path.resolve("second.yaml"),
-	];
-	assert.deepEqual(f.state.validations, [
-		{
-			args: ["lint", "--strict", archive, ...values],
-			options: undefined,
-			archive: f.state.pushes[0].archive,
-		},
-		{
-			args: ["template", "release-validation", archive, ...values],
-			options: { silent: true },
-			archive: f.state.pushes[0].archive,
-		},
-	]);
-	assertOutputs(f.state);
-	assertCleanup(f);
-});
-
-for (const validationFailure of ["lint", "template"]) {
-	test(`${validationFailure} failure blocks publication and cleans temporary files`, async (t) => {
-		const f = fixture(t, {
-			validationValues: "values.yaml",
-			validationFailure,
-		});
-		await assert.rejects(f.run, new RegExp(`${validationFailure} failed`));
-		assert.equal(f.state.pushes.length, 0);
-		assert.deepEqual(f.state.outputs, {});
-		assert.deepEqual(f.state.delays, []);
-		assertCleanup(f);
-	});
-}
 
 for (const errorStream of ["stderr", "stdout"]) {
 	test(`chart tag visibility failures on ${errorStream} retry the unchanged archive`, async (t) => {

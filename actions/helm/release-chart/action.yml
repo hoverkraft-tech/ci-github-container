@@ -55,18 +55,6 @@ inputs:
       List of Helm repositories to add before release charts.
       See https://helm.sh/docs/helm/helm_repo_add/.
     required: false
-  validation-values:
-    description: |
-      Values files used to validate the final chart archive before publication.
-      One path per line, relative to the workspace; files are applied in order.
-      Supplying files enables `helm lint --strict` and `helm template` on the
-      same archive that will be pushed. Use the chart's `values.yaml` to validate
-      its defaults. Empty input leaves validation disabled.
-
-      These files only configure validation; they do not change published defaults.
-      Rendered manifests are not logged. A validation failure prevents publication.
-      This does not replace installation tests or application/image verification.
-    required: false
   tag:
     description: "The release tag to set to chart"
     required: true
@@ -231,7 +219,6 @@ runs:
         INPUT_REGISTRY: ${{ inputs.oci-registry }}
         INPUT_USERNAME: ${{ inputs.oci-registry-username }}
         INPUT_PASSWORD: ${{ inputs.oci-registry-password }}
-        INPUT_VALIDATION_VALUES: ${{ inputs.validation-values }}
         CHART_REPOSITORY: ${{ github.repository }}/charts/${{ inputs.chart }}
       with:
         script: |
@@ -254,16 +241,8 @@ runs:
             if (packages.length !== 1) {
               throw new Error('Expected exactly one packaged chart.');
             }
-            const archive = path.join(destination, packages[0]);
-            const validationValues = (process.env.INPUT_VALIDATION_VALUES ?? '')
-              .split(/\r?\n/).map(file => file.trim()).filter(Boolean);
-            if (validationValues.length > 0) {
-              const valuesArgs = validationValues.flatMap(file => ['--values', path.resolve(file)]);
-              await exec.exec('helm', ['lint', '--strict', archive, ...valuesArgs]);
-              await exec.exec('helm', ['template', 'release-validation', archive, ...valuesArgs], { silent: true });
-            }
             const pushArgs = [
-              'push', archive, `oci://${registry}/${process.env.CHART_REPOSITORY}`,
+              'push', path.join(destination, packages[0]), `oci://${registry}/${process.env.CHART_REPOSITORY}`,
               '--registry-config', registryConfig,
             ];
             const maxAttempts = 6;
