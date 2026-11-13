@@ -8704,7 +8704,12 @@ function dependencyDigest(requirements, locked) {
 			),
 		);
 	// encoding/json escapes these characters even inside JSON strings.
-	const data = JSON.stringify([ordered(requirements), ordered(locked)]).replace(
+	const resolved = requirements.map((dependency, index) =>
+		/^(?:@|alias:)/.test(dependency.repository ?? "")
+			? { ...dependency, repository: locked[index]?.repository }
+			: dependency,
+	);
+	const data = JSON.stringify([ordered(resolved), ordered(locked)]).replace(
 		/[<>&\u2028\u2029]/g,
 		(character) =>
 			`\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
@@ -8849,6 +8854,7 @@ async function packageChart({
 	charts,
 	chartPath,
 	runnerTemp,
+	version = "",
 	repositories = "",
 }) {
 	await buildDependencies({ exec, charts, repositories });
@@ -8857,6 +8863,7 @@ async function packageChart({
 		await exec.exec("helm", [
 			"package",
 			external_node_path_namespaceObject.resolve(chartPath),
+			...(version ? ["--version", version] : []),
 			"--destination",
 			destination,
 		]);

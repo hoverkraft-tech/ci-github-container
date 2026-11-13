@@ -72,18 +72,29 @@ test("prepared archives contain current nested sources, final values and locked 
 	fs.writeFileSync(template, "# stale nested source\n");
 	command("helm", ["dependency", "update", appPath]);
 	command("helm", ["repo", "add", "valkey", "https://valkey.io/valkey-helm/"]);
-	command("helm", ["dependency", "build", chartPath]);
+	const rootFile = path.join(chartPath, "Chart.yaml");
+	const root = yaml.parse(fs.readFileSync(rootFile, "utf8"));
+	root.dependencies.find(
+		(dependency) => dependency.name === "valkey",
+	).repository = "@valkey";
+	fs.writeFileSync(rootFile, yaml.stringify(root));
+	command("helm", ["dependency", "update", chartPath]);
 	const external = yaml
 		.parse(fs.readFileSync(path.join(chartPath, "Chart.lock"), "utf8"))
 		.dependencies.find((dependency) => dependency.name === "valkey");
 	const archives = [];
 	const literalValue = `quoted ' " value $(exit 19)`;
-	for (const tag of ["1.2.3", "2.0.0"]) {
+	for (const { tag, updateTagPaths, localVersion = tag } of [
+		{ tag: "1.2.3" },
+		{ tag: "2.0.0" },
+		{ tag: "3.0.0", updateTagPaths: ".appVersion", localVersion: "2.0.0" },
+	]) {
 		fs.writeFileSync(template, `# current nested source ${tag}\n`);
 		const plan = planPreparation({
 			chartPath,
 			name: "prepared",
 			tag,
+			updateTagPaths,
 			values: JSON.stringify([
 				{ file: "charts/app/values.yaml", path: ".image.tag", value: tag },
 				{ path: ".publishedLiteral", value: literalValue },
@@ -105,6 +116,7 @@ test("prepared archives contain current nested sources, final values and locked 
 			chartPath,
 			charts: plan.charts,
 			runnerTemp: directory,
+			version: tag,
 		});
 		assert.equal(
 			result.checksum,
@@ -130,7 +142,7 @@ test("prepared archives contain current nested sources, final values and locked 
 		assert.equal(
 			metadata.dependencies.find((dependency) => dependency.name === "app")
 				.version,
-			tag,
+			localVersion,
 		);
 		assert.equal(
 			fs.readFileSync(
@@ -152,7 +164,7 @@ test("prepared archives contain current nested sources, final values and locked 
 					"utf8",
 				),
 			).version,
-			tag,
+			localVersion,
 		);
 		assert.equal(
 			yaml.parse(

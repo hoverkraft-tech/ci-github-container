@@ -204,3 +204,14 @@ test("a changed prepared archive fails before registry login", async (t) => {
 	assert.deepEqual(f.state.commands, []);
 	assert.deepEqual(f.state.outputs, {});
 });
+
+test("release rejects a missing tag before preparing a chart", () => {
+	const validate = new AsyncFunction(
+		"process",
+		action.runs.steps[0].with.script,
+	);
+	return assert.rejects(
+		validate({ env: { INPUT_SIGN: "false", INPUT_TAG: "" } }),
+		/tag.*missing/,
+	);
+});
