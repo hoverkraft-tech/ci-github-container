@@ -44,8 +44,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Arrange standalone test action
+        run: |
+          mkdir -p .cache/agent-work
+          cp -R actions/helm/test-chart .cache/agent-work/test-chart
+
       - id: test-chart
-        uses: $/actions/helm/test-chart
+        # This runner-created copy is the isolation test target.
+        uses: ./.cache/agent-work/test-chart # zizmor: ignore[self-repository]
         with:
           check-diff-only: false
           namespace: chart-testing
@@ -57,3 +63,7 @@ jobs:
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean standalone test action
+        if: always()
+        run: rm -rf .cache/agent-work/test-chart
