@@ -42,12 +42,24 @@ test("prepared archives contain current nested sources, final values and locked 
 		HELM_CONFIG_HOME: path.join(directory, "config"),
 		HELM_DATA_HOME: path.join(directory, "data"),
 	};
-	const command = (program, args, extraEnv = {}) =>
+	const command = (program, args) =>
 		execFileSync(program, args, {
-			env: { ...env, ...extraEnv },
+			env,
 			encoding: "utf8",
 			timeout: 60000,
 		});
+	const applyValues = (values) =>
+		updateValues(
+			{ env: { INPUT_PATH: chartPath, INPUT_VALUES: JSON.stringify(values) } },
+			{
+				setOutput: (_name, script) =>
+					execFileSync("sh", ["-c", updateAction.runs.steps[1].with.cmd], {
+						env: { ...env, YQ_COMMAND: script },
+						encoding: "utf8",
+						timeout: 60000,
+					}),
+			},
+		);
 	const exec = {
 		exec: async (program, args) => {
 			command(program, args);
@@ -91,23 +103,10 @@ test("prepared archives contain current nested sources, final values and locked 
 		"utf8",
 	);
 	await assert.rejects(
-		updateValues(
-			{
-				env: {
-					INPUT_PATH: chartPath,
-					INPUT_VALUES: JSON.stringify([
-						{ file: "missing/values.yaml", path: ".invalid", value: "invalid" },
-						{ path: ".mustNotBeWritten", value: "later update" },
-					]),
-				},
-			},
-			{
-				setOutput: (_name, script) =>
-					command("sh", ["-c", updateAction.runs.steps[1].with.cmd], {
-						YQ_COMMAND: script,
-					}),
-			},
-		),
+		applyValues([
+			{ file: "missing/values.yaml", path: ".invalid", value: "invalid" },
+			{ path: ".mustNotBeWritten", value: "later update" },
+		]),
 	);
 	assert.equal(
 		fs.readFileSync(path.join(chartPath, "values.yaml"), "utf8"),
@@ -131,20 +130,7 @@ test("prepared archives contain current nested sources, final values and locked 
 				{ path: ".publishedLiteral", value: literalValue },
 			]),
 		});
-		await updateValues(
-			{
-				env: {
-					INPUT_PATH: chartPath,
-					INPUT_VALUES: JSON.stringify(plan.values),
-				},
-			},
-			{
-				setOutput: (_name, script) =>
-					command("sh", ["-c", updateAction.runs.steps[1].with.cmd], {
-						YQ_COMMAND: script,
-					}),
-			},
-		);
+		await applyValues(plan.values);
 		const result = await packageChart({
 			exec,
 			chartPath,
