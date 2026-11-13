@@ -81,7 +81,6 @@ jobs:
           values: ${{ matrix.chart.values }}
           tag: ${{ steps.arrange.outputs.tag }}
           sign: ${{ matrix.sign }}
-          validation-values: ${{ matrix.sign && format('tests/charts/{0}/values.yaml', matrix.chart.name) || '' }}
           helm-repositories: |
             valkey https://valkey.io/valkey-helm/
 
