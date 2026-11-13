@@ -46,7 +46,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@d6569ca423f29f68152ee561f51f7de0c08db709 # 1.0.0
   with:
     # Comma-separated list of packages to cleanup.
     # Example: "application-1,application-2"
@@ -110,7 +110,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@d6569ca423f29f68152ee561f51f7de0c08db709 # 1.0.0
         with:
           package: my-app
           delete-tags: pr-${{ github.event.pull_request.number }}-*
@@ -132,7 +132,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/clean-images@d6569ca423f29f68152ee561f51f7de0c08db709 # 1.0.0
         with:
           package: my-app
           delete-untagged: true
