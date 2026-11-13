@@ -64,6 +64,10 @@ jobs:
           oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Clean standalone test action
+      # The action's checkout can remove the fixture. Post-job hooks reload its manifest.
+      # Keep this copy until the hosted runner disposes of the workspace after those hooks.
+      - name: Restore standalone action for post-job hooks
         if: always()
-        run: rm -rf .cache/agent-work/test-chart
+        run: |
+          mkdir -p .cache/agent-work/test-chart
+          cp actions/helm/test-chart/action.yml .cache/agent-work/test-chart/action.yml
