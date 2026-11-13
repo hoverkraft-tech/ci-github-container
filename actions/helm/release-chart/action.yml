@@ -4,8 +4,8 @@ description: |
   Action to release a Helm chart to OCI registry.
   Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
   Set `sign` to `false` to opt out and still consume the immutable digest output.
-  Supports umbrella charts: if a chart has local dependencies having version `0.0.0`,
-  the action will update those dependencies version with the given tag, then update the Chart.lock accordingly.
+  Delegates final metadata, published values, locked dependencies and packaging
+  to prepare-chart. Push retries reuse the same prepared archive.
 author: hoverkraft
 branding:
   icon: upload-cloud
@@ -111,111 +111,25 @@ runs:
       with:
         ref: ${{ inputs.ref }}
 
-    - id: chart-tag-updates
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        INPUT_PATH: ${{ inputs.path }}
-        INPUT_TAG: ${{ inputs.tag }}
-        INPUT_UPDATE_TAG_PATHS: ${{ inputs.update-tag-paths }}
-        INPUT_VALUES: ${{ inputs.values }}
-        REPOSITORY_NAME: ${{ github.event.repository.name }}
-      with:
-        script: |
-          const path = require('node:path');
-
-          const basePath = process.env.INPUT_PATH;
-          if (!basePath) {
-            throw new Error(`"path" input is missing`);
-          }
-
-          const tag = process.env.INPUT_TAG;
-          if (!tag) {
-            throw new Error(`"tag" input is missing`);
-          }
-
-          const inputValues = process.env.INPUT_VALUES;
-          let chartValues = [];
-          if (inputValues) {
-            try {
-              chartValues = JSON.parse(inputValues);
-            } catch (error) {
-              throw new Error(`"values" input is not a valid JSON: ${error}`);
-            }
-
-            if (!Array.isArray(chartValues)) {
-              throw new Error(`"values" input is not an array`);
-            }
-          }
-
-          const updateTagPaths = process.env.INPUT_UPDATE_TAG_PATHS.trim().split(',').map(p => p.trim()).filter(p => p);
-          const chartRootPath = path.resolve(process.env.GITHUB_WORKSPACE ?? '.', basePath);
-          const generatedValues = [];
-
-          const globber = await glob.create(`${basePath}/**/Chart.yaml`, { followSymbolicLinks: false });
-          for await (const chartFile of globber.globGenerator()) {
-            const filePath = path.relative(chartRootPath, chartFile);
-
-            const isRootChart = filePath === 'Chart.yaml';
-            if (isRootChart) {
-              generatedValues.push({
-                file: filePath,
-                path: '.name',
-                value: process.env.REPOSITORY_NAME,
-              });
-
-              if (updateTagPaths.includes('.version')) {
-                generatedValues.push({
-                  file: filePath,
-                  path: '(.dependencies[]? | select(.repository | test("^file://")).version)',
-                  value: tag,
-                });
-              }
-            }
-
-            for (const path of updateTagPaths) {
-              generatedValues.push({
-                file: filePath,
-                path,
-                value: tag,
-              });
-            }
-          }
-
-          core.setOutput('values', JSON.stringify([...generatedValues, ...chartValues]));
-
-    - uses: $/actions/helm/update-chart-values
-      with:
-        path: ${{ inputs.path }}
-        values: ${{ steps.chart-tag-updates.outputs.values }}
-
-    - name: Rewrite the Chart.lock to match with updated umbrella dependencies if any
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        INPUT_PATH: ${{ inputs.path }}
-        INPUT_TAG: ${{ inputs.tag }}
-        ACTION_PATH: ${{ github.action_path }}
-      with:
-        script: |
-          const { join } = require('node:path');
-          const { pathToFileURL } = require('node:url');
-          const { run } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist', 'index.js')));
-          run({ core, chartPath: process.env.INPUT_PATH, tag: process.env.INPUT_TAG });
-
     - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
 
-    - name: Prepare chart dependencies
+    - name: Prepare chart archive
+      id: prepare-chart
       uses: $/actions/helm/prepare-chart
       with:
         path: ${{ inputs.path }}
-        helm-repositories: >-
-          ${{ inputs.helm-repositories }}
+        name: ${{ github.event.repository.name }}
+        tag: ${{ inputs.tag }}
+        update-tag-paths: ${{ inputs.update-tag-paths }}
+        values: ${{ inputs.values }}
+        helm-repositories: ${{ inputs.helm-repositories }}
 
     - id: chart-releaser
-      name: Package and push chart
+      name: Push prepared chart
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        INPUT_PATH: ${{ inputs.path }}
-        INPUT_TAG: ${{ inputs.tag }}
+        CHART_ARCHIVE: ${{ steps.prepare-chart.outputs.archive }}
+        CHART_CHECKSUM: ${{ steps.prepare-chart.outputs.checksum }}
         INPUT_REGISTRY: ${{ inputs.oci-registry }}
         INPUT_USERNAME: ${{ inputs.oci-registry-username }}
         INPUT_PASSWORD: ${{ inputs.oci-registry-password }}
@@ -224,6 +138,10 @@ runs:
         script: |
           const fs = require('node:fs');
           const path = require('node:path');
+          const { createHash } = require('node:crypto');
+          const archive = process.env.CHART_ARCHIVE;
+          const checksum = createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
+          if (checksum !== process.env.CHART_CHECKSUM) throw new Error('Prepared chart checksum mismatch.');
           const registry = process.env.INPUT_REGISTRY;
           const destination = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'helm-release-'));
           const registryConfig = path.join(destination, 'registry.json');
@@ -234,15 +152,8 @@ runs:
               '--password-stdin', '--registry-config', registryConfig,
             ], { input: Buffer.from(process.env.INPUT_PASSWORD) });
             loggedIn = true;
-            await exec.exec('helm', [
-              'package', path.resolve(process.env.INPUT_PATH), '--version', process.env.INPUT_TAG, '--destination', destination,
-            ]);
-            const packages = fs.readdirSync(destination).filter(file => file.endsWith('.tgz'));
-            if (packages.length !== 1) {
-              throw new Error('Expected exactly one packaged chart.');
-            }
             const pushArgs = [
-              'push', path.join(destination, packages[0]), `oci://${registry}/${process.env.CHART_REPOSITORY}`,
+              'push', archive, `oci://${registry}/${process.env.CHART_REPOSITORY}`,
               '--registry-config', registryConfig,
             ];
             const maxAttempts = 6;
@@ -299,3 +210,14 @@ runs:
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
         charts: ${{ steps.chart-releaser.outputs.image }}@${{ steps.chart-releaser.outputs.digest }}
+
+    - name: Clean prepared archive
+      if: ${{ always() && steps.prepare-chart.outputs.archive != '' }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        CHART_ARCHIVE: ${{ steps.prepare-chart.outputs.archive }}
+      with:
+        script: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+          fs.rmSync(path.dirname(process.env.CHART_ARCHIVE), { recursive: true, force: true });

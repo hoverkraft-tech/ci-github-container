@@ -25,8 +25,13 @@
 
 ## Overview
 
-Add Helm repositories and build chart dependencies
-for all charts found under a path.
+Finalize and package one root Helm chart with its local dependencies.
+Applies chart metadata and published values, builds locked dependencies from
+children to parents, then returns one archive and its SHA-256 checksum.
+Requires Helm on PATH and source already checked out. Does not lint, test,
+publish or sign. Complete generated chart files before calling this action.
+Reuse the archive within the job; upload it with its checksum for later jobs.
+The caller owns successful archive cleanup. Failed packaging removes its output.
 
 <!-- overview:end -->
 
@@ -37,12 +42,29 @@ for all charts found under a path.
 ```yaml
 - uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-chart@ed1e90302235365110f9b4b05df96840f715a14f # 0.43.0
   with:
-    # Path containing the chart(s) to prepare
+    # Path to one root chart containing Chart.yaml, not a directory of charts.
     # This input is required.
     path: ""
 
-    # List of Helm repositories to add before building chart dependencies.
+    # Final root chart name. Omit to keep the name in Chart.yaml.
+    name: ""
+
+    # Version to apply to the root and local charts. Omit to retain existing metadata.
+    tag: ""
+
+    # Comma-separated YAML paths updated with tag in each local Chart.yaml.
+    # Default: `.version,.appVersion`
+    update-tag-paths: .version,.appVersion
+
+    # Published defaults using the update-chart-values action format: `[{ file, path, value }]`.
+    # Paths are relative to the root chart; file defaults to values.yaml.
+    # Applied after generated metadata updates. Do not include validation-only values or credentials.
+    # Dependency declarations must retain locked external versions and local chart identities.
+    values: ""
+
+    # List of Helm repositories to add before building locked dependencies.
     # See https://helm.sh/docs/helm/helm_repo_add/.
+    # Charts with dependencies must have a matching Chart.lock; preparation does not resolve new versions.
     helm-repositories: ""
 ```
 
@@ -52,11 +74,19 @@ for all charts found under a path.
 
 ## Inputs
 
-| **Input**               | **Description**                                                      | **Required** | **Default** |
-| ----------------------- | -------------------------------------------------------------------- | ------------ | ----------- |
-| **`path`**              | Path containing the chart(s) to prepare                              | **true**     | -           |
-| **`helm-repositories`** | List of Helm repositories to add before building chart dependencies. | **false**    | -           |
-|                         | See <https://helm.sh/docs/helm/helm_repo_add/>.                      |              |             |
+| **Input**               | **Description**                                                                                      | **Required** | **Default**            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- | ------------ | ---------------------- |
+| **`path`**              | Path to one root chart containing Chart.yaml, not a directory of charts.                             | **true**     | -                      |
+| **`name`**              | Final root chart name. Omit to keep the name in Chart.yaml.                                          | **false**    | -                      |
+| **`tag`**               | Version to apply to the root and local charts. Omit to retain existing metadata.                     | **false**    | -                      |
+| **`update-tag-paths`**  | Comma-separated YAML paths updated with tag in each local Chart.yaml.                                | **false**    | `.version,.appVersion` |
+| **`values`**            | Published defaults using the update-chart-values action format: `[{ file, path, value }]`.           | **false**    | -                      |
+|                         | Paths are relative to the root chart; file defaults to values.yaml.                                  |              |                        |
+|                         | Applied after generated metadata updates. Do not include validation-only values or credentials.      |              |                        |
+|                         | Dependency declarations must retain locked external versions and local chart identities.             |              |                        |
+| **`helm-repositories`** | List of Helm repositories to add before building locked dependencies.                                | **false**    | -                      |
+|                         | See <https://helm.sh/docs/helm/helm_repo_add/>.                                                      |              |                        |
+|                         | Charts with dependencies must have a matching Chart.lock; preparation does not resolve new versions. |              |                        |
 
 <!-- inputs:end -->
 
@@ -64,6 +94,14 @@ for all charts found under a path.
 <!-- secrets:end -->
 
 <!-- outputs:start -->
+
+## Outputs
+
+| **Output**     | **Description**                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| **`archive`**  | Absolute path to the final chart .tgz in a unique runner temporary directory.                    |
+| **`checksum`** | SHA-256 of the archive bytes (64 lowercase hexadecimal characters), not the OCI manifest digest. |
+
 <!-- outputs:end -->
 
 <!-- examples:start -->

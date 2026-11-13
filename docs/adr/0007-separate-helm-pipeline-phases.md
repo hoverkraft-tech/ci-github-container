@@ -2,7 +2,7 @@
 
 Date: 2026-11-13
 
-Status: Proposed; phase separation requested in review, implementation pending.
+Status: Accepted on 2026-11-13. Prepare implementation in review; remaining phases pending.
 
 ## Context
 
@@ -88,8 +88,9 @@ before changing the scheduling policy.
 
 Review and implement one phase at a time using existing fixtures and helpers:
 
-- [ ] Review this ADR and the artifact/input contracts before implementation.
-- [ ] Prepare: move final mutations and packaging; verify locked external dependencies, current nested local charts and changed-input invalidation.
+- [x] Review this ADR and the artifact/input contracts before implementation.
+- [x] Implement Prepare: move final mutations and packaging; verify locked external dependencies, current nested local charts and changed-input invalidation.
+- [ ] Review the Prepare implementation and its CI before starting Lint.
 - [ ] Lint: extract existing static checks; verify invalid metadata, schema or templates fail against the prepared artifact.
 - [ ] Test: consume that artifact; preserve fresh-cluster readiness, migrations, chart tests, diagnostics and failure/cancellation cleanup.
 - [ ] Release: accept the prepared archive; preserve retries, immutable outputs and signing; reject missing or mismatched artifacts before push.
@@ -108,13 +109,45 @@ only for new artifact/mutation/gate failure cases, and use existing integration
 fixtures for the Helm and registry boundaries. Do not publish a production release
 just to validate the redesign.
 
+### Prepare increment: 2026-11-13
+
+The design was approved before implementation. `prepare-chart` now takes one
+selected root chart, applies metadata and published values through the existing
+values action, validates dependency locks, builds local children before parents,
+and packages once. It returns an absolute archive path and a hexadecimal SHA-256.
+The caller owns the successful artifact; failed packaging removes partial output.
+No cache is introduced, so each invocation rebuilds current source and locked
+inputs rather than accepting stale packaged children.
+
+The prior release lock helper and its bundle move to Prepare. During extraction,
+`release-chart` delegates preparation and pushes the returned archive, retaining
+its existing release-facing inputs, retries and signing. Its public artifact-input
+contract remains a later increment. `test-chart` reuses the dependency helper
+while its artifact-based test contract is pending. Neither adaptation adds a mode
+flag or makes release responsible for lint/test checks.
+
+The changed public Prepare contract requires one chart directory and matching
+locks for charts with dependencies; repository-wide discovery moves to callers.
+Optional name/tag inputs retain source metadata when omitted. Existing tag-path
+and published-values configuration remains available. Local dependency versions
+may change together with their source charts; external declarations and locked
+versions remain unchanged. Source is prepared in place, so generated chart files
+must be ready before the call.
+
+Focused tests cover lock errors, final metadata plans, package outputs/cleanup and
+publication integrity. The existing umbrella fixture supplies a real Helm test
+for stale nested packages, changed source/values/versions and locked external
+content. Existing publication tests retain retry and signing coverage. Hosted CI
+must pass before this increment is accepted; no performance gain is claimed.
+
 ## Consequences and limits
 
 This separates validation from publication and avoids repeated preparation in the
 target pipeline. It adds an artifact handoff to the isolated publication job.
 Performance gains remain unmeasured; this is a responsibility and reuse decision,
 not evidence of a speedup. Existing fresh-install tests, image verification and
-signing remain required. No part of this split is implemented by this ADR-only PR.
+signing remain required. Preparation is implemented in this increment. The complete workflow and remaining
+phase contracts are not yet available.
 
 ## References
 
