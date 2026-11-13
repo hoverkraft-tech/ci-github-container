@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -37,6 +38,11 @@ function fixture(
 ) {
 	const runnerTemp = fs.mkdtempSync(path.join(os.tmpdir(), "helm-push-test-"));
 	t.after(() => fs.rmSync(runnerTemp, { recursive: true, force: true }));
+	const archive = path.join(runnerTemp, "prepared.tgz");
+	fs.writeFileSync(archive, "prepared chart");
+	const checksum = createHash("sha256")
+		.update(fs.readFileSync(archive))
+		.digest("hex");
 	const state = {
 		commands: [],
 		pushes: [],
@@ -55,13 +61,7 @@ function fixture(
 		exec: async (command, args) => {
 			assert.equal(command, "helm");
 			state.commands.push(args);
-			if (args[0] === "package") {
-				const destination = args[args.indexOf("--destination") + 1];
-				fs.writeFileSync(
-					path.join(destination, "application-1.2.3.tgz"),
-					"packaged chart",
-				);
-			} else if (args[1] === "login") {
+			if (args[1] === "login") {
 				const config = args[args.indexOf("--registry-config") + 1];
 				fs.writeFileSync(config, "test credentials");
 			} else {
@@ -90,8 +90,8 @@ function fixture(
 			{
 				env: {
 					RUNNER_TEMP: runnerTemp,
-					INPUT_PATH: runnerTemp,
-					INPUT_TAG: "1.2.3",
+					CHART_ARCHIVE: archive,
+					CHART_CHECKSUM: checksum,
 					INPUT_REGISTRY: "registry.example.com",
 					INPUT_USERNAME: "test-user",
 					INPUT_PASSWORD: "test-password",
@@ -106,12 +106,12 @@ function fixture(
 				callback();
 			},
 		);
-	return { state, run, runnerTemp };
+	return { state, run, runnerTemp, archive };
 }
 
 function assertCleanup({ state, runnerTemp }) {
 	assert.equal(state.commands.filter((args) => args[1] === "logout").length, 1);
-	assert.deepEqual(fs.readdirSync(runnerTemp), []);
+	assert.deepEqual(fs.readdirSync(runnerTemp), ["prepared.tgz"]);
 }
 
 function assertOutputs(state) {
@@ -139,7 +139,7 @@ for (const errorStream of ["stderr", "stdout"]) {
 		assert(f.state.elapsed >= 90000 && f.state.elapsed <= 180000);
 		assert.equal(
 			f.state.commands.filter((args) => args[0] === "package").length,
-			1,
+			0,
 		);
 		assert.equal(
 			f.state.commands.filter((args) => args[1] === "login").length,
@@ -195,4 +195,12 @@ test("logout errors still remove temporary credentials after a successful push",
 		f.state.warnings.some((message) => message.includes("logout unavailable")),
 	);
 	assertCleanup(f);
+});
+
+test("a changed prepared archive fails before registry login", async (t) => {
+	const f = fixture(t);
+	fs.appendFileSync(f.archive, "tampered");
+	await assert.rejects(f.run, /checksum mismatch/);
+	assert.deepEqual(f.state.commands, []);
+	assert.deepEqual(f.state.outputs, {});
 });

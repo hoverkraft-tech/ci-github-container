@@ -1,8 +1,13 @@
 ---
 name: "Prepare Helm Chart"
 description: |
-  Add Helm repositories and build chart dependencies
-  for all charts found under a path.
+  Finalize and package one root Helm chart with its local dependencies.
+  Applies chart metadata and published values, builds locked dependencies from
+  children to parents, then returns one archive and its SHA-256 checksum.
+  Requires Helm on PATH and source already checked out. Does not lint, test,
+  publish or sign. Complete generated chart files before calling this action.
+  Reuse the archive within the job; upload it with its checksum for later jobs.
+  The caller owns successful archive cleanup. Failed packaging removes its output.
 author: hoverkraft
 branding:
   icon: package
@@ -10,75 +15,93 @@ branding:
 
 inputs:
   path:
-    description: "Path containing the chart(s) to prepare"
+    description: "Path to one root chart containing Chart.yaml, not a directory of charts."
     required: true
+  name:
+    description: "Final root chart name. Omit to keep the name in Chart.yaml."
+    required: false
+  tag:
+    description: "Version to apply to the root and local charts. Omit to retain existing metadata."
+    required: false
+  update-tag-paths:
+    description: "Comma-separated YAML paths updated with tag in each local Chart.yaml."
+    required: false
+    default: ".version,.appVersion"
+  values:
+    description: |
+      Published defaults using the update-chart-values action format: `[{ file, path, value }]`.
+      Paths are relative to the root chart; file defaults to values.yaml.
+      Applied after generated metadata updates. Do not include validation-only values or credentials.
+      Dependency declarations must retain locked external versions and local chart identities.
+    required: false
   helm-repositories:
     description: |
-      List of Helm repositories to add before building chart dependencies.
+      List of Helm repositories to add before building locked dependencies.
       See https://helm.sh/docs/helm/helm_repo_add/.
+      Charts with dependencies must have a matching Chart.lock; preparation does not resolve new versions.
     required: false
+
+outputs:
+  archive:
+    description: "Absolute path to the final chart .tgz in a unique runner temporary directory."
+    value: ${{ steps.package.outputs.archive }}
+  checksum:
+    description: "SHA-256 of the archive bytes (64 lowercase hexadecimal characters), not the OCI manifest digest."
+    value: ${{ steps.package.outputs.checksum }}
 
 runs:
   using: "composite"
   steps:
-    - name: Add Helm repositories
+    - name: Plan chart preparation
+      id: plan
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        INPUT_HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
-      with:
-        script: |
-          const repositories = (process.env.INPUT_HELM_REPOSITORIES ?? '')
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0);
-
-          for (const repository of repositories) {
-            await exec.exec('helm', [
-              'repo',
-              'add',
-              ...repository.split(/\s+/),
-            ]);
-          }
-
-    - name: Build chart dependencies
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
+        ACTION_PATH: ${{ github.action_path }}
         INPUT_PATH: ${{ inputs.path }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_UPDATE_TAG_PATHS: ${{ inputs.update-tag-paths }}
+        INPUT_VALUES: ${{ inputs.values }}
       with:
         script: |
-          const path = require('node:path');
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { planPreparation } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist/index.js')));
+          const plan = planPreparation({
+            chartPath: process.env.INPUT_PATH,
+            name: process.env.INPUT_NAME,
+            tag: process.env.INPUT_TAG,
+            updateTagPaths: process.env.INPUT_UPDATE_TAG_PATHS,
+            values: process.env.INPUT_VALUES,
+          });
+          core.setOutput('charts', JSON.stringify(plan.charts));
+          core.setOutput('values', JSON.stringify(plan.values));
 
-          const chartPath = process.env.INPUT_PATH;
-          if (!chartPath) {
-            core.setFailed('"path" input is missing');
-            return;
-          }
+    - name: Apply final chart metadata and published values
+      uses: $/actions/helm/update-chart-values
+      with:
+        path: ${{ inputs.path }}
+        values: ${{ steps.plan.outputs.values }}
 
-          core.info('Building charts dependencies');
-
-          const chartRootDir = path.resolve(
-            process.env.GITHUB_WORKSPACE ?? '.',
-            chartPath,
-          );
-          const chartFiles = [];
-          const globber = await glob.create(
-            `${chartPath}/**/Chart.yaml`,
-            { followSymbolicLinks: false },
-          );
-
-          for await (const chartFile of globber.globGenerator()) {
-            chartFiles.push(chartFile);
-          }
-
-          if (chartFiles.length === 0) {
-            core.info(`No charts found in ${chartRootDir}`);
-            return;
-          }
-
-          chartFiles.sort();
-
-          for (const chartFile of chartFiles) {
-            const chartDir = path.dirname(chartFile);
-            core.info(`Building dependencies for ${chartDir}`);
-            await exec.exec('helm', ['dependency', 'build', chartDir]);
-          }
+    - name: Build dependencies and package chart
+      id: package
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
+        CHARTS: ${{ steps.plan.outputs.charts }}
+      with:
+        script: |
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { packageChart } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist/index.js')));
+          const result = await packageChart({
+            exec,
+            charts: JSON.parse(process.env.CHARTS),
+            chartPath: process.env.INPUT_PATH,
+            runnerTemp: process.env.RUNNER_TEMP,
+            repositories: process.env.INPUT_HELM_REPOSITORIES,
+          });
+          core.setOutput('archive', result.archive);
+          core.setOutput('checksum', result.checksum);

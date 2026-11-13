@@ -8639,13 +8639,17 @@ var __webpack_exports__ = {};
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
-  e: () => (/* binding */ run)
+  yZ: () => (/* binding */ buildDependencies),
+  nt: () => (/* binding */ packageChart),
+  Xo: () => (/* binding */ planPreparation)
 });
 
 ;// CONCATENATED MODULE: external "node:crypto"
 const external_node_crypto_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:crypto");
 ;// CONCATENATED MODULE: external "node:fs"
 const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
+;// CONCATENATED MODULE: external "node:path"
+const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
 // EXTERNAL MODULE: ./node_modules/yaml/dist/index.js
 var dist = __nccwpck_require__(8815);
 ;// CONCATENATED MODULE: ./src/index.js
@@ -8653,104 +8657,227 @@ var dist = __nccwpck_require__(8815);
 
 
 
-function run({ core, chartPath, tag }) {
-	const rootChartFile = `${chartPath}/Chart.yaml`;
-	const rootChartFileContent = dist.parse(
-		external_node_fs_namespaceObject.readFileSync(rootChartFile, "utf8"),
-	);
 
-	if (
-		!rootChartFileContent.dependencies ||
-		rootChartFileContent.dependencies.length === 0
-	) {
-		core.debug(`No dependencies found in Chart.yaml file: ${rootChartFile}`);
-		return;
-	}
+function readYaml(file) {
+	return dist.parse(external_node_fs_namespaceObject.readFileSync(file, "utf8"));
+}
 
-	const chartLockFile = `${chartPath}/Chart.lock`;
-	if (!external_node_fs_namespaceObject.existsSync(chartLockFile)) {
-		core.debug(`Chart.lock file not found: ${chartLockFile}`);
-		return core.setFailed(`Chart.lock file not found: ${chartLockFile}`);
-	}
-
-	const chartLockFileContent = dist.parse(
-		external_node_fs_namespaceObject.readFileSync(chartLockFile, "utf8"),
-	);
-
-	let hasLocalDependencies = false;
-	const dependencies = chartLockFileContent.dependencies;
-
-	for (const dependency of dependencies) {
-		const isLocalDependency =
-			dependency.repository.startsWith("file://") &&
-			dependency.version === "0.0.0";
-		core.debug(`Dependency ${dependency.name} is local: ${isLocalDependency}`);
-
-		if (isLocalDependency) {
-			dependency.version = tag;
-			hasLocalDependencies = true;
-		}
-	}
-
-	if (!hasLocalDependencies) {
-		core.debug(
-			`No local dependencies found in Chart.lock file: ${chartLockFile}`,
+function sortMaps(value) {
+	if (Array.isArray(value)) return value.map(sortMaps);
+	if (value && typeof value === "object") {
+		return Object.fromEntries(
+			Object.keys(value)
+				.sort()
+				.map((key) => [key, sortMaps(value[key])]),
 		);
-		return;
 	}
+	return value;
+}
 
-	chartLockFileContent.generated = new Date().toISOString();
-
-	function hashReq(req, lock) {
-		req = req.map(sortDependencyFields);
-		lock = lock.map(sortDependencyFields);
-
-		const data = JSON.stringify([req, lock]);
-		const hash = digest(data);
-		return `sha256:${hash}`;
-	}
-
-	function digest(input) {
-		const hash = external_node_crypto_namespaceObject.createHash("sha256");
-		hash.update(input);
-		return hash.digest("hex");
-	}
-
-	function sortDependencyFields(dependency) {
-		const fieldOrder = [
-			"name",
-			"version",
-			"repository",
-			"condition",
-			"tags",
-			"enabled",
-			"import-values",
-			"alias",
-		];
-		const sortedDependency = {};
-		for (const field of fieldOrder) {
-			if (Object.hasOwn(dependency, field)) {
-				sortedDependency[field] = dependency[field];
-			}
-		}
-
-		return sortedDependency;
-	}
-
-	const req = rootChartFileContent.dependencies;
-	const lock = dependencies;
-
-	chartLockFileContent.digest = hashReq(req, lock);
-
-	const updatedChartLockFileContent = dist.stringify(chartLockFileContent);
-	core.debug(
-		`Updated Chart.lock file content:\n${updatedChartLockFileContent}`,
+// Helm hashes dependencies in Go struct field order, not YAML property order.
+function dependencyDigest(requirements, locked) {
+	const fields = [
+		"name",
+		"version",
+		"repository",
+		"condition",
+		"tags",
+		"enabled",
+		"import-values",
+		"alias",
+	];
+	const ordered = (dependencies) =>
+		dependencies.map((dependency) =>
+			Object.fromEntries(
+				fields
+					.filter((field) => {
+						if (field === "name" || field === "repository") return true;
+						const value = dependency[field];
+						return (
+							value != null &&
+							value !== "" &&
+							value !== false &&
+							(!Array.isArray(value) || value.length > 0)
+						);
+					})
+					.map((field) => [field, sortMaps(dependency[field] ?? "")]),
+			),
+		);
+	// encoding/json escapes these characters even inside JSON strings.
+	const data = JSON.stringify([ordered(requirements), ordered(locked)]).replace(
+		/[<>&\u2028\u2029]/g,
+		(character) =>
+			`\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
 	);
+	return `sha256:${external_node_crypto_namespaceObject.createHash("sha256").update(data).digest("hex")}`;
+}
 
-	external_node_fs_namespaceObject.writeFileSync(chartLockFile, updatedChartLockFileContent, "utf8");
+function localPath(chartPath, dependency) {
+	if (dependency.repository?.startsWith("file://")) {
+		return external_node_path_namespaceObject.resolve(chartPath, dependency.repository.slice(7));
+	}
+	if (!dependency.repository)
+		return external_node_path_namespaceObject.join(chartPath, "charts", dependency.name);
+	return null;
+}
+
+function collectCharts(chartPath, charts = [], visiting = new Set()) {
+	const directory = external_node_fs_namespaceObject.realpathSync(chartPath);
+	if (visiting.has(directory))
+		throw new Error(`Local chart dependency cycle: ${directory}`);
+	if (charts.some((chart) => chart.directory === directory)) return charts;
+	visiting.add(directory);
+	const chart = readYaml(external_node_path_namespaceObject.join(directory, "Chart.yaml"));
+	const dependencies = chart.dependencies ?? [];
+	let lock = null;
+	if (dependencies.length) {
+		const lockPath = external_node_path_namespaceObject.join(directory, "Chart.lock");
+		if (!external_node_fs_namespaceObject.existsSync(lockPath))
+			throw new Error(`Chart.lock file not found: ${lockPath}`);
+		lock = readYaml(lockPath);
+		if (
+			!Array.isArray(lock.dependencies) ||
+			lock.digest !== dependencyDigest(dependencies, lock.dependencies)
+		) {
+			throw new Error(`Chart.lock is out of sync: ${lockPath}`);
+		}
+	}
+	for (const dependency of dependencies) {
+		const child = localPath(directory, dependency);
+		if (child) collectCharts(child, charts, visiting);
+	}
+	visiting.delete(directory);
+	charts.push({ directory, dependencies, lock });
+	return charts;
+}
+
+function planPreparation({
+	chartPath,
+	name = "",
+	tag = "",
+	updateTagPaths = ".version,.appVersion",
+	values = "",
+}) {
+	if (!chartPath) throw new Error('"path" input is missing');
+	const charts = collectCharts(chartPath);
+	const root = external_node_fs_namespaceObject.realpathSync(chartPath);
+	const updates = values ? JSON.parse(values) : [];
+	if (!Array.isArray(updates))
+		throw new Error('"values" input is not an array');
+	const tagPaths = updateTagPaths
+		.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean);
+	const generated = [];
+	for (const chart of charts) {
+		const file = external_node_path_namespaceObject.relative(root, external_node_path_namespaceObject.join(chart.directory, "Chart.yaml"));
+		if (chart.directory === root && name)
+			generated.push({ file, path: ".name", value: name });
+		if (!tag) continue;
+		for (const field of tagPaths)
+			generated.push({ file, path: field, value: tag });
+		if (tagPaths.includes(".version")) {
+			chart.dependencies.forEach((dependency, index) => {
+				if (localPath(chart.directory, dependency)) {
+					generated.push({
+						file,
+						path: `.dependencies[${index}].version`,
+						value: tag,
+					});
+				}
+			});
+		}
+	}
+	return { charts, values: [...generated, ...updates] };
+}
+
+function updateLock({ directory, dependencies, lock }) {
+	const current =
+		readYaml(external_node_path_namespaceObject.join(directory, "Chart.yaml")).dependencies ?? [];
+	const expected = dependencies.map((dependency, index) => {
+		const child = localPath(directory, dependency);
+		if (!child) return dependency;
+		// Preserve a local version range when preparation did not change it.
+		if (current[index]?.version === dependency.version) return dependency;
+		return {
+			...dependency,
+			version: readYaml(external_node_path_namespaceObject.join(child, "Chart.yaml")).version,
+		};
+	});
+	if (JSON.stringify(current) !== JSON.stringify(expected)) {
+		throw new Error(
+			`Preparation may only change local dependency versions: ${directory}`,
+		);
+	}
+	if (!lock || JSON.stringify(current) === JSON.stringify(dependencies)) return;
+	const updated = structuredClone(lock);
+	updated.dependencies.forEach((dependency) => {
+		if (!localPath(directory, dependency)) return;
+		const requirement = current.find(
+			(item) =>
+				item.name === dependency.name &&
+				item.repository === dependency.repository,
+		);
+		dependency.version = requirement.version;
+	});
+	updated.digest = dependencyDigest(current, updated.dependencies);
+	updated.generated = new Date().toISOString();
+	external_node_fs_namespaceObject.writeFileSync(external_node_path_namespaceObject.join(directory, "Chart.lock"), dist.stringify(updated));
+}
+
+async function addRepositories(exec, repositories = "") {
+	for (const repository of repositories
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean)) {
+		await exec.exec("helm", ["repo", "add", ...repository.split(/\s+/)]);
+	}
+}
+
+async function buildDependencies({ exec, charts, repositories = "" }) {
+	// Reject changed requirements before downloading or packaging anything.
+	for (const chart of charts) updateLock(chart);
+	await addRepositories(exec, repositories);
+	for (const { directory, dependencies } of charts) {
+		if (dependencies.length)
+			await exec.exec("helm", ["dependency", "build", directory]);
+	}
+}
+
+async function packageChart({
+	exec,
+	charts,
+	chartPath,
+	runnerTemp,
+	repositories = "",
+}) {
+	await buildDependencies({ exec, charts, repositories });
+	const destination = external_node_fs_namespaceObject.mkdtempSync(external_node_path_namespaceObject.join(runnerTemp, "helm-prepare-"));
+	try {
+		await exec.exec("helm", [
+			"package",
+			external_node_path_namespaceObject.resolve(chartPath),
+			"--destination",
+			destination,
+		]);
+		const archives = external_node_fs_namespaceObject.readdirSync(destination)
+			.filter((file) => file.endsWith(".tgz"));
+		if (archives.length !== 1)
+			throw new Error("Expected exactly one packaged chart.");
+		const archive = external_node_path_namespaceObject.join(destination, archives[0]);
+		const checksum = external_node_crypto_namespaceObject.createHash("sha256")
+			.update(external_node_fs_namespaceObject.readFileSync(archive))
+			.digest("hex");
+		return { archive, checksum };
+	} catch (error) {
+		external_node_fs_namespaceObject.rmSync(destination, { recursive: true, force: true });
+		throw error;
+	}
 }
 
 
 
-var __webpack_exports__run = __webpack_exports__.e;
-export { __webpack_exports__run as run };
+var __webpack_exports__buildDependencies = __webpack_exports__.yZ;
+var __webpack_exports__packageChart = __webpack_exports__.nt;
+var __webpack_exports__planPreparation = __webpack_exports__.Xo;
+export { __webpack_exports__buildDependencies as buildDependencies, __webpack_exports__packageChart as packageChart, __webpack_exports__planPreparation as planPreparation };

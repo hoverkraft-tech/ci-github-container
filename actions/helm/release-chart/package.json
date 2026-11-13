@@ -3,15 +3,9 @@
 	"dependencies": {
 		"yaml": "^2.9.1"
 	},
-	"devDependencies": {
-		"@vercel/ncc": "0.45.0"
-	},
 	"scripts": {
-		"build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && ncc build src/index.js --out dist --target es2022 --no-cache --license licenses.txt",
-		"check:dist": "npm run build && git diff --exit-code -- dist && test -z \"$(git ls-files --others --exclude-standard -- dist)\"",
 		"test": "node --test",
 		"test:ci": "node --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test",
-		"test:distribution": "node --test src/index.test.js",
 		"test:watch": "node --test --watch",
 		"pretest:ci": "node -e \"require('node:fs').mkdirSync('coverage', { recursive: true })\""
 	},

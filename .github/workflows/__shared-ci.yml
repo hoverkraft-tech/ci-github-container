@@ -116,6 +116,16 @@ jobs:
     permissions:
       contents: read
 
+  test-action-helm-prepare-chart:
+    needs: lint
+    uses: $/.github/workflows/__test-action-helm-prepare-chart.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+
   test-action-helm-release-chart:
     needs: lint
     uses: $/.github/workflows/__test-action-helm-release-chart.yml
@@ -212,6 +222,7 @@ jobs:
   reports:
     needs:
       - lint
+      - test-action-helm-prepare-chart
       - test-action-helm-release-chart
       - test-action-docker-promote-images
       - test-action-docker-verify-images

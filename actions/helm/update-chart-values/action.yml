@@ -79,13 +79,14 @@ runs:
                   yqUpdates[filePath] = [];
                 }
 
-                yqUpdates[filePath].push(`${chartValue.path} = "${chartValue.value}"`);
+                yqUpdates[filePath].push(`${chartValue.path} = ${JSON.stringify(String(chartValue.value))}`);
               }
             }
           }
 
+          const shellQuote = value => "'" + value.replaceAll("'", "'\\''") + "'";
           const yqCommands = Object.entries(yqUpdates).map(([filePath, updates]) => {
-            return `yq -i '${updates.join(' | ')}' ${filePath}`;
+            return `yq -i ${shellQuote(updates.join(' | '))} ${shellQuote(filePath)}`;
           });
 
           core.setOutput('yq-command', yqCommands.join('\n'));

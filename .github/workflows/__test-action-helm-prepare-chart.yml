@@ -1,0 +1,81 @@
+---
+name: Test for "helm/prepare-chart" action
+run-name: Test for "helm/prepare-chart" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  continuous-integration:
+    uses: hoverkraft-tech/ci-github-nodejs/.github/workflows/continuous-integration.yml@fbd3522b68c55a6314aadbededaa487825ba9b35 # 3.0.0
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+    with:
+      working-directory: actions/helm/prepare-chart
+      build: ""
+      lint: ""
+      code-ql: '{"languages":"typescript","config-file":".github/codeql/config.yml"}'
+      test: '{"comment":false,"report-group":"test-action-helm-prepare-chart"}'
+
+  integration:
+    name: Prepare chart archive with Helm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@fbd3522b68c55a6314aadbededaa487825ba9b35 # 3.0.0
+        with:
+          working-directory: actions/helm/prepare-chart
+
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+
+      - name: Test nested chart preparation with Helm
+        working-directory: actions/helm/prepare-chart
+        run: npm run test:integration
+
+      - name: Prepare existing application fixture
+        id: prepare
+        uses: $/actions/helm/prepare-chart
+        with:
+          path: tests/charts/application
+          name: prepared-application
+          tag: "1.2.3"
+          helm-repositories: |
+            valkey https://valkey.io/valkey-helm/
+
+      - name: Check public archive outputs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+          CHECKSUM: ${{ steps.prepare.outputs.checksum }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const { createHash } = require('node:crypto');
+            assert.match(process.env.CHECKSUM, /^[a-f0-9]{64}$/);
+            assert.equal(createHash('sha256').update(fs.readFileSync(process.env.ARCHIVE)).digest('hex'), process.env.CHECKSUM);
+            const result = await exec.getExecOutput('helm', ['show', 'chart', process.env.ARCHIVE]);
+            assert.match(result.stdout, /^name: prepared-application$/m);
+            assert.match(result.stdout, /^version: 1\.2\.3$/m);
+
+      - name: Clean prepared archive
+        if: ${{ always() && steps.prepare.outputs.archive != '' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
