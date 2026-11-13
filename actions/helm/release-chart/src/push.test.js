@@ -1,26 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import yaml from "yaml";
+import { pushChart } from "./index.js";
 
 const action = yaml.parse(
 	fs.readFileSync(new URL("../action.yml", import.meta.url), "utf8"),
 );
-const script = action.runs.steps.find((step) => step.id === "chart-releaser")
-	.with.script;
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-const execute = new AsyncFunction(
-	"require",
-	"process",
-	"core",
-	"exec",
-	"setTimeout",
-	script,
-);
 const digest = `sha256:${"a".repeat(64)}`;
 const image = "registry.example.com/charts/application:1.2.3";
 const tagNotFound = `Error: failed to perform "Tag" on destination: ${digest}: not found`;
@@ -85,27 +75,21 @@ function fixture(
 		},
 	};
 	const run = () =>
-		execute(
-			createRequire(import.meta.url),
-			{
-				env: {
-					RUNNER_TEMP: runnerTemp,
-					CHART_ARCHIVE: archive,
-					CHART_CHECKSUM: checksum,
-					INPUT_REGISTRY: "registry.example.com",
-					INPUT_USERNAME: "test-user",
-					INPUT_PASSWORD: "test-password",
-					CHART_REPOSITORY: "charts",
-				},
-			},
+		pushChart({
 			core,
 			exec,
-			(callback, delay) => {
+			archive,
+			expectedChecksum: checksum,
+			runnerTemp,
+			registry: "registry.example.com",
+			username: "test-user",
+			password: "test-password",
+			repository: "charts",
+			sleep: async (delay) => {
 				state.delays.push(delay);
 				state.elapsed += delay;
-				callback();
 			},
-		);
+		});
 	return { state, run, runnerTemp, archive };
 }
 
