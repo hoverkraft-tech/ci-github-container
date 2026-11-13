@@ -141,24 +141,31 @@ runs:
     - name: Prepare chart dependencies
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        ACTION_PATH: ${{ github.action_path }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
         HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
       with:
         script: |
-          const { dirname, join } = require('node:path');
-          const { pathToFileURL } = require('node:url');
-          const { planPreparation, buildDependencies } = await import(
-            pathToFileURL(join(process.env.ACTION_PATH, '../prepare-chart/dist/index.js'))
+          const path = require('node:path');
+          const workingDirectory = path.resolve(
+            process.env.GITHUB_WORKSPACE ?? '.',
+            process.env.WORKING_DIRECTORY ?? '.',
           );
-          const globber = await glob.create(`${process.env.WORKING_DIRECTORY}/**/Chart.yaml`, { followSymbolicLinks: false });
-          const charts = new Map();
-          for await (const file of globber.globGenerator()) {
-            for (const chart of planPreparation({ chartPath: dirname(file) }).charts) {
-              charts.set(chart.directory, chart);
-            }
+          const repositories = (process.env.HELM_REPOSITORIES ?? '')
+            .split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+          for (const repository of repositories) {
+            await exec.exec('helm', ['repo', 'add', ...repository.split(/\s+/)]);
           }
-          await buildDependencies({ exec, charts: [...charts.values()], repositories: process.env.HELM_REPOSITORIES });
+
+          const globber = await glob.create(`${workingDirectory}/**/Chart.yaml`, { followSymbolicLinks: false });
+          const chartDirectories = [];
+          for await (const file of globber.globGenerator()) {
+            chartDirectories.push(path.dirname(file));
+          }
+          // Keep nested source charts current until Test consumes prepared archives.
+          chartDirectories.sort((a, b) => b.split(path.sep).length - a.split(path.sep).length || a.localeCompare(b));
+          for (const directory of chartDirectories) {
+            await exec.exec('helm', ['dependency', 'build', directory]);
+          }
 
     - name: Prepare ct variables
       id: prepare-ct-variables

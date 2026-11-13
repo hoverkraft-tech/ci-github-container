@@ -122,9 +122,18 @@ inputs rather than accepting stale packaged children.
 The prior release lock helper and its bundle move to Prepare. During extraction,
 `release-chart` delegates preparation and pushes the returned archive, retaining
 its existing release-facing inputs, retries and signing. Its public artifact-input
-contract remains a later increment. `test-chart` reuses the dependency helper
-while its artifact-based test contract is pending. Neither adaptation adds a mode
-flag or makes release responsible for lint/test checks.
+contract remains a later increment. The initial Test adapter imported Prepare's
+private JavaScript bundle. Review rejected that coupling: actions must use another
+action's declared inputs/outputs, never its source or distribution files.
+
+For this increment, `test-chart` retains its source-based repository registration
+and dependency builds through Helm's CLI, contained within its own action. Nested
+source directories are built before their parents. This preserves the existing
+Test API while its prepared-artifact contract is pending. Preparation's metadata,
+lock-rewrite and packaging implementation remains private to Prepare. No shared
+JavaScript API or temporary action is introduced for the rollout. The Test phase
+will replace this source setup with consumption of the archive and checksum.
+Release remains free of lint/test checks.
 
 The changed public Prepare contract requires one chart directory and matching
 locks for charts with dependencies; repository-wide discovery moves to callers.
@@ -137,7 +146,10 @@ must be ready before the call.
 Focused tests cover lock errors, final metadata plans, package outputs/cleanup and
 publication integrity. The existing umbrella fixture supplies a real Helm test
 for stale nested packages, changed source/values/versions and locked external
-content. Existing publication tests retain retry and signing coverage. Hosted CI
+content. The existing Test integration executes an isolated copy of that action,
+without sibling action files, to catch accidental runtime coupling. It reuses the
+same cluster and fixture, adding no separate installation scenario. Existing
+publication tests retain retry and signing coverage. Hosted CI
 must pass before this increment is accepted; no performance gain is claimed.
 
 ## Consequences and limits
