@@ -42,8 +42,12 @@ test("prepared archives contain current nested sources, final values and locked 
 		HELM_CONFIG_HOME: path.join(directory, "config"),
 		HELM_DATA_HOME: path.join(directory, "data"),
 	};
-	const command = (program, args) =>
-		execFileSync(program, args, { env, encoding: "utf8", timeout: 60000 });
+	const command = (program, args, extraEnv = {}) =>
+		execFileSync(program, args, {
+			env: { ...env, ...extraEnv },
+			encoding: "utf8",
+			timeout: 60000,
+		});
 	const exec = {
 		exec: async (program, args) => {
 			command(program, args);
@@ -82,6 +86,33 @@ test("prepared archives contain current nested sources, final values and locked 
 	const external = yaml
 		.parse(fs.readFileSync(path.join(chartPath, "Chart.lock"), "utf8"))
 		.dependencies.find((dependency) => dependency.name === "valkey");
+	const originalValues = fs.readFileSync(
+		path.join(chartPath, "values.yaml"),
+		"utf8",
+	);
+	await assert.rejects(
+		updateValues(
+			{
+				env: {
+					INPUT_PATH: chartPath,
+					INPUT_VALUES: JSON.stringify([
+						{ file: "missing/values.yaml", path: ".invalid", value: "invalid" },
+						{ path: ".mustNotBeWritten", value: "later update" },
+					]),
+				},
+			},
+			{
+				setOutput: (_name, script) =>
+					command("sh", ["-c", updateAction.runs.steps[1].with.cmd], {
+						YQ_COMMAND: script,
+					}),
+			},
+		),
+	);
+	assert.equal(
+		fs.readFileSync(path.join(chartPath, "values.yaml"), "utf8"),
+		originalValues,
+	);
 	const archives = [];
 	const literalValue = `quoted ' " value $(exit 19)`;
 	for (const { tag, updateTagPaths, localVersion = tag } of [
@@ -108,7 +139,10 @@ test("prepared archives contain current nested sources, final values and locked 
 				},
 			},
 			{
-				setOutput: (_name, script) => command("sh", ["-c", script]),
+				setOutput: (_name, script) =>
+					command("sh", ["-c", updateAction.runs.steps[1].with.cmd], {
+						YQ_COMMAND: script,
+					}),
 			},
 		);
 		const result = await packageChart({

@@ -97,4 +97,4 @@ runs:
         YQ_COMMAND: ${{ steps.chart-values-updates.outputs.yq-command }}
       with:
         cmd: |
-          sh -c "$YQ_COMMAND"
+          sh -ec "$YQ_COMMAND"
