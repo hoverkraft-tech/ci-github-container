@@ -207,7 +207,11 @@ Unit checks cover archive identity and extraction, policy/overlay handoff,
 mutation rejection, private rendered output and failure cleanup. One real-tool
 integration reuses the existing application fixture to reject invalid metadata,
 duplicate YAML keys, invalid values schemas and template failures, and to verify
-overlay precedence. No additional test image or cluster is introduced. Lint's CI
+overlay precedence. Review moved these cases from the standalone integration
+runner into the existing action-test workflow's Arrange/Act/Assert steps. Every
+case invokes the public action through `uses:` and checks its outcome, archive
+identity and cleanup. One runner shares tool setup and the prepared fixture.
+No additional test image or cluster is introduced. Lint's CI
 must pass and receive review before starting Test. The complete phase workflow
 and performance acceptance remain pending.
 
