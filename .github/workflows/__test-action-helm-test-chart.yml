@@ -33,7 +33,7 @@ jobs:
           }
         ]
 
-  test-lint-and-install:
+  test-install:
     name: Test for "helm/test-chart" action
     needs: build-test-images
     runs-on: ubuntu-latest
