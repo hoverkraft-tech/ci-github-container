@@ -1,8 +1,10 @@
 ---
 name: "Test Helm Chart"
 description: |
-  Action to lint and test installing some Helm chart(s).
-  Mainly using [helm/chart-testing-action](https://github.com/helm/chart-testing-action).
+  Install selected source Helm charts in a fresh kind cluster and run their Helm tests
+  using [helm/chart-testing-action](https://github.com/helm/chart-testing-action).
+  Run static validation separately with [Lint Helm Chart](../lint-chart/README.md)
+  before calling this action.
 author: hoverkraft
 branding:
   icon: check-circle
@@ -52,35 +54,13 @@ inputs:
     required: false
   check-diff-only:
     description: |
-      Only run lint and tests on changed charts.
-    required: false
-    default: "true"
-  enable-lint:
-    description: |
-      Enable linting of the Helm chart.
-      See https://github.com/helm/chart-testing/blob/main/doc/ct_lint.md.
-    required: false
-    default: "true"
-  enable-install:
-    description: |
-      Enable installing the Helm chart.
-      See https://github.com/helm/chart-testing/blob/main/doc/ct_install.md.
+      Only run installation tests on changed charts.
     required: false
     default: "true"
 
 runs:
   using: "composite"
   steps:
-    - name: Validate inputs
-      if: ${{ inputs.enable-lint != 'true' && inputs.enable-install != 'true' }}
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      with:
-        script: |
-          core.setFailed(
-            "At least one of 'enable-lint' or 'enable-install' " +
-            'input must be true',
-          );
-
     - uses: hoverkraft-tech/ci-github-common/actions/checkout@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
       with:
         fetch-depth: 0
@@ -208,33 +188,12 @@ runs:
               `test-chart-${process.env.GITHUB_RUN_ID}-${randomUUID()}`,
           );
 
-    - name: Run chart-testing (lint)
-      if: ${{ inputs.enable-lint == 'true' }}
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        WORKING_DIRECTORY: ${{ inputs.working-directory }}
-        CT_ARGS_JSON: ${{ steps.prepare-ct-variables.outputs.args-json }}
-      with:
-        script: |
-          const path = require('node:path');
-
-          const workingDirectory = path.resolve(
-            process.env.GITHUB_WORKSPACE ?? '.',
-            process.env.WORKING_DIRECTORY ?? '.',
-          );
-          const ctArgs = JSON.parse(process.env.CT_ARGS_JSON ?? '[]');
-
-          await exec.exec('ct', ['lint', ...ctArgs], {
-            cwd: workingDirectory,
-          });
-
     - name: Create kind cluster
-      if: ${{ inputs.enable-install == 'true' }}
       uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
 
     - name: Install default OCI registry secrets
       id: oci-registry-secret
-      if: ${{ inputs.enable-install == 'true' && inputs.oci-registry != '' && inputs.oci-registry-username != '' && inputs.oci-registry-password != '' }}
+      if: ${{ inputs.oci-registry != '' && inputs.oci-registry-username != '' && inputs.oci-registry-password != '' }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         NAMESPACE: ${{ steps.prepare-ct-variables.outputs.namespace }}
@@ -291,7 +250,6 @@ runs:
           ]);
 
     - name: Run chart-testing (install)
-      if: ${{ inputs.enable-install == 'true' }}
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
         CT_ARGS_JSON: ${{ steps.prepare-ct-variables.outputs.args-json }}

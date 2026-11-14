@@ -176,8 +176,17 @@ It selects only the prepared chart, disables repository setup and dependency
 builds, and prevents upgrade worktrees or a deprecated-chart skip from bypassing
 that validation. Explicit selection follows `ct --charts`: chart-diff and version
 increment policy belong to source selection before Prepare, not a synthetic Git
-comparison against a temporary extraction. Existing source-based Test callers
-retain their current checks until the Test/workflow migration.
+comparison against a temporary extraction.
+
+Review identified that retaining the old `ct lint` step in Test left two owners
+for static validation. This increment removes it: `lint-chart` is the single
+implementation. Test always runs installation tests; the `enable-lint` and
+`enable-install` inputs are removed. Callers run Prepare and Lint before Test,
+with normal step success gating. This is a breaking change. Test still selects
+source charts until its archive-input increment; that remaining work must bind
+installation to the validated bytes before consumers adopt the complete pipeline.
+The existing Prepare-to-Lint integration verifies static checks, and the isolated
+Test integration retains installation coverage without sibling action files.
 
 Helm's lint mode intentionally ignores some `required` and `fail` template
 errors. Therefore Lint also runs client-side `helm template` for the same scenarios,
