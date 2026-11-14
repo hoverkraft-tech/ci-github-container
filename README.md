@@ -59,6 +59,8 @@ _Actions dedicated to packaging, validating, signing, and publishing Helm charts
 
 #### - [Prepare chart](actions/helm/prepare-chart/README.md)
 
+#### - [Lint chart](actions/helm/lint-chart/README.md)
+
 #### - [Release chart](actions/helm/release-chart/README.md)
 
 #### - [Test chart](actions/helm/test-chart/README.md)
