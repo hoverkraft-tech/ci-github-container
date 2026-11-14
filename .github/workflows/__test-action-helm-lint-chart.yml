@@ -33,15 +33,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: hoverkraft-tech/ci-github-nodejs/actions/setup-node@fbd3522b68c55a6314aadbededaa487825ba9b35 # 3.0.0
-        with:
-          working-directory: actions/helm/lint-chart
-
       - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
 
       - uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
 
-      - name: Prepare existing application fixture
+      - name: Arrange - Prepare existing application fixture
         id: prepare
         uses: $/actions/helm/prepare-chart
         with:
@@ -49,25 +45,168 @@ jobs:
           helm-repositories: |
             valkey https://valkey.io/valkey-helm/
 
-      - name: Lint prepared archive
+      - name: Arrange - Invalid archives and validation overlays
+        id: arrange
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+          CHECKSUM: ${{ steps.prepare.outputs.checksum }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { createHash } = require('node:crypto');
+            const checksum = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+            const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'helm-lint-tests-'));
+            core.setOutput('directory', directory);
+            const workingDirectory = path.join(directory, 'repository with spaces');
+            fs.mkdirSync(workingDirectory);
+            core.setOutput('working-directory', workingDirectory);
+            fs.writeFileSync(path.join(workingDirectory, 'ct.yaml'), JSON.stringify({
+              'chart-yaml-schema': path.resolve('tests/charts/chart-schema.yaml'),
+              'lint-conf': path.resolve('tests/charts/lintconf.yaml'),
+              'validate-maintainers': false,
+              // Artifact selection must override source discovery and dependency setup.
+              all: true,
+              charts: ['missing-source-chart'],
+              'chart-repos': ['unused=https://invalid.invalid'],
+              'skip-helm-dependencies': false,
+              upgrade: true,
+            }));
+            fs.writeFileSync(path.join(workingDirectory, 'first values.yaml'), 'replicaCount: invalid\n');
+            fs.writeFileSync(path.join(workingDirectory, 'last values.yaml'), 'replicaCount: 2\n');
+            assert.equal(checksum(process.env.ARCHIVE), process.env.CHECKSUM);
+            const artifacts = {
+              valid: { archive: process.env.ARCHIVE, checksum: process.env.CHECKSUM },
+            };
+            const scenarios = [
+              { name: 'metadata', file: 'Chart.yaml', mutate: text => text.replace(/^apiVersion:.*\n/m, '') },
+              { name: 'yaml', file: 'values.yaml', mutate: text => `${text}\nreplicaCount: 1\nreplicaCount: 2\n` },
+              { name: 'schema', file: 'values.yaml', mutate: text => text.replace(/^replicaCount:.*$/m, 'replicaCount: invalid') },
+              { name: 'template', file: 'templates/invalid.tpl', mutate: () => '{{ fail "invalid-template-fixture" }}\n' },
+            ];
+            for (const scenario of scenarios) {
+              const unpacked = path.join(directory, scenario.name);
+              fs.mkdirSync(unpacked);
+              await exec.exec('tar', ['-xzf', process.env.ARCHIVE, '-C', unpacked]);
+              const roots = fs.readdirSync(unpacked);
+              assert.equal(roots.length, 1);
+              const file = path.join(unpacked, roots[0], scenario.file);
+              const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+              const after = scenario.mutate(before);
+              assert.notEqual(after, before, `${scenario.name} must change its fixture`);
+              fs.writeFileSync(file, after);
+              const archive = path.join(directory, `${scenario.name}.tgz`);
+              await exec.exec('tar', ['-czf', archive, '-C', unpacked, roots[0]]);
+              artifacts[scenario.name] = { archive, checksum: checksum(archive) };
+            }
+            core.setOutput('artifacts', JSON.stringify(artifacts));
+
+      - name: Act - Lint valid prepared archive
+        id: valid
         uses: $/actions/helm/lint-chart
         with:
           archive: ${{ steps.prepare.outputs.archive }}
           checksum: ${{ steps.prepare.outputs.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
 
-      - name: Verify validation failures and overlays
-        working-directory: actions/helm/lint-chart
+      - name: Act - Reject invalid metadata
+        id: metadata
+        continue-on-error: true
+        uses: $/actions/helm/lint-chart
+        with:
+          archive: ${{ fromJson(steps.arrange.outputs.artifacts).metadata.archive }}
+          checksum: ${{ fromJson(steps.arrange.outputs.artifacts).metadata.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+
+      - name: Act - Reject duplicate YAML keys
+        id: yaml
+        continue-on-error: true
+        uses: $/actions/helm/lint-chart
+        with:
+          archive: ${{ fromJson(steps.arrange.outputs.artifacts).yaml.archive }}
+          checksum: ${{ fromJson(steps.arrange.outputs.artifacts).yaml.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+
+      - name: Act - Reject invalid values schema
+        id: schema
+        continue-on-error: true
+        uses: $/actions/helm/lint-chart
+        with:
+          archive: ${{ fromJson(steps.arrange.outputs.artifacts).schema.archive }}
+          checksum: ${{ fromJson(steps.arrange.outputs.artifacts).schema.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+
+      - name: Act - Reject template failure
+        id: template
+        continue-on-error: true
+        uses: $/actions/helm/lint-chart
+        with:
+          archive: ${{ fromJson(steps.arrange.outputs.artifacts).template.archive }}
+          checksum: ${{ fromJson(steps.arrange.outputs.artifacts).template.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+
+      - name: Act - Apply validation overlays in order
+        id: overlays
+        uses: $/actions/helm/lint-chart
+        with:
+          archive: ${{ fromJson(steps.arrange.outputs.artifacts).schema.archive }}
+          checksum: ${{ fromJson(steps.arrange.outputs.artifacts).schema.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+          values-files: |
+            first values.yaml
+            last values.yaml
+
+      - name: Assert - Validation results, archive identity and cleanup
+        if: ${{ !cancelled() && steps.arrange.outcome == 'success' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          PREPARED_ARCHIVE: ${{ steps.prepare.outputs.archive }}
-        run: npm run test:integration
+          ARTIFACTS: ${{ steps.arrange.outputs.artifacts }}
+          WORKING_DIRECTORY: ${{ steps.arrange.outputs.working-directory }}
+          OUTCOMES: |
+            {
+              "valid": "${{ steps.valid.outcome }}",
+              "metadata": "${{ steps.metadata.outcome }}",
+              "yaml": "${{ steps.yaml.outcome }}",
+              "schema": "${{ steps.schema.outcome }}",
+              "template": "${{ steps.template.outcome }}",
+              "overlays": "${{ steps.overlays.outcome }}"
+            }
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const { createHash } = require('node:crypto');
+            const outcomes = JSON.parse(process.env.OUTCOMES);
+            for (const scenario of ['valid', 'overlays']) {
+              assert.equal(outcomes[scenario], 'success', `${scenario} must pass validation`);
+            }
+            for (const scenario of ['metadata', 'yaml', 'schema', 'template']) {
+              assert.equal(outcomes[scenario], 'failure', `${scenario} must fail validation`);
+            }
+            for (const { archive, checksum } of Object.values(JSON.parse(process.env.ARTIFACTS))) {
+              assert.equal(createHash('sha256').update(fs.readFileSync(archive)).digest('hex'), checksum);
+            }
+            assert.deepEqual(
+              fs.readdirSync(process.env.WORKING_DIRECTORY).filter(name => name.startsWith('.helm-lint-')),
+              [],
+              'Every invocation must remove its temporary validation files',
+            );
 
-      - name: Clean prepared archive
-        if: ${{ always() && steps.prepare.outputs.archive != '' }}
+      - name: Clean test fixtures and prepared archive
+        if: ${{ always() }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           ARCHIVE: ${{ steps.prepare.outputs.archive }}
+          DIRECTORY: ${{ steps.arrange.outputs.directory }}
         with:
           script: |
             const fs = require('node:fs');
             const path = require('node:path');
-            fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
+            if (process.env.DIRECTORY) {
+              fs.rmSync(process.env.DIRECTORY, { recursive: true, force: true });
+            }
+            if (process.env.ARCHIVE) {
+              fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
+            }
