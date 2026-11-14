@@ -2,7 +2,7 @@
 
 Date: 2026-11-13
 
-Status: Accepted on 2026-11-13. Prepare implementation in review; remaining phases pending.
+Status: Accepted on 2026-11-13. Prepare released in 1.0.0; Lint implementation in review; remaining phases pending.
 
 ## Context
 
@@ -90,8 +90,9 @@ Review and implement one phase at a time using existing fixtures and helpers:
 
 - [x] Review this ADR and the artifact/input contracts before implementation.
 - [x] Implement Prepare: move final mutations and packaging; verify locked external dependencies, current nested local charts and changed-input invalidation.
-- [ ] Review the Prepare implementation and its CI before starting Lint.
-- [ ] Lint: extract existing static checks; verify invalid metadata, schema or templates fail against the prepared artifact.
+- [x] Review the Prepare implementation and its CI before starting Lint. PR #966 merged and released in 1.0.0.
+- [x] Lint: extract existing static checks; verify invalid metadata, schema or templates fail against the prepared artifact.
+- [ ] Review Lint and its CI before starting Test.
 - [ ] Test: consume that artifact; preserve fresh-cluster readiness, migrations, chart tests, diagnostics and failure/cancellation cleanup.
 - [ ] Release: accept the prepared archive; preserve retries, immutable outputs and signing; reject missing or mismatched artifacts before push.
 - [ ] Compose the reusable workflow; verify failed/skipped/cancelled validation blocks publication and reruns select the correct artifact.
@@ -101,8 +102,9 @@ Review and implement one phase at a time using existing fixtures and helpers:
 Changing the current mixed-purpose action contracts requires an explicit breaking
 release and coordinated caller migration. Keep consumers on their supported
 released version until the replacement is ready. Do not preserve the old mixed
-responsibilities through additional mode flags. Keep the replacement in draft
-until its phases and callers work together.
+responsibilities through additional mode flags. Review each subsequent phase in
+its own pull request. Consumers adopt the complete artifact pipeline after its
+remaining contracts and callers are ready.
 
 Reuse existing tests when they already cover the contract. Add focused coverage
 only for new artifact/mutation/gate failure cases, and use existing integration
@@ -152,14 +154,62 @@ same cluster and fixture, adding no separate installation scenario. Existing
 publication tests retain retry and signing coverage. Hosted CI
 must pass before this increment is accepted; no performance gain is claimed.
 
+### Prepare release and Lint increment: 2026-11-14
+
+The original rollout kept the replacement in draft until all phases worked
+together. After reviewing Prepare, the user merged PR #966 and published
+[1.0.0](https://github.com/hoverkraft-tech/ci-github-container/releases/tag/1.0.0)
+on 2026-11-13. Its [release CI](https://github.com/hoverkraft-tech/ci-github-container/actions/runs/43519248579)
+passed. The remaining phases proceed as separate reviewable increments; Pleey
+continues using its existing released contract until the full pipeline is ready.
+
+`lint-chart` accepts the archive/checksum, a working directory, optional existing
+chart-testing configuration and ordered validation-only values files. Tools and
+checkout remain caller-owned. It verifies a snapshot of the supplied bytes,
+extracts one root chart using the maintained `tar` package, and rejects links,
+unsafe paths and duplicate entries. Its dependencies use the existing action
+distribution checks and rebuild automation.
+
+The action preserves chart-testing metadata/schema validation, YAML linter rules,
+maintainer policy, custom commands and packaged `ci/*-values.yaml` scenarios.
+It selects only the prepared chart, disables repository setup and dependency
+builds, and prevents upgrade worktrees or a deprecated-chart skip from bypassing
+that validation. Explicit selection follows `ct --charts`: chart-diff and version
+increment policy belong to source selection before Prepare, not a synthetic Git
+comparison against a temporary extraction. Existing source-based Test callers
+retain their current checks until the Test/workflow migration.
+
+Helm's lint mode intentionally ignores some `required` and `fail` template
+errors. Therefore Lint also runs client-side `helm template` for the same scenarios,
+with the same values precedence and shared Helm flags. The three lint-only flags
+(`strict`, `quiet`, `with-subcharts`) are omitted from rendering. Rendered manifests
+stay out of logs; rendering errors retain stderr diagnostics with debug disabled.
+Custom commands remain caller-owned and must apply their own logging policy.
+
+Validation files are copied into a unique temporary directory inside the working
+directory. Relative staging paths accommodate spaces in caller paths despite
+chart-testing's whitespace-based extra-argument parser. Ordered overlays follow
+each packaged CI scenario and never become published defaults. Fingerprints reject
+custom commands that change extracted chart/overlay content; the original archive
+checksum is checked again. Success and errors both remove only the temporary
+directory created by the invocation.
+
+Unit checks cover archive identity and extraction, policy/overlay handoff,
+mutation rejection, private rendered output and failure cleanup. One real-tool
+integration reuses the existing application fixture to reject invalid metadata,
+duplicate YAML keys, invalid values schemas and template failures, and to verify
+overlay precedence. No additional test image or cluster is introduced. Lint's CI
+must pass and receive review before starting Test. The complete phase workflow
+and performance acceptance remain pending.
+
 ## Consequences and limits
 
 This separates validation from publication and avoids repeated preparation in the
 target pipeline. It adds an artifact handoff to the isolated publication job.
 Performance gains remain unmeasured; this is a responsibility and reuse decision,
 not evidence of a speedup. Existing fresh-install tests, image verification and
-signing remain required. Preparation is implemented in this increment. The complete workflow and remaining
-phase contracts are not yet available.
+signing remain required. Preparation is released and Lint is implemented for
+review. The complete workflow and remaining phase contracts are not yet available.
 
 ## References
 

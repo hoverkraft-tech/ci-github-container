@@ -1,0 +1,73 @@
+---
+name: "Lint Helm Chart"
+description: |
+  Validate one prepared Helm chart archive and its expected SHA-256 checksum.
+  Runs chart-testing metadata/schema, YAML, maintainer, custom-command and Helm
+  lint checks on an isolated extraction, including packaged ci/*-values.yaml scenarios.
+  Also renders each scenario with Helm to reject required/fail errors that lint mode
+  permits. Rendering uses the same values and shared Helm options; rendered manifests
+  are kept out of logs. ct namespace/release-name settings apply to rendering when set.
+  Requires Helm, chart-testing, yamale and yamllint on PATH. Checkout and tool setup
+  belong to the caller. Dependencies come from the archive and are never rebuilt.
+  Temporary extraction and validation overlays are removed after success or failure;
+  the caller retains the original archive. Custom commands must leave validation inputs unchanged.
+  This explicitly selected chart follows ct --charts semantics: source change detection
+  and version-increment policy belong to source selection before preparation.
+author: hoverkraft
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  archive:
+    description: "Path to the prepared .tgz archive. Relative paths use working-directory."
+    required: true
+  checksum:
+    description: "Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters."
+    required: true
+  working-directory:
+    description: |
+      Repository directory for chart-testing configuration and custom commands.
+      Must be writable for temporary validation files, removed when lint finishes.
+    required: false
+    default: "${{ github.workspace }}"
+  config:
+    description: |
+      Chart-testing YAML/JSON configuration path, relative to working-directory.
+      Defaults to ct.yaml in that directory when present.
+      Lint policies and custom commands are retained. Chart selection, repository setup,
+      dependency rebuilding, upgrades, debug and configuration dumps are controlled by this action.
+    required: false
+  values-files:
+    description: |
+      Optional validation-only values files, one path per line, relative to working-directory.
+      Applied in order after each packaged ci/*-values.yaml scenario (or chart defaults).
+      Later files take precedence. These overlays never become published chart defaults.
+      Use the same files when testing the archive.
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Lint prepared chart
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        ARCHIVE: ${{ inputs.archive }}
+        CHECKSUM: ${{ inputs.checksum }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        CONFIG: ${{ inputs.config }}
+        VALUES_FILES: ${{ inputs.values-files }}
+      with:
+        script: |
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { lintChart } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist/index.js')));
+          await lintChart({
+            exec,
+            archive: process.env.ARCHIVE,
+            expectedChecksum: process.env.CHECKSUM,
+            workingDirectory: process.env.WORKING_DIRECTORY,
+            config: process.env.CONFIG,
+            valuesFiles: process.env.VALUES_FILES,
+          });
