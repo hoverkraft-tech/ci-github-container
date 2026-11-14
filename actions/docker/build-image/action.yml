@@ -192,7 +192,7 @@ runs:
   using: "composite"
   steps:
     - id: slugify-platform
-      uses: hoverkraft-tech/ci-github-common/actions/slugify@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
+      uses: hoverkraft-tech/ci-github-common/actions/slugify@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
       with:
         value: ${{ inputs.platform }}
 

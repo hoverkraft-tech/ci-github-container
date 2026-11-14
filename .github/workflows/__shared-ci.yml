@@ -11,13 +11,13 @@ permissions: {}
 
 jobs:
   test-action-distributions:
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/test-action-distributions.yml@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/test-action-distributions.yml@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
     permissions:
       contents: read
 
   lint:
     name: linter
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/linter.yml@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
     permissions:
       actions: read
       contents: read
@@ -238,7 +238,7 @@ jobs:
       - test-action-docker-promote-images
       - test-action-docker-verify-images
     if: always()
-    uses: hoverkraft-tech/ci-github-common/.github/workflows/ci-reports.yml@0864018583d79f7e535f572005baa35f2e864849 # 4.1.0
+    uses: hoverkraft-tech/ci-github-common/.github/workflows/ci-reports.yml@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
     permissions:
       contents: read
       pull-requests: write
