@@ -2,7 +2,7 @@
 
 Date: 2026-11-13
 
-Status: Accepted on 2026-11-13. Prepare and Lint released; Test implementation in review; Release and workflow composition pending.
+Status: Accepted on 2026-11-13. Prepare, Lint and Test released and reviewed. Release and shared workflow implementation in review. [ADR 0009](0009-compose-helm-validation-and-release-workflows.md) supersedes the single workflow entrypoint with separate validation and release entrypoints.
 
 ## Context
 
@@ -94,7 +94,7 @@ Review and implement one phase at a time using existing fixtures and helpers:
 - [x] Lint: extract existing static checks; verify invalid metadata, schema or templates fail against the prepared artifact.
 - [x] Review Lint and its CI before starting Test. PR #968 merged and released in 2.0.0; Pleey adoption passed and was reviewed on 2026-11-15.
 - [x] Test: consume that artifact; preserve fresh-cluster readiness, migrations, chart tests, diagnostics and failure/cancellation cleanup.
-- [ ] Review the Test implementation and its CI before starting Release.
+- [x] Review the Test implementation and its CI before starting Release. PR #975 merged and released in 3.0.0; Pleey adoption CI 43761313764 passed at `fd765b8` and the user approved the next increment on 2026-11-15.
 - [ ] Release: accept the prepared archive; preserve retries, immutable outputs and signing; reject missing or mismatched artifacts before push.
 - [ ] Compose the reusable workflow; verify failed/skipped/cancelled validation blocks publication and reruns select the correct artifact.
 - [ ] Migrate in-repository callers, fixtures and generated action/workflow docs together, then review and release the complete public contract.
@@ -308,3 +308,30 @@ review. The complete workflow and Release archive contract are not yet available
 - [Helm tests run against an installed release](https://helm.sh/docs/helm/helm_test/)
 - [Helm OCI publication consumes a prepared archive](https://helm.sh/docs/topics/registries/)
 - [Pleey CI optimization plan](https://github.com/cloud-native-aixmarseille/pleey/pull/553)
+
+### Release and workflow implementation: 2026-11-15
+
+After reviewing Pleey's 3.0.0 adoption, the user requested Release and reusable
+validation orchestration together. [ADR 0009](0009-compose-helm-validation-and-release-workflows.md)
+records the permission boundary and artifact handoff. The Release action consumes
+archive/checksum, retains a verified snapshot across retries, preserves the caller's
+archive and removes its own temporary credentials/files. Source inputs are removed;
+existing integration callers now prepare explicitly and retain their publication
+namespaces.
+
+The read-only CI workflow owns checkout, Prepare/Lint/Test and cleanup. The release
+workflow reuses it, downloads the exact successful artifact ID and publishes/signs
+in a separate protected job. Ordinary validation does not upload an artifact or
+request publication permissions. Successful outputs depend on the complete job,
+including cleanup. Callers retain their image-to-chart mapping and required check
+inventory; published defaults and test credentials remain separate.
+
+The existing simple and umbrella fixtures retain unsigned/signed publication
+coverage. The former separate default-signing integration moves into the workflow
+integration, which reuses Test's existing application image and compares the pulled
+OCI archive bytes with the validation checksum. It adds one validation cluster to
+exercise the workflow boundary, while removing two redundant release matrix cases.
+Focused unit tests cover missing/mismatched inputs, snapshot identity, mutation
+between retries, output validation and credential cleanup. Hosted CI and generated
+documentation must pass before review; fixture publication does not establish live
+production rollout or controlled performance acceptance.

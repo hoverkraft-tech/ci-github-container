@@ -154,3 +154,77 @@ jobs:
             if (process.env.DIRECTORY) fs.rmSync(process.env.DIRECTORY, { recursive: true, force: true });
             if (process.env.ARCHIVE) fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
             // Keep the standalone action until kind's post-job cleanup loads its manifest.
+
+  test-release-workflow:
+    name: Test composed Helm release workflow
+    needs: build-test-images
+    uses: $/.github/workflows/helm-chart-release.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      path: tests/charts/application
+      name: workflow-application-test
+      tag: 0.1.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
+      helm-repositories: |
+        valkey https://valkey.io/valkey-helm/
+      helm-set: |
+        image.tag=${{ fromJSON(needs.build-test-images.outputs.built-images).application-test.tags[0] }}
+        image.digest=${{ fromJSON(needs.build-test-images.outputs.built-images).application-test.digest }}
+      oci-repository: ${{ github.repository }}/charts/workflow-test
+
+  assert-release-workflow:
+    name: Assert workflow publication identity
+    needs: test-release-workflow
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: $/actions/helm/setup
+
+      - name: Assert - Pull exact digest and compare archive bytes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          IMAGE: ${{ needs.test-release-workflow.outputs.image }}
+          DIGEST: ${{ needs.test-release-workflow.outputs.digest }}
+          IMAGE_DIGEST: ${{ needs.test-release-workflow.outputs.image-digest }}
+          CHECKSUM: ${{ needs.test-release-workflow.outputs.checksum }}
+          GH_TOKEN: ${{ github.token }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { createHash } = require('node:crypto');
+            const image = `ghcr.io/${context.repo.owner}/${context.repo.repo}/charts/workflow-test/workflow-application-test`;
+            const version = `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}`;
+            assert.equal(process.env.IMAGE, `${image}:${version}`);
+            assert.match(process.env.DIGEST, /^sha256:[a-f0-9]{64}$/);
+            assert.equal(process.env.IMAGE_DIGEST, `${image}@${process.env.DIGEST}`);
+            const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'helm-workflow-assert-'));
+            const config = path.join(directory, 'registry.json');
+            try {
+              await exec.exec('helm', ['registry', 'login', 'ghcr.io', '--username', context.repo.owner,
+                '--password-stdin', '--registry-config', config], { input: Buffer.from(process.env.GH_TOKEN) });
+              await exec.exec('helm', ['pull', `oci://${process.env.IMAGE_DIGEST}`, '--registry-config', config,
+                '--destination', directory]);
+              const archive = fs.readFileSync(path.join(directory, `workflow-application-test-${version}.tgz`));
+              assert.equal(createHash('sha256').update(archive).digest('hex'), process.env.CHECKSUM);
+            } finally {
+              fs.rmSync(directory, { recursive: true, force: true });
+            }
+
+      - name: Authenticate for signature verification
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Assert - Default signing binds the published digest
+        uses: $/actions/docker/verify-images
+        with:
+          images: ${{ needs.test-release-workflow.outputs.image-digest }}
+          certificate-identity: https://github.com/${{ github.repository }}/.github/workflows/helm-chart-release.yml@${{ github.ref }}

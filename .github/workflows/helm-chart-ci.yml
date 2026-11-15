@@ -1,0 +1,204 @@
+# Prepare, lint and install one root Helm chart on a single runner.
+#
+# The caller grants contents/packages read. Checkout uses the caller's ref by
+# default; phase actions install missing tools and reuse existing installations.
+# Static validation finishes before kind starts. Both validation phases receive
+# one archive/checksum, the same ct configuration and ordered validation overlays.
+# Local preparation files and the test cluster are cleaned after success/failure.
+#
+# Supply path, helm-repositories and optional config/values-files/helm-set inputs.
+# Published metadata/default changes belong to name/tag/values; helm-set is for
+# installation-only overrides, including candidate image digests and pull secrets.
+# Private image credentials must be read-only. They are never uploaded in the chart.
+#
+# Optional images metadata follows docker-build-images' built-images object. Map
+# every entry into the chart by digest using helm-set. The successful job returns
+# that metadata as validated-images for docker-promote-images. This is a trusted
+# caller contract: the workflow cannot infer arbitrary chart value semantics.
+# Include this workflow and all other required checks in the promotion job's needs.
+#
+# Set upload-artifact for a later publication job. The immutable artifact-id and
+# checksum identify this invocation's archive in this run (retained seven days); never select by a
+# wildcard or latest run. Failed/cancelled validation returns no successful outputs.
+# The release entrypoint composes this handoff without repeating validation.
+# Pin callers to a reviewed release SHA. See [ADR 0009](../../docs/adr/0009-compose-helm-validation-and-release-workflows.md).
+---
+name: Helm chart CI
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: Repository-relative path to one root chart containing Chart.yaml.
+        type: string
+        required: true
+      ref:
+        description: Git ref to validate; defaults to the caller's current ref.
+        type: string
+        default: ""
+      name:
+        description: Final root chart name; empty keeps Chart.yaml metadata.
+        type: string
+        default: ""
+      tag:
+        description: Final chart version; empty keeps existing metadata.
+        type: string
+        default: ""
+      update-tag-paths:
+        description: Comma-separated local Chart.yaml paths updated with tag.
+        type: string
+        default: ".version,.appVersion"
+      values:
+        description: Published values in prepare-chart's JSON format; never include test credentials.
+        type: string
+        default: ""
+      helm-repositories:
+        description: Dependency repositories, one name and URL per line; existing locks remain required.
+        type: string
+        default: ""
+      working-directory:
+        description: Repository-relative directory for chart-testing configuration and validation files.
+        type: string
+        default: "."
+      config:
+        description: Chart-testing configuration relative to working-directory; defaults to its ct.yaml.
+        type: string
+        default: ""
+      values-files:
+        description: Ordered validation-only values files, one per line, relative to working-directory.
+        type: string
+        default: ""
+      namespace:
+        description: Optional test namespace; otherwise a unique namespace is created.
+        type: string
+        default: ""
+      helm-set:
+        description: Installation-only key=value overrides, one per line; map candidate images by digest here.
+        type: string
+        default: ""
+      images:
+        description: Optional built-images JSON metadata for images mapped into the chart by helm-set.
+        type: string
+        default: ""
+      oci-registry:
+        description: Registry from which tests pull private images.
+        type: string
+        default: ghcr.io
+      oci-registry-username:
+        description: Image registry username; defaults to the calling repository owner.
+        type: string
+        default: ""
+      upload-artifact:
+        description: Upload the validated archive for publication in a downstream job.
+        type: boolean
+        default: false
+      runs-on:
+        description: JSON array of Linux runner labels; Docker is required for kind.
+        type: string
+        default: '["ubuntu-latest"]'
+      timeout-minutes:
+        description: Maximum validation job duration, including setup and cluster tests.
+        type: number
+        default: 30
+    secrets:
+      oci-registry-password:
+        description: Read-only image registry credential; defaults to the job's GITHUB_TOKEN.
+        required: false
+    outputs:
+      validated-images:
+        description: Supplied image metadata after successful validation and cleanup; empty on failure.
+        value: ${{ jobs.validate.outputs.validated-images }}
+      artifact-id:
+        description: Immutable archive artifact ID in this run, only when upload-artifact is enabled.
+        value: ${{ jobs.validate.outputs.artifact-id }}
+      archive-name:
+        description: Archive basename inside the uploaded artifact.
+        value: ${{ jobs.validate.outputs.archive-name }}
+      checksum:
+        description: SHA-256 of the validated chart archive bytes, not the artifact ZIP or OCI manifest.
+        value: ${{ jobs.validate.outputs.checksum }}
+permissions: {}
+jobs:
+  validate:
+    name: Prepare, lint and test chart
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      validated-images: ${{ job.status == 'success' && inputs.images || '' }}
+      artifact-id: ${{ job.status == 'success' && steps.upload.outputs.artifact-id || '' }}
+      archive-name: ${{ job.status == 'success' && steps.metadata.outputs.archive-name || '' }}
+      checksum: ${{ job.status == 'success' && steps.prepare.outputs.checksum || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Prepare chart
+        id: prepare
+        uses: $/actions/helm/prepare-chart
+        with:
+          path: ${{ inputs.path }}
+          name: ${{ inputs.name }}
+          tag: ${{ inputs.tag }}
+          update-tag-paths: ${{ inputs.update-tag-paths }}
+          values: ${{ inputs.values }}
+          helm-repositories: ${{ inputs.helm-repositories }}
+
+      - name: Lint prepared chart
+        uses: $/actions/helm/lint-chart
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: ${{ steps.prepare.outputs.checksum }}
+          working-directory: ${{ inputs.working-directory }}
+          config: ${{ inputs.config }}
+          values-files: ${{ inputs.values-files }}
+
+      - name: Install and test prepared chart
+        uses: $/actions/helm/test-chart
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: ${{ steps.prepare.outputs.checksum }}
+          working-directory: ${{ inputs.working-directory }}
+          config: ${{ inputs.config }}
+          values-files: ${{ inputs.values-files }}
+          namespace: ${{ inputs.namespace }}
+          helm-set: ${{ inputs.helm-set }}
+          oci-registry: ${{ inputs.oci-registry }}
+          oci-registry-username: ${{ inputs.oci-registry-username || github.repository_owner }}
+          oci-registry-password: ${{ secrets.oci-registry-password || github.token }}
+
+      - name: Identify validated archive
+        id: metadata
+        if: inputs.upload-artifact
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+        with:
+          script: |
+            core.setOutput('archive-name', require('node:path').basename(process.env.ARCHIVE));
+            core.setOutput('id', require('node:crypto').randomUUID());
+
+      - name: Upload validated archive
+        id: upload
+        if: inputs.upload-artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: helm-chart-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.metadata.outputs.id }}
+          path: ${{ steps.prepare.outputs.archive }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Clean prepared archive
+        if: ${{ always() && steps.prepare.outputs.archive != '' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });

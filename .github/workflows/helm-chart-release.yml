@@ -1,0 +1,233 @@
+# Validate and publish the same prepared Helm chart archive.
+#
+# This workflow reuses Helm chart CI, then downloads only its immutable artifact ID
+# in a separate publication job. The original checksum is checked before registry
+# login; no source checkout, packaging or dependency rebuild occurs in publication.
+# Validation uses read permissions and separate read-only image credentials.
+# Only publication receives packages write and OIDC. A failed/skipped/cancelled
+# validator blocks publication. Environment protection, when configured, applies
+# to the publication job. Do not call this workflow from untrusted PR triggers.
+#
+# Grant contents read, packages write and id-token write at the calling job.
+# Use a trusted immutable source ref, final name/tag/values and declared dependency
+# repositories. See Helm chart CI for validation and candidate-image configuration.
+# Pin this workflow to a reviewed release SHA.
+#
+# A publication-only rerun downloads the producer's exact artifact from the same
+# run; a full rerun prepares a new artifact ID. Deleted/expired artifacts fail.
+# Publication retries reuse the same archive; the immutable OCI digest comes from
+# the push result. A partial push/sign failure returns no successful outputs and
+# may leave content in the registry. Rerun to complete signing; no content is deleted.
+# Use non-cancelling concurrency for release callers. Cancellation cannot revoke
+# an in-flight registry request. Do not republish different content under one version.
+# See [ADR 0009](../../docs/adr/0009-compose-helm-validation-and-release-workflows.md).
+---
+name: Helm chart release
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: Repository-relative path to one root chart containing Chart.yaml.
+        type: string
+        required: true
+      ref:
+        description: Git ref to validate; defaults to the caller's current ref.
+        type: string
+        default: ""
+      name:
+        description: Final root chart name; empty keeps Chart.yaml metadata.
+        type: string
+        default: ""
+      tag:
+        description: Final chart version; empty keeps existing metadata.
+        type: string
+        default: ""
+      update-tag-paths:
+        description: Comma-separated local Chart.yaml paths updated with tag.
+        type: string
+        default: ".version,.appVersion"
+      values:
+        description: Published values in prepare-chart's JSON format; never include test credentials.
+        type: string
+        default: ""
+      helm-repositories:
+        description: Dependency repositories, one name and URL per line; existing locks remain required.
+        type: string
+        default: ""
+      working-directory:
+        description: Repository-relative directory for chart-testing configuration and validation files.
+        type: string
+        default: "."
+      config:
+        description: Chart-testing configuration relative to working-directory; defaults to its ct.yaml.
+        type: string
+        default: ""
+      values-files:
+        description: Ordered validation-only values files, one per line, relative to working-directory.
+        type: string
+        default: ""
+      namespace:
+        description: Optional test namespace; otherwise a unique namespace is created.
+        type: string
+        default: ""
+      helm-set:
+        description: Installation-only key=value overrides, one per line; map candidate images by digest here.
+        type: string
+        default: ""
+      images:
+        description: Optional built-images JSON metadata for images mapped into the chart by helm-set.
+        type: string
+        default: ""
+      test-oci-registry:
+        description: Registry from which tests pull private images.
+        type: string
+        default: ghcr.io
+      test-oci-registry-username:
+        description: Image registry username; defaults to the calling repository owner.
+        type: string
+        default: ""
+      runs-on:
+        description: JSON array of Linux runner labels; Docker is required for kind.
+        type: string
+        default: '["ubuntu-latest"]'
+      timeout-minutes:
+        description: Maximum validation job duration, including setup and cluster tests.
+        type: number
+        default: 30
+      oci-registry:
+        description: Registry receiving the validated chart and its signature.
+        type: string
+        default: ghcr.io
+      oci-registry-username:
+        description: Publication username; defaults to the calling repository owner.
+        type: string
+        default: ""
+      oci-repository:
+        description: Publication namespace; defaults to owner/repository/charts, excluding the final chart name.
+        type: string
+        default: ""
+      sign:
+        description: Sign the published digest with GitHub OIDC and Cosign.
+        type: boolean
+        default: true
+      environment:
+        description: Optional GitHub environment protecting publication and supplying its secrets.
+        type: string
+        default: ""
+    secrets:
+      test-oci-registry-password:
+        description: Read-only image pull credential for validation; defaults to its read-only GITHUB_TOKEN.
+        required: false
+      oci-registry-password:
+        description: Chart publication credential; defaults to the publication job's GITHUB_TOKEN.
+        required: false
+    outputs:
+      image:
+        description: Published chart tag reference, available only after successful publication and signing.
+        value: ${{ jobs.publish.outputs.image }}
+      digest:
+        description: Published OCI manifest digest, distinct from the archive checksum.
+        value: ${{ jobs.publish.outputs.digest }}
+      image-digest:
+        description: Immutable published chart reference.
+        value: ${{ jobs.publish.outputs.image-digest }}
+      checksum:
+        description: SHA-256 of the unchanged validated and published chart archive.
+        value: ${{ jobs.publish.outputs.checksum }}
+permissions: {}
+jobs:
+  validate:
+    name: Validate release chart
+    uses: $/.github/workflows/helm-chart-ci.yml
+    permissions:
+      contents: read
+      packages: read
+    with:
+      path: ${{ inputs.path }}
+      ref: ${{ inputs.ref }}
+      name: ${{ inputs.name }}
+      tag: ${{ inputs.tag }}
+      update-tag-paths: ${{ inputs.update-tag-paths }}
+      values: ${{ inputs.values }}
+      helm-repositories: ${{ inputs.helm-repositories }}
+      working-directory: ${{ inputs.working-directory }}
+      config: ${{ inputs.config }}
+      values-files: ${{ inputs.values-files }}
+      namespace: ${{ inputs.namespace }}
+      helm-set: ${{ inputs.helm-set }}
+      images: ${{ inputs.images }}
+      oci-registry: ${{ inputs.test-oci-registry }}
+      oci-registry-username: ${{ inputs.test-oci-registry-username }}
+      upload-artifact: true
+      runs-on: ${{ inputs.runs-on }}
+      timeout-minutes: ${{ inputs.timeout-minutes }}
+    secrets:
+      oci-registry-password: ${{ secrets.test-oci-registry-password }}
+
+  publish:
+    name: Publish validated chart
+    needs: validate
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: 15
+    concurrency:
+      group: helm-chart-publication-${{ github.repository_id }}-${{ inputs.oci-registry }}-${{ inputs.oci-repository || format('{0}/charts', github.repository) }}
+      cancel-in-progress: false
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image: ${{ job.status == 'success' && steps.release.outputs.image || '' }}
+      digest: ${{ job.status == 'success' && steps.release.outputs.digest || '' }}
+      image-digest: ${{ job.status == 'success' && steps.release.outputs.image-digest || '' }}
+      checksum: ${{ job.status == 'success' && needs.validate.outputs.checksum || '' }}
+    steps:
+      - name: Require validated artifact identity
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARTIFACT_ID: ${{ needs.validate.outputs.artifact-id }}
+          ARCHIVE_NAME: ${{ needs.validate.outputs.archive-name }}
+          CHECKSUM: ${{ needs.validate.outputs.checksum }}
+        with:
+          script: |
+            const path = require('node:path');
+            const { ARTIFACT_ID, ARCHIVE_NAME, CHECKSUM } = process.env;
+            if (!/^[1-9][0-9]*$/.test(ARTIFACT_ID) || !/^[a-f0-9]{64}$/.test(CHECKSUM)
+              || !ARCHIVE_NAME.endsWith('.tgz') || path.basename(ARCHIVE_NAME) !== ARCHIVE_NAME) {
+              throw new Error('Successful validation must supply one artifact ID, archive basename and checksum.');
+            }
+
+      - name: Download exact validated archive
+        id: download
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.validate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/helm-publish-${{ needs.validate.outputs.artifact-id }}
+          digest-mismatch: error
+
+      - name: Publish and sign unchanged archive
+        id: release
+        uses: $/actions/helm/release-chart
+        with:
+          archive: ${{ steps.download.outputs.download-path }}/${{ needs.validate.outputs.archive-name }}
+          checksum: ${{ needs.validate.outputs.checksum }}
+          oci-registry: ${{ inputs.oci-registry }}
+          oci-registry-username: ${{ inputs.oci-registry-username || github.repository_owner }}
+          oci-registry-password: ${{ secrets.oci-registry-password || github.token }}
+          oci-repository: ${{ inputs.oci-repository || format('{0}/charts', github.repository) }}
+          sign: ${{ inputs.sign }}
+
+      - name: Clean downloaded archive
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARTIFACT_ID: ${{ needs.validate.outputs.artifact-id }}
+        with:
+          script: |
+            if (/^[1-9][0-9]*$/.test(process.env.ARTIFACT_ID)) {
+              const path = require('node:path');
+              require('node:fs').rmSync(path.join(process.env.RUNNER_TEMP, `helm-publish-${process.env.ARTIFACT_ID}`), {
+                recursive: true, force: true,
+              });
+            }

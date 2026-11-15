@@ -33,29 +33,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sign: [false, true]
-        chart:
-          - name: application
-            values: |
-              [
-                { "path": ".image.registry", "value": "ghcr.io" },
-                {
-                  "path": ".image.repository",
-                  "value": "hoverkraft-tech/ci-github-container/application"
-                },
-                { "path": ".image.tag", "value": "0.1.0" }
-              ]
-          - name: umbrella-application
-            values: |
-              [
-                { "file": "charts/app/values.yaml", "path": ".image.registry", "value": "ghcr.io" },
-                {
-                  "file": "charts/app/values.yaml",
-                  "path": ".image.repository",
-                  "value": "hoverkraft-tech/ci-github-container/umbrella-application"
-                },
-                { "file": "charts/app/values.yaml", "path": ".image.tag", "value": "0.1.0" }
-              ]
+        include:
+          - chart:
+              name: application
+              values: |
+                [
+                  { "path": ".image.registry", "value": "ghcr.io" },
+                  { "path": ".image.repository", "value": "hoverkraft-tech/ci-github-container/application" },
+                  { "path": ".image.tag", "value": "0.1.0" }
+                ]
+            sign: false
+          - chart:
+              name: umbrella-application
+              values: |
+                [
+                  { "file": "charts/app/values.yaml", "path": ".image.registry", "value": "ghcr.io" },
+                  { "file": "charts/app/values.yaml", "path": ".image.repository", "value": "hoverkraft-tech/ci-github-container/umbrella-application" },
+                  { "file": "charts/app/values.yaml", "path": ".image.tag", "value": "0.1.0" }
+                ]
+            sign: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,23 +67,47 @@ jobs:
             // Different chart contents prevent an unsigned scenario from sharing a signed digest.
             core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.${process.env.SIGN}`);
 
-      - id: release-chart
-        uses: $/actions/helm/release-chart
+      - name: Prepare release fixture
+        id: prepare
+        uses: $/actions/helm/prepare-chart
         with:
-          oci-registry: ghcr.io
-          oci-registry-password: ${{ github.token }}
-          oci-repository: ${{ matrix.chart.name == 'application' && matrix.sign == false && format('{0}/charts/custom-release-test', github.repository) || '' }}
-          chart: ${{ matrix.chart.name }}-test
+          name: ${{ github.event.repository.name }}
           path: tests/charts/${{ matrix.chart.name }}
           values: ${{ matrix.chart.values }}
           tag: ${{ steps.arrange.outputs.tag }}
-          sign: ${{ matrix.sign }}
           helm-repositories: |
             valkey https://valkey.io/valkey-helm/
+
+      - name: Act - Reject a mismatched archive before publication
+        id: mismatch
+        continue-on-error: true
+        uses: $/actions/helm/release-chart
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: "0000000000000000000000000000000000000000000000000000000000000000"
+          sign: false
+
+      - name: Arrange - Remove source after preparation
+        env:
+          CHART_PATH: tests/charts/${{ matrix.chart.name }}
+        run: rm -rf -- "$CHART_PATH"
+
+      - id: release-chart
+        uses: $/actions/helm/release-chart
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: ${{ steps.prepare.outputs.checksum }}
+          oci-registry: ghcr.io
+          oci-registry-password: ${{ github.token }}
+          oci-repository: ${{ matrix.chart.name == 'application' && matrix.sign == false && format('{0}/charts/custom-release-test', github.repository) || format('{0}/charts/{1}-test', github.repository, matrix.chart.name) }}
+          sign: ${{ matrix.sign }}
 
       - name: Check release chart output
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
+          MISMATCH_OUTCOME: ${{ steps.mismatch.outcome }}
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+          CHECKSUM: ${{ steps.prepare.outputs.checksum }}
           RELEASED_IMAGE: ${{ steps.release-chart.outputs.image }}
           RELEASED_DIGEST: ${{ steps.release-chart.outputs.digest }}
           RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
@@ -97,6 +117,8 @@ jobs:
         with:
           script: |
             const assert = require('node:assert/strict');
+            assert.equal(process.env.MISMATCH_OUTCOME, 'failure');
+            assert.equal(require('node:crypto').createHash('sha256').update(require('node:fs').readFileSync(process.env.ARCHIVE)).digest('hex'), process.env.CHECKSUM);
             const namespace = process.env.CHART_NAME === 'application' && process.env.SIGN === 'false'
               ? 'custom-release-test' : `${process.env.CHART_NAME}-test`;
             const image = `ghcr.io/${context.repo.owner}/${context.repo.repo}/charts/${namespace}/${context.repo.repo}`;
@@ -159,47 +181,13 @@ jobs:
             assert.notEqual(result.exitCode, 0);
             assert.match(`${result.stderr}\n${result.stdout}`, /no signatures found|no valid bundles (?:found|exist)/i);
 
-  default-signing:
-    name: Release application (default sign=true)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Arrange isolated chart version
-        id: arrange
+      - name: Clean prepared fixture
+        if: ${{ always() && steps.prepare.outputs.archive != '' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
         with:
           script: |
-            core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.default`);
-
-      - id: release-chart
-        uses: $/actions/helm/release-chart
-        with:
-          oci-registry: ghcr.io
-          oci-registry-password: ${{ github.token }}
-          chart: application-default-test
-          path: tests/charts/application
-          values: |
-            [
-              { "path": ".image.registry", "value": "ghcr.io" },
-              {
-                "path": ".image.repository",
-                "value": "hoverkraft-tech/ci-github-container/application"
-              },
-              { "path": ".image.tag", "value": "0.1.0" }
-            ]
-          tag: ${{ steps.arrange.outputs.tag }}
-          helm-repositories: |
-            valkey https://valkey.io/valkey-helm/
-
-      - name: Verify chart signature with default signing
-        uses: $/actions/docker/verify-images
-        with:
-          images: ${{ steps.release-chart.outputs.image-digest }}
-          certificate-identity: https://github.com/${{ github.repository }}/.github/workflows/__test-action-helm-release-chart.yml@${{ github.ref }}
+            const fs = require('node:fs');
+            const path = require('node:path');
+            fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
