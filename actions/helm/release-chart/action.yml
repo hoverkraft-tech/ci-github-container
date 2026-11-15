@@ -27,6 +27,12 @@ inputs:
     description: |
       OCI registry password.
     default: ${{ github.token }}
+  oci-repository:
+    description: |
+      OCI namespace without the registry or final chart name.
+      Defaults to {owner}/{repository}/charts/{chart}. Override to preserve an existing
+      publication address, for example hoverkraft-tech/charts for a shared chart registry.
+    default: ""
   chart:
     description: "Chart name to release"
     required: true
@@ -136,7 +142,7 @@ runs:
         INPUT_REGISTRY: ${{ inputs.oci-registry }}
         INPUT_USERNAME: ${{ inputs.oci-registry-username }}
         INPUT_PASSWORD: ${{ inputs.oci-registry-password }}
-        CHART_REPOSITORY: ${{ github.repository }}/charts/${{ inputs.chart }}
+        CHART_REPOSITORY: ${{ inputs.oci-repository || format('{0}/charts/{1}', github.repository, inputs.chart) }}
       with:
         script: |
           const { join } = require('node:path');

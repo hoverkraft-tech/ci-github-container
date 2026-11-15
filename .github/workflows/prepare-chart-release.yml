@@ -1,0 +1,94 @@
+# Prepare committed Helm versions for a manual or scheduled release.
+# Use this workflow before validation. Start the caller on the default branch;
+# preparation commits Chart.yaml, creates a tag and dispatches that caller at the tag.
+# Only status ready starts validation and publication in the dispatched run.
+# No-change runs finish without creating a commit, tag or release.
+#
+# Supply path and the organization's GitHub App credentials explicitly. The App
+# needs contents/actions write and pull requests read, and repository rules must
+# permit its version commits and tags. GITHUB_TOKEN also works where repository
+# protections permit its writes. This workflow never modifies repository rules.
+# Set update-app-version only when the application and chart share one version.
+# Stable bare or v-prefixed tags are supported. Release configuration comes from
+# ci-github-publish's defaults and repository overrides.
+#
+# The caller needs workflow_dispatch (with an optional boolean force input) and
+# schedule triggers. Forward force only for manual runs. Use non-cancelling release
+# concurrency; the initial branch run finishes after dispatching the tag run.
+#
+# If dispatch fails after tag creation, dispatch the caller manually at that tag.
+# Tag recovery verifies source ancestry and committed versions and never moves a
+# tag. Already published releases return released. If the default branch moves
+# before the version commit, preparation fails instead of overwriting newer work.
+# Restart from the default branch after reviewing that change.
+#
+# This workflow prepares source identity only. The caller still owns chart/image
+# validation and publication, and must finish those before publishing its GitHub release.
+name: Prepare Helm Chart Release
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: Repository-relative directory containing Chart.yaml
+        type: string
+        required: true
+      update-app-version:
+        description: Version the application together with its chart
+        type: boolean
+        default: false
+      force:
+        description: Force a release on manual default-branch runs
+        type: boolean
+        default: false
+      github-app-client-id:
+        description: Optional GitHub App client ID paired with the github-app-key secret
+        type: string
+    secrets:
+      github-app-key:
+        description: GitHub App private key for the supplied client ID
+    outputs:
+      status:
+        description: no-changes, dispatched, ready or released; only ready starts validation and publication
+        value: ${{ jobs.prepare.outputs.status }}
+      tag:
+        description: Prepared release tag
+        value: ${{ jobs.prepare.outputs.tag }}
+
+permissions: {}
+
+concurrency:
+  group: helm-release-prepare-${{ github.repository }}-${{ inputs.path }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    env:
+      HAS_APP_PRIVATE_KEY: ${{ secrets.github-app-key != '' }}
+    outputs:
+      status: ${{ steps.prepare.outputs.status }}
+      tag: ${{ steps.prepare.outputs.tag }}
+    steps:
+      - id: token
+        if: inputs.github-app-client-id != '' || env.HAS_APP_PRIVATE_KEY == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ inputs.github-app-client-id }}
+          private-key: ${{ secrets.github-app-key }} # zizmor: ignore[secrets-outside-env] caller explicitly supplies release credentials
+          permission-actions: write
+          permission-contents: write
+          permission-pull-requests: read
+
+      - id: prepare
+        uses: $/actions/helm/prepare-release
+        with:
+          path: ${{ inputs.path }}
+          update-app-version: ${{ inputs.update-app-version }}
+          force: ${{ inputs.force }}
+          github-token: ${{ steps.token.outputs.token || github.token }}

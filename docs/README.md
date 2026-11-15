@@ -10,3 +10,4 @@
 - [Candidate publication and final image metadata](adr/0005-publish-candidates-with-final-image-metadata.md)
 - [Validated digest promotion](adr/0006-promote-validated-image-digests.md)
 - [Separate Helm pipeline phases](adr/0007-separate-helm-pipeline-phases.md)
+- [Committed Helm release preparation](adr/0008-prepare-committed-helm-releases.md)
