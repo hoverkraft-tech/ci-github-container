@@ -99,7 +99,14 @@ jobs:
               process.env.RELEASED_IMAGE_DIGEST,
             ], { ignoreReturnCode: true });
 
-            const result = await verify(process.env.CERTIFICATE_IDENTITY);
+            let result = await verify(process.env.CERTIFICATE_IDENTITY);
+            // GHCR may not expose a newly pushed signature immediately.
+            // Cosign exit code 10 means no signatures were found; other errors fail immediately.
+            for (let attempt = 1; result.exitCode === 10 && attempt < 6; attempt += 1) {
+              core.info(`Chart signature is not visible yet; retrying verification (${attempt}/5) in 10 seconds`);
+              await new Promise((resolve) => setTimeout(resolve, 10000));
+              result = await verify(process.env.CERTIFICATE_IDENTITY);
+            }
             const output = `${result.stderr}\n${result.stdout}`;
             assert.equal(result.exitCode, 0, `Chart signature verification failed: ${output}`);
 
