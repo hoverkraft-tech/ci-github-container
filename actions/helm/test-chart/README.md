@@ -23,10 +23,17 @@
 
 ## Overview
 
-Install selected source Helm charts in a fresh kind cluster and run their Helm tests
-using [helm/chart-testing-action](https://github.com/helm/chart-testing-action).
-Run static validation separately with [Lint Helm Chart](../lint-chart/README.md)
-before calling this action.
+Install one prepared Helm chart in a fresh kind cluster and run its Helm tests.
+Verify its expected SHA-256 before cluster creation and keep the archive unchanged.
+Uses chart-testing for packaged ci/*-values.yaml scenarios, readiness, Helm tests,
+diagnostics and release cleanup. Test-only values and registry credentials are overlays.
+Requires Helm and chart-testing on PATH; checkout and shared tool setup belong to
+the caller. Source selection and dependency builds belong before Prepare.
+The action owns its unique kind cluster and isolated chart extraction. Temporary
+inputs are removed on success, failure or cancellation; kind's post-job hook removes
+the cluster. The caller retains the original archive.
+Run [Lint Helm Chart](../lint-chart/README.md) first with the same archive/checksum
+and values-files. Release and reusable-workflow composition are separate phases.
 
 <!-- overview:end -->
 <!-- inputs:start -->
@@ -35,22 +42,27 @@ before calling this action.
 
 | **Input**                   | **Description**                                                                                     | **Required** | **Default**                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
-| **`working-directory`**     | Working directory                                                                                   | **false**    | `${{ github.workspace }}`        |
+| **`archive`**               | Path to the prepared .tgz archive. Relative paths use working-directory.                            | **true**     | -                                |
+| **`checksum`**              | Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters.                      | **true**     | -                                |
+| **`config`**                | Chart-testing configuration path relative to working-directory; defaults to ct.yaml when present.   | **false**    | -                                |
+|                             | Retains installation timeouts, release settings and diagnostic policies. This action controls       |              |                                  |
+|                             | chart selection, dependency setup, fresh installation, cleanup and debug/configuration output.      |              |                                  |
+| **`values-files`**          | Validation-only values files, one path per line relative to working-directory.                      | **false**    | -                                |
+|                             | Applied in order after each packaged ci/*-values.yaml scenario or chart defaults.                   |              |                                  |
+|                             | Later files take precedence. Use the same files with Lint; publication defaults stay unchanged.     |              |                                  |
+| **`working-directory`**     | Writable repository directory for configuration and temporary validation files.                     | **false**    | `${{ github.workspace }}`        |
 | **`namespace`**             | Namespace used to install test releases.                                                            | **false**    | -                                |
 |                             | Defaults to a random namespace created for the current workflow run.                                |              |                                  |
-| **`helm-set`**              | Set values for Helm chart.                                                                          | **false**    | -                                |
+| **`helm-set`**              | Installation-only values, applied after values-files. Never written to the archive.                 | **false**    | -                                |
 |                             | Multiple values can be set using multiline string.                                                  |              |                                  |
 |                             | Example:                                                                                            |              |                                  |
 |                             | <!-- textlint-disable --><pre lang="text">key1=value1&#13;key2=value2</pre><!-- textlint-enable --> |              |                                  |
-| **`helm-repositories`**     | List of Helm repositories to add before testing charts.                                             | **false**    | -                                |
-|                             | See <https://helm.sh/docs/helm/helm_repo_add/>.                                                     |              |                                  |
-| **`oci-registry`**          | OCI registry where to pull and push images                                                          | **false**    | `ghcr.io`                        |
+| **`oci-registry`**          | OCI registry used by the test cluster to pull images                                                | **false**    | `ghcr.io`                        |
 | **`oci-registry-username`** | Username used to log against the OCI registry.                                                      | **false**    | `${{ github.repository_owner }}` |
 |                             | See <https://github.com/docker/login-action#usage>.                                                 |              |                                  |
 | **`oci-registry-password`** | Password or personal access token used to log against the OCI registry.                             | **false**    | `${{ github.token }}`            |
 |                             | Can be passed in using `secrets.GITHUB_TOKEN`.                                                      |              |                                  |
 |                             | See <https://github.com/docker/login-action#usage>.                                                 |              |                                  |
-| **`check-diff-only`**       | Only run installation tests on changed charts.                                                      | **false**    | `true`                           |
 
 <!-- inputs:end -->
 <!-- secrets:start -->
@@ -95,7 +107,25 @@ This documentation was automatically generated by [CI Dokumentor](https://github
 ````yaml
 - uses: hoverkraft-tech/ci-github-container/actions/helm/test-chart@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
   with:
-    # Working directory
+    # Path to the prepared .tgz archive. Relative paths use working-directory.
+    # This input is required.
+    archive: ""
+
+    # Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters.
+    # This input is required.
+    checksum: ""
+
+    # Chart-testing configuration path relative to working-directory; defaults to ct.yaml when present.
+    # Retains installation timeouts, release settings and diagnostic policies. This action controls
+    # chart selection, dependency setup, fresh installation, cleanup and debug/configuration output.
+    config: ""
+
+    # Validation-only values files, one path per line relative to working-directory.
+    # Applied in order after each packaged ci/*-values.yaml scenario or chart defaults.
+    # Later files take precedence. Use the same files with Lint; publication defaults stay unchanged.
+    values-files: ""
+
+    # Writable repository directory for configuration and temporary validation files.
     # Default: `${{ github.workspace }}`
     working-directory: ${{ github.workspace }}
 
@@ -103,7 +133,7 @@ This documentation was automatically generated by [CI Dokumentor](https://github
     # Defaults to a random namespace created for the current workflow run.
     namespace: ""
 
-    # Set values for Helm chart.
+    # Installation-only values, applied after values-files. Never written to the archive.
     # Multiple values can be set using multiline string.
     # Example:
     # ```
@@ -112,11 +142,7 @@ This documentation was automatically generated by [CI Dokumentor](https://github
     # ```
     helm-set: ""
 
-    # List of Helm repositories to add before testing charts.
-    # See https://helm.sh/docs/helm/helm_repo_add/.
-    helm-repositories: ""
-
-    # OCI registry where to pull and push images
+    # OCI registry used by the test cluster to pull images
     # Default: `ghcr.io`
     oci-registry: ghcr.io
 
@@ -132,11 +158,6 @@ This documentation was automatically generated by [CI Dokumentor](https://github
     #
     # Default: `${{ github.token }}`
     oci-registry-password: ${{ github.token }}
-
-    # Only run installation tests on changed charts.
-    #
-    # Default: `true`
-    check-diff-only: "true"
 ````
 
 <!-- usage:end -->
