@@ -1,11 +1,14 @@
 ---
 name: "Release Helm Chart"
 description: |
-  Action to release a Helm chart to OCI registry.
+  Publish one prepared Helm chart archive to an OCI registry.
+  Requires the archive and its expected SHA-256 checksum. Lint and test those same
+  bytes before calling this action. The caller retains its archive; temporary
+  publication files and registry credentials are removed on success or failure.
   Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
   Set `sign` to `false` to opt out and still consume the immutable digest output.
-  Delegates final metadata, published values, locked dependencies and packaging
-  to prepare-chart. Push retries reuse the same prepared archive.
+  Does not check out source, mutate values/metadata, rebuild dependencies or package.
+  Push retries reuse a verified snapshot of the supplied archive. Ensures Helm is available.
 author: hoverkraft
 branding:
   icon: upload-cloud
@@ -30,51 +33,15 @@ inputs:
   oci-repository:
     description: |
       OCI namespace without the registry or final chart name.
-      Defaults to {owner}/{repository}/charts/{chart}. Override to preserve an existing
-      publication address, for example hoverkraft-tech/charts for a shared chart registry.
-    default: ""
-  chart:
-    description: "Chart name to release"
+      Defaults to {owner}/{repository}/charts. The archive supplies its chart name/version.
+      Set this explicitly to preserve a different publication namespace.
+    default: "${{ github.repository }}/charts"
+  archive:
+    description: "Path to the prepared .tgz archive. Relative paths use the current working directory."
     required: true
-  path:
-    description: "Path to the chart to release"
+  checksum:
+    description: "Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters."
     required: true
-  values:
-    description: |
-      Define charts values to be filled.
-      See https://mikefarah.gitbook.io/yq/.
-      Format: `[{ file, path, value }]`.
-
-      Example:
-
-      ```json
-      [
-        {
-          "file": "charts/application/charts/api/values.yaml",
-          "path": ".image.registry", "value": "ghcr.io"
-        }
-      ]
-      ```
-    required: false
-  helm-repositories:
-    description: |
-      List of Helm repositories to add before release charts.
-      See https://helm.sh/docs/helm/helm_repo_add/.
-    required: false
-  tag:
-    description: "The release tag to set to chart"
-    required: true
-  update-tag-paths:
-    description: |
-      List of YAML paths to update with the tag.
-      Comma separated list of paths.
-    required: false
-    default: ".version,.appVersion"
-  ref:
-    description: |
-      The Git ref to checkout before releasing the chart.
-      Can be a branch, tag or commit SHA.
-    required: false
   sign:
     description: |
       Sign the published OCI chart using Cosign and GitHub Actions OIDC.
@@ -103,10 +70,8 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUT_SIGN: ${{ inputs.sign }}
-        INPUT_TAG: ${{ inputs.tag }}
       with:
         script: |
-          if (!process.env.INPUT_TAG?.trim()) throw new Error('"tag" input is missing');
           const sign = process.env.INPUT_SIGN;
           if (!['true', 'false'].includes(sign)) {
             throw new Error('"sign" must be "true" or "false".');
@@ -115,32 +80,20 @@ runs:
             throw new Error('Signing charts requires the workflow job to grant id-token: write.');
           }
 
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
-      with:
-        ref: ${{ inputs.ref }}
-
-    - name: Prepare chart archive
-      id: prepare-chart
-      uses: $/actions/helm/prepare-chart
-      with:
-        path: ${{ inputs.path }}
-        name: ${{ github.event.repository.name }}
-        tag: ${{ inputs.tag }}
-        update-tag-paths: ${{ inputs.update-tag-paths }}
-        values: ${{ inputs.values }}
-        helm-repositories: ${{ inputs.helm-repositories }}
+    - name: Ensure Helm is available
+      uses: $/actions/helm/setup
 
     - id: chart-releaser
       name: Push prepared chart
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
-        CHART_ARCHIVE: ${{ steps.prepare-chart.outputs.archive }}
-        CHART_CHECKSUM: ${{ steps.prepare-chart.outputs.checksum }}
+        CHART_ARCHIVE: ${{ inputs.archive }}
+        CHART_CHECKSUM: ${{ inputs.checksum }}
         INPUT_REGISTRY: ${{ inputs.oci-registry }}
         INPUT_USERNAME: ${{ inputs.oci-registry-username }}
         INPUT_PASSWORD: ${{ inputs.oci-registry-password }}
-        CHART_REPOSITORY: ${{ inputs.oci-repository || format('{0}/charts/{1}', github.repository, inputs.chart) }}
+        CHART_REPOSITORY: ${{ inputs.oci-repository }}
       with:
         script: |
           const { join } = require('node:path');
@@ -165,14 +118,3 @@ runs:
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
         charts: ${{ steps.chart-releaser.outputs.image }}@${{ steps.chart-releaser.outputs.digest }}
-
-    - name: Clean prepared archive
-      if: ${{ always() && steps.prepare-chart.outputs.archive != '' }}
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        CHART_ARCHIVE: ${{ steps.prepare-chart.outputs.archive }}
-      with:
-        script: |
-          const fs = require('node:fs');
-          const path = require('node:path');
-          fs.rmSync(path.dirname(process.env.CHART_ARCHIVE), { recursive: true, force: true });

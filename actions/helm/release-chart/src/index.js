@@ -2,6 +2,19 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+function verifiedArchive(archive, expectedChecksum) {
+	if (!archive || !/^[a-f0-9]{64}$/.test(expectedChecksum ?? "")) {
+		throw new Error(
+			"A prepared archive and lowercase hexadecimal SHA-256 checksum are required.",
+		);
+	}
+	const bytes = fs.readFileSync(archive);
+	if (createHash("sha256").update(bytes).digest("hex") !== expectedChecksum) {
+		throw new Error("Prepared chart checksum mismatch.");
+	}
+	return bytes;
+}
+
 async function pushChart({
 	core,
 	exec,
@@ -15,15 +28,28 @@ async function pushChart({
 	sleep = (milliseconds) =>
 		new Promise((resolve) => setTimeout(resolve, milliseconds)),
 }) {
-	const checksum = createHash("sha256")
-		.update(fs.readFileSync(archive))
-		.digest("hex");
-	if (checksum !== expectedChecksum)
-		throw new Error("Prepared chart checksum mismatch.");
+	const bytes = verifiedArchive(archive, expectedChecksum);
+	if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*(?::[0-9]+)?$/i.test(registry ?? "")) {
+		throw new Error("OCI registry must be a hostname with an optional port.");
+	}
+	if (
+		!/^[a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*$/.test(
+			repository ?? "",
+		)
+	) {
+		throw new Error(
+			"OCI repository must be a lowercase namespace without a registry, tag or digest.",
+		);
+	}
+	if (!username?.trim() || !password) {
+		throw new Error("OCI registry username and password are required.");
+	}
 	const destination = fs.mkdtempSync(path.join(runnerTemp, "helm-release-"));
 	const registryConfig = path.join(destination, "registry.json");
+	const snapshot = path.join(destination, "chart.tgz");
 	let loggedIn = false;
 	try {
+		fs.writeFileSync(snapshot, bytes, { mode: 0o600 });
 		await exec.exec(
 			"helm",
 			[
@@ -41,7 +67,7 @@ async function pushChart({
 		loggedIn = true;
 		const pushArgs = [
 			"push",
-			archive,
+			snapshot,
 			`oci://${registry}/${repository}`,
 			"--registry-config",
 			registryConfig,
@@ -50,6 +76,8 @@ async function pushChart({
 		let delayMs = 5000;
 		let result;
 		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			verifiedArchive(archive, expectedChecksum);
+			verifiedArchive(snapshot, expectedChecksum);
 			result = await exec.getExecOutput("helm", pushArgs, {
 				ignoreReturnCode: true,
 			});
@@ -76,6 +104,8 @@ async function pushChart({
 			await sleep(delayMs);
 			delayMs *= 2;
 		}
+		verifiedArchive(archive, expectedChecksum);
+		verifiedArchive(snapshot, expectedChecksum);
 		// Helm reports the pushed reference and manifest digest on stderr.
 		// Capture the push result so a concurrent tag update cannot change what we sign.
 		const output = `${result.stdout}\n${result.stderr}`;
@@ -90,6 +120,14 @@ async function pushChart({
 		}
 		const image = images[0][1];
 		const digest = digests[0][1];
+		if (
+			!image.startsWith(`${registry}/${repository}/`) ||
+			!/^[^\s@]+:[^/:\s@]+$/.test(image)
+		) {
+			throw new Error(
+				"Helm push returned an unexpected publication reference.",
+			);
+		}
 		core.setOutput("image", image);
 		core.setOutput("digest", digest);
 		core.setOutput(

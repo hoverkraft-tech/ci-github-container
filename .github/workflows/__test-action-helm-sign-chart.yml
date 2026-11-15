@@ -27,12 +27,11 @@ jobs:
           script: |
             core.setOutput('tag', `0.1.0-ci.${context.runId}.${process.env.GITHUB_RUN_ATTEMPT}.sign-chart`);
 
-      - id: release-chart
-        uses: $/actions/helm/release-chart
+      - name: Prepare release fixture
+        id: prepare
+        uses: $/actions/helm/prepare-chart
         with:
-          oci-registry: ghcr.io
-          oci-registry-password: ${{ github.token }}
-          chart: application-sign-chart-test
+          name: ${{ github.event.repository.name }}
           path: tests/charts/application
           values: |
             [
@@ -44,9 +43,18 @@ jobs:
               { "path": ".image.tag", "value": "0.1.0" }
             ]
           tag: ${{ steps.arrange.outputs.tag }}
-          sign: "false"
           helm-repositories: |
             valkey https://valkey.io/valkey-helm/
+
+      - id: release-chart
+        uses: $/actions/helm/release-chart
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: ${{ steps.prepare.outputs.checksum }}
+          oci-registry: ghcr.io
+          oci-registry-password: ${{ github.token }}
+          oci-repository: ${{ github.repository }}/charts/application-sign-chart-test
+          sign: "false"
 
       - name: Install Cosign for verification
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
@@ -113,3 +121,14 @@ jobs:
             const wrongIdentity = await verify(`${process.env.CERTIFICATE_IDENTITY}-unexpected`);
             assert.notEqual(wrongIdentity.exitCode, 0, 'Signature verification accepted the wrong workflow identity');
             assert.match(`${wrongIdentity.stderr}\n${wrongIdentity.stdout}`, /identit(?:y|ies).*match|match.*identit(?:y|ies)/i);
+
+      - name: Clean prepared fixture
+        if: ${{ always() && steps.prepare.outputs.archive != '' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });

@@ -75,6 +75,10 @@ _Orchestrated workflows you can plug directly into repositories to automate cont
 
 ### - [Docker promote images](.github/workflows/docker-promote-images.md)
 
+### - [Helm chart CI](.github/workflows/helm-chart-ci.md)
+
+### - [Helm chart release](.github/workflows/helm-chart-release.md)
+
 ### - [Prune pull requests images tags](.github/workflows/prune-pull-requests-images-tags.md)
 
 ## Architecture Decisions

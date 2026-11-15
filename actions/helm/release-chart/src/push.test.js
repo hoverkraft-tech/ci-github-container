@@ -74,7 +74,7 @@ function fixture(
 			return { exitCode: 1, stdout: "", stderr: "", [errorStream]: pushError };
 		},
 	};
-	const run = () =>
+	const run = (overrides = {}) =>
 		pushChart({
 			core,
 			exec,
@@ -89,6 +89,7 @@ function fixture(
 				state.delays.push(delay);
 				state.elapsed += delay;
 			},
+			...overrides,
 		});
 	return { state, run, runnerTemp, archive };
 }
@@ -111,6 +112,8 @@ test("successful chart pushes return the immutable digest without waiting", asyn
 	await f.run();
 	assertOutputs(f.state);
 	assert.equal(f.state.pushes.length, 1);
+	assert.notEqual(f.state.pushes[0].args[1], f.archive);
+	assert.equal(f.state.pushes[0].archive, fs.readFileSync(f.archive, "utf8"));
 	assert.deepEqual(f.state.delays, []);
 	assertCleanup(f);
 });
@@ -189,13 +192,52 @@ test("a changed prepared archive fails before registry login", async (t) => {
 	assert.deepEqual(f.state.outputs, {});
 });
 
-test("release rejects a missing tag before preparing a chart", () => {
-	const validate = new AsyncFunction(
-		"process",
-		action.runs.steps[0].with.script,
+for (const [name, overrides, message] of [
+	["missing archive", { archive: "" }, /archive.*checksum/],
+	["missing checksum", { expectedChecksum: "" }, /archive.*checksum/],
+	["missing file", { archive: "/missing/prepared-chart.tgz" }, /ENOENT/],
+	["registry URL", { registry: "https://registry.example.com" }, /hostname/],
+	["tagged namespace", { repository: "charts:latest" }, /namespace/],
+	["missing credentials", { password: "" }, /username and password/],
+]) {
+	test(`release rejects ${name} before registry access`, async (t) => {
+		const f = fixture(t);
+		await assert.rejects(f.run(overrides), message);
+		assert.deepEqual(f.state.commands, []);
+		assert.deepEqual(f.state.outputs, {});
+		assert.deepEqual(fs.readdirSync(f.runnerTemp), ["prepared.tgz"]);
+	});
+}
+
+test("archive changes during retry cannot publish different bytes", async (t) => {
+	const f = fixture(t, { visibleAfter: 5000 });
+	await assert.rejects(
+		f.run({ sleep: async () => fs.appendFileSync(f.archive, "changed") }),
+		/checksum mismatch/,
 	);
-	return assert.rejects(
-		validate({ env: { INPUT_SIGN: "false", INPUT_TAG: "" } }),
-		/tag.*missing/,
-	);
+	assert.equal(f.state.pushes.length, 1);
+	assert.deepEqual(f.state.outputs, {});
+	assertCleanup(f);
 });
+
+test("a reference outside the requested namespace fails without outputs", async (t) => {
+	const f = fixture(t, {
+		output: `Pushed: registry.example.com/unrelated/application:1.2.3\nDigest: ${digest}\n`,
+	});
+	await assert.rejects(f.run(), /unexpected publication reference/);
+	assert.deepEqual(f.state.outputs, {});
+	assertCleanup(f);
+});
+
+for (const [env, message] of [
+	[{ INPUT_SIGN: "maybe" }, /sign.*true.*false/],
+	[{ INPUT_SIGN: "true" }, /id-token: write/],
+]) {
+	test(`signing configuration rejects ${env.INPUT_SIGN} without credentials`, async () => {
+		const validate = new AsyncFunction(
+			"process",
+			action.runs.steps[0].with.script,
+		);
+		await assert.rejects(validate({ env }), message);
+	});
+}
