@@ -9,7 +9,6 @@
 ---
 
 <!-- header:end -->
-
 <!-- badges:start -->
 
 [![Marketplace](https://img.shields.io/badge/Marketplace-release--helm--chart-blue?logo=github-actions)](https://github.com/marketplace/actions/release-helm-chart)
@@ -20,151 +19,42 @@
 ![GitHub Verified Creator](https://img.shields.io/badge/GitHub-Verified%20Creator-4493F8?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSJyZ2IoNjgsIDE0NywgMjQ4KSI+CiAgPHBhdGggZD0ibTkuNTg1LjUyLjkyOS42OGMuMTUzLjExMi4zMzEuMTg2LjUxOC4yMTVsMS4xMzguMTc1YTIuNjc4IDIuNjc4IDAgMCAxIDIuMjQgMi4yNGwuMTc0IDEuMTM5Yy4wMjkuMTg3LjEwMy4zNjUuMjE1LjUxOGwuNjguOTI4YTIuNjc3IDIuNjc3IDAgMCAxIDAgMy4xN2wtLjY4LjkyOGExLjE3NCAxLjE3NCAwIDAgMC0uMjE1LjUxOGwtLjE3NSAxLjEzOGEyLjY3OCAyLjY3OCAwIDAgMS0yLjI0MSAyLjI0MWwtMS4xMzguMTc1YTEuMTcgMS4xNyAwIDAgMC0uNTE4LjIxNWwtLjkyOC42OGEyLjY3NyAyLjY3NyAwIDAgMS0zLjE3IDBsLS45MjgtLjY4YTEuMTc0IDEuMTc0IDAgMCAwLS41MTgtLjIxNUwzLjgzIDE0LjQxYTIuNjc4IDIuNjc4IDAgMCAxLTIuMjQtMi4yNGwtLjE3NS0xLjEzOGExLjE3IDEuMTcgMCAwIDAtLjIxNS0uNTE4bC0uNjgtLjkyOGEyLjY3NyAyLjY3NyAwIDAgMSAwLTMuMTdsLjY4LS45MjhjLjExMi0uMTUzLjE4Ni0uMzMxLjIxNS0uNTE4bC4xNzUtMS4xNGEyLjY3OCAyLjY3OCAwIDAgMSAyLjI0LTIuMjRsMS4xMzktLjE3NWMuMTg3LS4wMjkuMzY1LS4xMDMuNTE4LS4yMTVsLjkyOC0uNjhhMi42NzcgMi42NzcgMCAwIDEgMy4xNyAwWk03LjMwMyAxLjcyOGwtLjkyNy42OGEyLjY3IDIuNjcgMCAwIDEtMS4xOC40ODlsLTEuMTM3LjE3NGExLjE3OSAxLjE3OSAwIDAgMC0uOTg3Ljk4N2wtLjE3NCAxLjEzNmEyLjY3NyAyLjY3NyAwIDAgMS0uNDg5IDEuMThsLS42OC45MjhhMS4xOCAxLjE4IDAgMCAwIDAgMS4zOTRsLjY4LjkyN2MuMjU2LjM0OC40MjQuNzUzLjQ4OSAxLjE4bC4xNzQgMS4xMzdjLjA3OC41MDkuNDc4LjkwOS45ODcuOTg3bDEuMTM2LjE3NGEyLjY3IDIuNjcgMCAwIDEgMS4xOC40ODlsLjkyOC42OGMuNDE0LjMwNS45NzkuMzA1IDEuMzk0IDBsLjkyNy0uNjhhMi42NyAyLjY3IDAgMCAxIDEuMTgtLjQ4OWwxLjEzNy0uMTc0YTEuMTggMS4xOCAwIDAgMCAuOTg3LS45ODdsLjE3NC0xLjEzNmEyLjY3IDIuNjcgMCAwIDEgLjQ4OS0xLjE4bC42OC0uOTI4YTEuMTc2IDEuMTc2IDAgMCAwIDAtMS4zOTRsLS42OC0uOTI3YTIuNjg2IDIuNjg2IDAgMCAxLS40ODktMS4xOGwtLjE3NC0xLjEzN2ExLjE3OSAxLjE3OSAwIDAgMC0uOTg3LS45ODdsLTEuMTM2LS4xNzRhMi42NzcgMi42NzcgMCAwIDEtMS4xOC0uNDg5bC0uOTI4LS42OGExLjE3NiAxLjE3NiAwIDAgMC0xLjM5NCAwWk0xMS4yOCA2Ljc4bC0zLjc1IDMuNzVhLjc1Ljc1IDAgMCAxLTEuMDYgMEw0LjcyIDguNzhhLjc1MS43NTEgMCAwIDEgLjAxOC0xLjA0Mi43NTEuNzUxIDAgMCAxIDEuMDQyLS4wMThMNyA4Ljk0bDMuMjItMy4yMmEuNzUxLjc1MSAwIDAgMSAxLjA0Mi4wMTguNzUxLjc1MSAwIDAgMSAuMDE4IDEuMDQyWiI+PC9wYXRoPgo8L3N2Zz4K)
 
 <!-- badges:end -->
-
 <!-- overview:start -->
 
 ## Overview
 
-Action to release a Helm chart to OCI registry.
+Publish one prepared Helm chart archive to an OCI registry.
+Requires the archive and its expected SHA-256 checksum. Lint and test those same
+bytes before calling this action. The caller retains its archive; temporary
+publication files and registry credentials are removed on success or failure.
 Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
 Set `sign` to `false` to opt out and still consume the immutable digest output.
-Delegates final metadata, published values, locked dependencies and packaging
-to prepare-chart. Push retries reuse the same prepared archive.
+Does not check out source, mutate values/metadata, rebuild dependencies or package.
+Push retries reuse a verified snapshot of the supplied archive. Ensures Helm is available.
 
 <!-- overview:end -->
-
-## Permissions
-
-By default, this action requires the following permissions on the repository:
-
-- `contents: read`: to read the chart files
-- `packages: write`: to publish the chart and its signature to GitHub Container Registry
-- `id-token: write`: to sign the chart; set `sign: "false"` to opt out
-
-For other OCI registries, provide credentials with write access using the registry inputs.
-When calling this action through a reusable workflow, grant `id-token: write` in the caller as well as the signing job.
-
-<!-- usage:start -->
-
-## Usage
-
-````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
-  with:
-    # OCI registry where to push chart.
-    #
-    # This input is required.
-    # Default: `ghcr.io`
-    oci-registry: ghcr.io
-
-    # OCI registry username.
-    #
-    # This input is required.
-    # Default: `${{ github.repository_owner }}`
-    oci-registry-username: ${{ github.repository_owner }}
-
-    # OCI registry password.
-    #
-    # This input is required.
-    # Default: `${{ github.token }}`
-    oci-registry-password: ${{ github.token }}
-
-    # OCI namespace without the registry or final chart name.
-    # Defaults to {owner}/{repository}/charts/{chart}. Override to preserve an existing
-    # publication address, for example hoverkraft-tech/charts for a shared chart registry.
-    oci-repository: ""
-
-    # Chart name to release
-    # This input is required.
-    chart: ""
-
-    # Path to the chart to release
-    # This input is required.
-    path: ""
-
-    # Define charts values to be filled.
-    # See https://mikefarah.gitbook.io/yq/.
-    # Format: `[{ file, path, value }]`.
-    #
-    # Example:
-    #
-    # ```json
-    # [
-    # {
-    # "file": "charts/application/charts/api/values.yaml",
-    # "path": ".image.registry", "value": "ghcr.io"
-    # }
-    # ]
-    # ```
-    values: ""
-
-    # List of Helm repositories to add before release charts.
-    # See https://helm.sh/docs/helm/helm_repo_add/.
-    helm-repositories: ""
-
-    # The release tag to set to chart
-    # This input is required.
-    tag: ""
-
-    # List of YAML paths to update with the tag.
-    # Comma separated list of paths.
-    #
-    # Default: `.version,.appVersion`
-    update-tag-paths: .version,.appVersion
-
-    # The Git ref to checkout before releasing the chart.
-    # Can be a branch, tag or commit SHA.
-    ref: ""
-
-    # Sign the published OCI chart using Cosign and GitHub Actions OIDC.
-    # Enabled by default. Set to `false` to opt out.
-    # Requires `id-token: write` and write access to the OCI registry.
-    # Does not generate a Helm PGP provenance (.prov) file.
-    #
-    # Default: `true`
-    sign: "true"
-````
-
-<!-- usage:end -->
-
 <!-- inputs:start -->
 
 ## Inputs
 
-| **Input**                   | **Description**                                                                                                                                                                                            | **Required** | **Default**                      |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
-| **`oci-registry`**          | OCI registry where to push chart.                                                                                                                                                                          | **true**     | `ghcr.io`                        |
-| **`oci-registry-username`** | OCI registry username.                                                                                                                                                                                     | **true**     | `${{ github.repository_owner }}` |
-| **`oci-registry-password`** | OCI registry password.                                                                                                                                                                                     | **true**     | `${{ github.token }}`            |
-| **`oci-repository`**        | OCI namespace without the registry or final chart name.                                                                                                                                                    | **false**    | -                                |
-|                             | Defaults to {owner}/{repository}/charts/{chart}. Override to preserve an existing                                                                                                                          |              |                                  |
-|                             | publication address, for example hoverkraft-tech/charts for a shared chart registry.                                                                                                                       |              |                                  |
-| **`chart`**                 | Chart name to release                                                                                                                                                                                      | **true**     | -                                |
-| **`path`**                  | Path to the chart to release                                                                                                                                                                               | **true**     | -                                |
-| **`values`**                | Define charts values to be filled.                                                                                                                                                                         | **false**    | -                                |
-|                             | See <https://mikefarah.gitbook.io/yq/>.                                                                                                                                                                    |              |                                  |
-|                             | Format: `[{ file, path, value }]`.                                                                                                                                                                         |              |                                  |
-|                             |                                                                                                                                                                                                            |              |                                  |
-|                             | Example:                                                                                                                                                                                                   |              |                                  |
-|                             |                                                                                                                                                                                                            |              |                                  |
-|                             | <!-- textlint-disable --><pre lang="json">[&#13; {&#13; "file": "charts/application/charts/api/values.yaml",&#13; "path": ".image.registry", "value": "ghcr.io"&#13; }&#13;]</pre><!-- textlint-enable --> |              |                                  |
-| **`helm-repositories`**     | List of Helm repositories to add before release charts.                                                                                                                                                    | **false**    | -                                |
-|                             | See <https://helm.sh/docs/helm/helm_repo_add/>.                                                                                                                                                            |              |                                  |
-| **`tag`**                   | The release tag to set to chart                                                                                                                                                                            | **true**     | -                                |
-| **`update-tag-paths`**      | List of YAML paths to update with the tag.                                                                                                                                                                 | **false**    | `.version,.appVersion`           |
-|                             | Comma separated list of paths.                                                                                                                                                                             |              |                                  |
-| **`ref`**                   | The Git ref to checkout before releasing the chart.                                                                                                                                                        | **false**    | -                                |
-|                             | Can be a branch, tag or commit SHA.                                                                                                                                                                        |              |                                  |
-| **`sign`**                  | Sign the published OCI chart using Cosign and GitHub Actions OIDC.                                                                                                                                         | **false**    | `true`                           |
-|                             | Enabled by default. Set to `false` to opt out.                                                                                                                                                             |              |                                  |
-|                             | Requires `id-token: write` and write access to the OCI registry.                                                                                                                                           |              |                                  |
-|                             | Does not generate a Helm PGP provenance (.prov) file.                                                                                                                                                      |              |                                  |
+| **Input**                   | **Description**                                                                       | **Required** | **Default**                       |
+| --------------------------- | ------------------------------------------------------------------------------------- | ------------ | --------------------------------- |
+| **`oci-registry`**          | OCI registry where to push chart.                                                     | **true**     | `ghcr.io`                         |
+| **`oci-registry-username`** | OCI registry username.                                                                | **true**     | `${{ github.repository_owner }}`  |
+| **`oci-registry-password`** | OCI registry password.                                                                | **true**     | `${{ github.token }}`             |
+| **`oci-repository`**        | OCI namespace without the registry or final chart name.                               | **false**    | `${{ github.repository }}/charts` |
+|                             | Defaults to {owner}/{repository}/charts. The archive supplies its chart name/version. |              |                                   |
+|                             | Set this explicitly to preserve a different publication namespace.                    |              |                                   |
+| **`archive`**               | Path to the prepared .tgz archive. Relative paths use the current working directory.  | **true**     | -                                 |
+| **`checksum`**              | Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters.        | **true**     | -                                 |
+| **`sign`**                  | Sign the published OCI chart using Cosign and GitHub Actions OIDC.                    | **false**    | `true`                            |
+|                             | Enabled by default. Set to `false` to opt out.                                        |              |                                   |
+|                             | Requires `id-token: write` and write access to the OCI registry.                      |              |                                   |
+|                             | Does not generate a Helm PGP provenance (.prov) file.                                 |              |                                   |
 
 <!-- inputs:end -->
-
 <!-- secrets:start -->
 <!-- secrets:end -->
-
 <!-- outputs:start -->
 
 ## Outputs
@@ -176,89 +66,8 @@ When calling this action through a reusable workflow, grant `id-token: write` in
 | **`image-digest`** | Immutable chart reference (Format: `{registry}/{repository}/{image}@sha256:...`). |
 
 <!-- outputs:end -->
-
 <!-- examples:start -->
 <!-- examples:end -->
-
-## Signing and verification
-
-This repository's standard for OCI chart releases is keyless Cosign signing over the immutable digest described in [ADR 0001](../../../docs/adr/0001-sign-oci-helm-charts-with-keyless-cosign.md).
-Signing is enabled by default. Use `image-digest` for downstream verification and installation.
-Set `sign: "false"` only for workflows that intentionally opt out or cannot grant `id-token: write`.
-The action reuses [Sign Helm Chart](../sign-chart/README.md), which itself uses [Sign images](../../docker/sign-images/README.md) with GitHub Actions OIDC, so no signing key secret is needed.
-A signing failure fails the action; the chart has already been pushed and remains in the registry.
-The `digest` and `image-digest` outputs are also available when signing is disabled.
-The `image` output contains the tag published by Helm, including its normalization of SemVer build metadata (`+` becomes `_`).
-
-Keyless signing uses Sigstore's public trust services and transparency log.
-Signing identities and signature metadata become public, including for private charts; chart contents remain in the registry.
-
-### Release a chart with default signing
-
-This example uses the action and sample chart from a checkout of this repository.
-In another repository, use the release-chart action pinned to a commit containing signing support and set `path` to your chart.
-
-```yaml
-name: Release chart
-on:
-  workflow_dispatch:
-
-permissions: {}
-
-jobs:
-  release-chart:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    outputs:
-      image-digest: ${{ steps.release-chart.outputs.image-digest }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - id: release-chart
-        uses: ./actions/helm/release-chart
-        with:
-          chart: application
-          path: tests/charts/application
-          tag: 1.2.3
-          helm-repositories: |
-            valkey https://valkey.io/valkey-helm/
-```
-
-### Verify before installing
-
-Use the `image-digest` output as `chart_ref` and install the same digest after verification succeeds.
-Replace the example repository, workflow filename, and Git ref with the trusted publisher's exact values.
-For private registries, authenticate Cosign and Helm with credentials that can read the chart and signature.
-
-```sh
-set -eu
-chart_ref='ghcr.io/your-org/your-repo/charts/application/your-repo@sha256:<digest>'
-
-cosign verify "$chart_ref" \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  --certificate-identity 'https://github.com/your-org/your-repo/.github/workflows/release-chart.yml@refs/heads/main' \
-  --certificate-github-workflow-repository 'your-org/your-repo'
-
-helm pull "oci://$chart_ref"
-helm install application "oci://$chart_ref"
-```
-
-For a reusable workflow, the certificate identity uses the called workflow's [`job_workflow_ref`](https://github.com/sigstore/fulcio/blob/main/docs/oidc.md#github), including its ref or commit SHA.
-Keep `--certificate-github-workflow-repository` set to the expected caller repository so a different repository invoking the same workflow is not trusted.
-
-Cosign supports [Helm charts as OCI artifacts](https://docs.sigstore.dev/cosign/signing/other_types/).
-These signatures are verified with Cosign. Helm's `--verify` uses [PGP provenance files](https://helm.sh/docs/topics/provenance/),
-which this action does not generate. The [helm-sigstore plugin](https://github.com/sigstore/helm-sigstore#quickstart)
-works with existing signed chart provenance and is not required for this OCI signing flow.
-
-<!--
-// jscpd:ignore-start
--->
-
 <!-- contributing:start -->
 
 ## Contributing
@@ -266,10 +75,8 @@ works with existing signed chart provenance and is not required for this OCI sig
 Contributions are welcome! Please see the [contributing guidelines](https://github.com/hoverkraft-tech/ci-github-container/blob/main/CONTRIBUTING.md) for more details.
 
 <!-- contributing:end -->
-
 <!-- security:start -->
 <!-- security:end -->
-
 <!-- license:start -->
 
 ## License
@@ -283,7 +90,6 @@ Copyright © 2026 hoverkraft
 For more details, see the [license](http://choosealicense.com/licenses/mit/).
 
 <!-- license:end -->
-
 <!-- generated:start -->
 
 ---
@@ -291,7 +97,3 @@ For more details, see the [license](http://choosealicense.com/licenses/mit/).
 This documentation was automatically generated by [CI Dokumentor](https://github.com/hoverkraft-tech/ci-dokumentor).
 
 <!-- generated:end -->
-
-<!--
-// jscpd:ignore-start
--->
