@@ -93,6 +93,7 @@ test("installs only staged content with ordered overlays, retained settings and 
 			async exec(command, args, options) {
 				calls.push(command);
 				assert.equal(options.env.KUBECONFIG, stage.kubeconfig);
+				assert.equal(options.env.CT_SKIP_HELM_DEPENDENCIES, "true");
 				if (command === "kubectl") {
 					if (args.includes("secret")) assert.equal(options.silent, true);
 					else assert.deepEqual(args, ["get", "namespace", "default"]);
@@ -103,7 +104,6 @@ test("installs only staged content with ordered overlays, retained settings and 
 				for (const flag of [
 					"--all=false",
 					"--exclude-deprecated=false",
-					"--skip-helm-dependencies",
 					"--chart-repos=",
 					"--upgrade=false",
 					"--skip-clean-up=false",
@@ -128,6 +128,7 @@ test("installs only staged content with ordered overlays, retained settings and 
 					fs.readFileSync(args[args.indexOf("--config") + 1], "utf8"),
 				);
 				assert.equal(config["release-label"], "instance");
+				assert.equal(config["skip-helm-dependencies"], true);
 				assert.equal(config["print-logs"], false);
 				assert.equal(
 					args[args.indexOf("--helm-extra-args") + 1],
