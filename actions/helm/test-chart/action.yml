@@ -1,18 +1,43 @@
 ---
 name: "Test Helm Chart"
 description: |
-  Install selected source Helm charts in a fresh kind cluster and run their Helm tests
-  using [helm/chart-testing-action](https://github.com/helm/chart-testing-action).
-  Run static validation separately with [Lint Helm Chart](../lint-chart/README.md)
-  before calling this action.
+  Install one prepared Helm chart in a fresh kind cluster and run its Helm tests.
+  Verify its expected SHA-256 before cluster creation and keep the archive unchanged.
+  Uses chart-testing for packaged ci/*-values.yaml scenarios, readiness, Helm tests,
+  diagnostics and release cleanup. Test-only values and registry credentials are overlays.
+  Requires Helm and chart-testing on PATH; checkout and shared tool setup belong to
+  the caller. Source selection and dependency builds belong before Prepare.
+  The action owns its unique kind cluster and isolated chart extraction. Temporary
+  inputs are removed on success, failure or cancellation; kind's post-job hook removes
+  the cluster. The caller retains the original archive.
+  Run [Lint Helm Chart](../lint-chart/README.md) first with the same archive/checksum
+  and values-files. Release and reusable-workflow composition are separate phases.
 author: hoverkraft
 branding:
   icon: check-circle
   color: blue
 
 inputs:
+  archive:
+    description: "Path to the prepared .tgz archive. Relative paths use working-directory."
+    required: true
+  checksum:
+    description: "Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters."
+    required: true
+  config:
+    description: |
+      Chart-testing configuration path relative to working-directory; defaults to ct.yaml when present.
+      Retains installation timeouts, release settings and diagnostic policies. This action controls
+      chart selection, dependency setup, fresh installation, cleanup and debug/configuration output.
+    required: false
+  values-files:
+    description: |
+      Validation-only values files, one path per line relative to working-directory.
+      Applied in order after each packaged ci/*-values.yaml scenario or chart defaults.
+      Later files take precedence. Use the same files with Lint; publication defaults stay unchanged.
+    required: false
   working-directory:
-    description: "Working directory"
+    description: "Writable repository directory for configuration and temporary validation files."
     required: false
     default: "${{ github.workspace }}"
   namespace:
@@ -22,7 +47,7 @@ inputs:
     required: false
   helm-set:
     description: |
-      Set values for Helm chart.
+      Installation-only values, applied after values-files. Never written to the archive.
       Multiple values can be set using multiline string.
       Example:
       ```
@@ -30,13 +55,8 @@ inputs:
       key2=value2
       ```
     required: false
-  helm-repositories:
-    description: |
-      List of Helm repositories to add before testing charts.
-      See https://helm.sh/docs/helm/helm_repo_add/.
-    required: false
   oci-registry:
-    description: "OCI registry where to pull and push images"
+    description: "OCI registry used by the test cluster to pull images"
     default: "ghcr.io"
     required: false
   oci-registry-username:
@@ -52,256 +72,71 @@ inputs:
       See https://github.com/docker/login-action#usage.
     default: ${{ github.token }}
     required: false
-  check-diff-only:
-    description: |
-      Only run installation tests on changed charts.
-    required: false
-    default: "true"
-
 runs:
   using: "composite"
   steps:
-    - uses: hoverkraft-tech/ci-github-common/actions/checkout@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
-      with:
-        fetch-depth: 0
-
-    - name: Check for .tools-version file
-      id: check-tools-version
+    - name: Verify and stage prepared chart
+      id: chart
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        ACTION_PATH: ${{ github.action_path }}
+        ARCHIVE: ${{ inputs.archive }}
+        CHECKSUM: ${{ inputs.checksum }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        CONFIG: ${{ inputs.config }}
+        VALUES_FILES: ${{ inputs.values-files }}
+        NAMESPACE: ${{ inputs.namespace }}
       with:
         script: |
-          const fs = require('node:fs');
-          const path = require('node:path');
-
-          const workingDirectory = path.resolve(
-            process.env.GITHUB_WORKSPACE ?? '.',
-            process.env.WORKING_DIRECTORY ?? '.',
-          );
-          const toolsVersionPath = path.join(
-            workingDirectory,
-            '.tools-version',
-          );
-
-          core.setOutput(
-            'tools-version-exists',
-            fs.existsSync(toolsVersionPath) ? 'true' : 'false',
-          );
-
-    - name: Install tools with asdf
-      if: ${{ steps.check-tools-version.outputs.tools-version-exists == 'true' }}
-      uses: asdf-vm/actions/install@b7bcd026f18772e44fe1026d729e1611cc435d47 # v4.0.1
-
-    - name: Check for ct.yaml file
-      id: check-ct-yaml
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        WORKING_DIRECTORY: ${{ inputs.working-directory }}
-      with:
-        script: |
-          const fs = require('node:fs');
-          const path = require('node:path');
-
-          const workingDirectory = path.resolve(
-            process.env.GITHUB_WORKSPACE ?? '.',
-            process.env.WORKING_DIRECTORY ?? '.',
-          );
-          const ctConfigPath = path.join(workingDirectory, 'ct.yaml');
-
-          if (fs.existsSync(ctConfigPath)) {
-            core.setOutput('path', 'ct.yaml');
-          }
-
-    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-
-    - name: Set up chart-testing
-      uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
-
-    - name: Prepare chart dependencies
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        WORKING_DIRECTORY: ${{ inputs.working-directory }}
-        HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
-      with:
-        script: |
-          const path = require('node:path');
-          const workingDirectory = path.resolve(
-            process.env.GITHUB_WORKSPACE ?? '.',
-            process.env.WORKING_DIRECTORY ?? '.',
-          );
-          const repositories = (process.env.HELM_REPOSITORIES ?? '')
-            .split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-          for (const repository of repositories) {
-            await exec.exec('helm', ['repo', 'add', ...repository.split(/\s+/)]);
-          }
-
-          const globber = await glob.create(`${workingDirectory}/**/Chart.yaml`, { followSymbolicLinks: false });
-          const chartDirectories = [];
-          for await (const file of globber.globGenerator()) {
-            chartDirectories.push(path.dirname(file));
-          }
-          // Keep nested source charts current until Test consumes prepared archives.
-          chartDirectories.sort((a, b) => b.split(path.sep).length - a.split(path.sep).length || a.localeCompare(b));
-          for (const directory of chartDirectories) {
-            await exec.exec('helm', ['dependency', 'build', directory]);
-          }
-
-    - name: Prepare ct variables
-      id: prepare-ct-variables
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        INPUT_CHECK_DIFF_ONLY: ${{ inputs.check-diff-only }}
-        INPUT_NAMESPACE: ${{ inputs.namespace }}
-        CT_CONFIG_PATH: ${{ steps.check-ct-yaml.outputs.path }}
-      with:
-        script: |
-          const { randomUUID } = require('node:crypto');
-
-          const args = [];
-
-          if (process.env.INPUT_CHECK_DIFF_ONLY === 'true') {
-            const targetBranch = context.eventName === 'pull_request'
-              ? context.payload.pull_request?.base?.ref
-              : context.payload.repository?.default_branch;
-
-            if (targetBranch) {
-              args.push('--target-branch', targetBranch);
-            }
-          }
-
-          if (process.env.CT_CONFIG_PATH) {
-            args.push('--config', process.env.CT_CONFIG_PATH);
-          }
-
-          if (args.length === 0) {
-            args.push('--all');
-          }
-
-          core.setOutput('args', args.join(' '));
-          core.setOutput('args-json', JSON.stringify(args));
-          const namespace = process.env.INPUT_NAMESPACE?.trim();
-
-          core.setOutput(
-            'namespace',
-            namespace ||
-              `test-chart-${process.env.GITHUB_RUN_ID}-${randomUUID()}`,
-          );
-
-    - name: Create kind cluster
-      uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
-
-    - name: Install default OCI registry secrets
-      id: oci-registry-secret
-      if: ${{ inputs.oci-registry != '' && inputs.oci-registry-username != '' && inputs.oci-registry-password != '' }}
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        NAMESPACE: ${{ steps.prepare-ct-variables.outputs.namespace }}
-        INPUT_OCI_REGISTRY: ${{ inputs.oci-registry }}
-        INPUT_OCI_REGISTRY_USERNAME: ${{ inputs.oci-registry-username }}
-        INPUT_OCI_REGISTRY_PASSWORD: ${{ inputs.oci-registry-password }}
-      with:
-        script: |
-          const secretName = 'regcred';
-          const namespace = process.env.NAMESPACE;
-
-          core.setOutput('name', secretName);
-
-          const namespaceExists = await exec.exec(
-            'kubectl',
-            ['get', 'namespace', namespace],
-            {
-              ignoreReturnCode: true,
-              silent: true,
-            },
-          );
-
-          if (namespaceExists !== 0) {
-            await exec.exec('kubectl', ['create', 'namespace', namespace]);
-          }
-
-          const secretExists = await exec.exec(
-            'kubectl',
-            ['get', 'secret', secretName, `--namespace=${namespace}`],
-            {
-              ignoreReturnCode: true,
-              silent: true,
-            },
-          );
-
-          if (secretExists === 0) {
-            core.info(
-              `[helm-test-chart] Reusing OCI registry secret '${secretName}' in namespace '${namespace}'.`,
-            );
-            return;
-          }
-
-          await exec.exec('kubectl', [
-            '--context',
-            'kind-chart-testing',
-            'create',
-            'secret',
-            'docker-registry',
-            secretName,
-            `--namespace=${namespace}`,
-            `--docker-server=${process.env.INPUT_OCI_REGISTRY}`,
-            `--docker-username=${process.env.INPUT_OCI_REGISTRY_USERNAME}`,
-            `--docker-password=${process.env.INPUT_OCI_REGISTRY_PASSWORD}`,
-          ]);
-
-    - name: Run chart-testing (install)
-      env:
-        WORKING_DIRECTORY: ${{ inputs.working-directory }}
-        CT_ARGS_JSON: ${{ steps.prepare-ct-variables.outputs.args-json }}
-        NAMESPACE: ${{ steps.prepare-ct-variables.outputs.namespace }}
-        INPUT_HELM_SET: ${{ inputs.helm-set }}
-        OCI_REGISTRY_SECRET: ${{ steps.oci-registry-secret.outputs.name }}
-        HELM_EXPERIMENTAL_OCI: true
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      with:
-        script: |
-          const path = require('node:path');
-
-          const workingDirectory = path.resolve(
-            process.env.GITHUB_WORKSPACE ?? '.',
-            process.env.WORKING_DIRECTORY ?? '.',
-          );
-          const namespace = process.env.NAMESPACE;
-          const ctArgs = JSON.parse(process.env.CT_ARGS_JSON ?? '[]');
-          const helmSetLines = (process.env.INPUT_HELM_SET ?? '').split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0)
-            .map((line) => line.replaceAll(',', '\\,'));
-
-          const ociRegistrySecret = process.env.OCI_REGISTRY_SECRET ?? '';
-          if (ociRegistrySecret) {
-            await exec.exec('kubectl', [
-              'get',
-              'secret',
-              ociRegistrySecret,
-              '--output=yaml',
-              `--namespace=${namespace}`,
-            ]);
-
-            helmSetLines.push(
-              `imagePullSecrets[0].name=${ociRegistrySecret}`,
-            );
-          }
-
-          const installArgs = [
-            'install',
-            ...ctArgs,
-            '--namespace',
-            namespace,
-          ];
-
-          if (helmSetLines.length > 0) {
-            installArgs.push(
-              '--helm-extra-set-args',
-              `--set=${helmSetLines.join(',')}`,
-            );
-          }
-
-          await exec.exec('ct', installArgs, {
-            cwd: workingDirectory,
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { stageChart } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist/index.js')));
+          const chart = stageChart({
+            archive: process.env.ARCHIVE,
+            expectedChecksum: process.env.CHECKSUM,
+            workingDirectory: process.env.WORKING_DIRECTORY,
+            config: process.env.CONFIG,
+            valuesFiles: process.env.VALUES_FILES,
+            namespace: process.env.NAMESPACE,
           });
+          core.setOutput('directory', chart.directory);
+          core.setOutput('cluster-name', chart.clusterName);
+          core.setOutput('kubeconfig', chart.kubeconfig);
+
+    - name: Create fresh kind cluster
+      uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+      with:
+        cluster_name: ${{ steps.chart.outputs.cluster-name }}
+        kubeconfig: ${{ steps.chart.outputs.kubeconfig }}
+
+    - name: Install and test prepared chart
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DIRECTORY: ${{ steps.chart.outputs.directory }}
+        HELM_SET: ${{ inputs.helm-set }}
+        OCI_REGISTRY: ${{ inputs.oci-registry }}
+        OCI_REGISTRY_USERNAME: ${{ inputs.oci-registry-username }}
+        OCI_REGISTRY_PASSWORD: ${{ inputs.oci-registry-password }}
+      with:
+        script: |
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { installChart } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'dist/index.js')));
+          await installChart({
+            exec,
+            directory: process.env.DIRECTORY,
+            helmSet: process.env.HELM_SET,
+            registry: process.env.OCI_REGISTRY,
+            username: process.env.OCI_REGISTRY_USERNAME,
+            password: process.env.OCI_REGISTRY_PASSWORD,
+          });
+
+    - name: Clean test inputs
+      if: ${{ always() && steps.chart.outputs.directory != '' }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        DIRECTORY: ${{ steps.chart.outputs.directory }}
+      with:
+        script: |
+          require('node:fs').rmSync(process.env.DIRECTORY, { recursive: true, force: true });
