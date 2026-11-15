@@ -28,7 +28,7 @@
 Finalize and package one root Helm chart with its local dependencies.
 Applies chart metadata and published values, builds locked dependencies from
 children to parents, then returns one archive and its SHA-256 checksum.
-Requires Helm on PATH and source already checked out. Does not lint, test,
+Ensures Helm is available, reusing an existing installation. Source must already be checked out. Does not lint, test,
 publish or sign. Complete generated chart files before calling this action.
 Reuse the archive within the job; upload it with its checksum for later jobs.
 The caller owns successful archive cleanup. Failed packaging removes its output.
