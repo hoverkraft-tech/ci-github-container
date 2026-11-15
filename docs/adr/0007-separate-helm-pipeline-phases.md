@@ -280,6 +280,19 @@ no longer depends on that later increment. Existing public-action integrations
 exercise automatic setup and preservation of caller-provided configuration across
 repeated calls, using the same fixtures, runners and cluster.
 
+### Prepare integration review: 2026-11-15
+
+[Review on PR #975](https://github.com/hoverkraft-tech/ci-github-container/pull/975#discussion_r4579823646)
+identified that Prepare's standalone integration runner bypassed the public action
+and ran after the workflow's assertions. Move its scenarios into the existing
+Arrange/Act/Assert workflow: create stale nested packages and locked dependencies,
+invoke `helm/prepare-chart` through `uses:` for each preparation, then inspect all
+archives and failure outcomes in the final assertion step. Retain changed-input,
+appVersion-only, literal-value, external-lock and failed-update isolation checks.
+Remove the standalone runner and package script. Reuse one runner and the existing
+umbrella fixture; cleanup remains unconditional. Unit/distribution tests continue
+covering implementation helpers separately.
+
 ## Consequences and limits
 
 This separates validation from publication and avoids repeated preparation in the

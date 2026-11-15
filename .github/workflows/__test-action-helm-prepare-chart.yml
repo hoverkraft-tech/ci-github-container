@@ -24,7 +24,7 @@ jobs:
       test: '{"comment":false,"report-group":"test-action-helm-prepare-chart"}'
 
   integration:
-    name: Prepare chart archive with Helm
+    name: Prepare nested chart archives with Helm
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,43 +37,198 @@ jobs:
         with:
           working-directory: actions/helm/prepare-chart
 
-      - name: Prepare existing application fixture
-        id: prepare
-        uses: $/actions/helm/prepare-chart
-        with:
-          path: tests/charts/application
-          name: prepared-application
-          tag: "1.2.3"
-          helm-repositories: |
-            valkey https://valkey.io/valkey-helm/
+      - name: Arrange - Tools for generating stale dependency packages
+        uses: $/actions/helm/setup
 
-      - name: Check public archive outputs
+      - name: Arrange - Nested sources, locked dependencies and published values
+        id: arrange
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          ARCHIVE: ${{ steps.prepare.outputs.archive }}
-          CHECKSUM: ${{ steps.prepare.outputs.checksum }}
-        with:
-          script: |
-            const assert = require('node:assert/strict');
-            const fs = require('node:fs');
-            const { createHash } = require('node:crypto');
-            assert.match(process.env.CHECKSUM, /^[a-f0-9]{64}$/);
-            assert.equal(createHash('sha256').update(fs.readFileSync(process.env.ARCHIVE)).digest('hex'), process.env.CHECKSUM);
-            const result = await exec.getExecOutput('helm', ['show', 'chart', process.env.ARCHIVE]);
-            assert.match(result.stdout, /^name: prepared-application$/m);
-            assert.match(result.stdout, /^version: 1\.2\.3$/m);
-
-      - name: Test nested chart preparation with Helm
-        working-directory: actions/helm/prepare-chart
-        run: npm run test:integration
-
-      - name: Clean prepared archive
-        if: ${{ always() && steps.prepare.outputs.archive != '' }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          ARCHIVE: ${{ steps.prepare.outputs.archive }}
         with:
           script: |
             const fs = require('node:fs');
             const path = require('node:path');
-            fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
+            const yaml = require(path.resolve('actions/helm/prepare-chart/node_modules/yaml'));
+            fs.mkdirSync('.cache/agent-work', { recursive: true });
+            const directory = fs.mkdtempSync('.cache/agent-work/helm-preparation-');
+            core.setOutput('directory', directory);
+            const chart = path.join(directory, 'umbrella chart');
+            core.setOutput('chart', chart);
+            fs.cpSync('tests/charts/umbrella-application', chart, { recursive: true });
+            for (const [variable, child] of Object.entries({ HELM_CACHE_HOME: 'cache', HELM_CONFIG_HOME: 'config', HELM_DATA_HOME: 'data' })) {
+              core.exportVariable(variable, path.resolve(directory, child));
+            }
+            const appPath = path.join(chart, 'charts/app');
+            const leafPath = path.join(appPath, 'charts/leaf');
+            fs.mkdirSync(path.join(leafPath, 'templates'), { recursive: true });
+            fs.writeFileSync(path.join(leafPath, 'Chart.yaml'), 'apiVersion: v2\nname: leaf\nversion: 0.0.0\n');
+            const appFile = path.join(appPath, 'Chart.yaml');
+            const app = yaml.parse(fs.readFileSync(appFile, 'utf8'));
+            app.dependencies = [{
+              name: 'leaf', version: '>=0.0.0 <1.0.0', repository: 'file://./charts/leaf',
+              'import-values': [{ parent: 'settings', child: 'exports.defaults' }],
+            }];
+            fs.writeFileSync(appFile, yaml.stringify(app));
+            const template = path.join(leafPath, 'templates/current.yaml');
+            fs.writeFileSync(template, '# stale nested source\n');
+            await exec.exec('helm', ['dependency', 'update', appPath]);
+            await exec.exec('helm', ['repo', 'add', 'valkey', 'https://valkey.io/valkey-helm/']);
+            const rootFile = path.join(chart, 'Chart.yaml');
+            const root = yaml.parse(fs.readFileSync(rootFile, 'utf8'));
+            root.dependencies.find(dependency => dependency.name === 'valkey').repository = '@valkey';
+            fs.writeFileSync(rootFile, yaml.stringify(root));
+            await exec.exec('helm', ['dependency', 'update', chart]);
+            const external = yaml.parse(fs.readFileSync(path.join(chart, 'Chart.lock'), 'utf8'))
+              .dependencies.find(dependency => dependency.name === 'valkey');
+            core.setOutput('external', JSON.stringify(external));
+            const invalidChart = path.join(directory, 'invalid values chart');
+            fs.cpSync(chart, invalidChart, { recursive: true });
+            core.setOutput('invalid-chart', invalidChart);
+            fs.writeFileSync(path.join(directory, 'original-values.yaml'), fs.readFileSync(path.join(chart, 'values.yaml')));
+            fs.writeFileSync(template, '# current nested source 1.2.3\n');
+            const literal = `quoted ' " value $(exit 19)`;
+            core.setOutput('literal', literal);
+            for (const [name, tag] of [['initial', '1.2.3'], ['changed', '2.0.0'], ['app-only', '3.0.0']]) {
+              core.setOutput(`${name}-values`, JSON.stringify([
+                { file: 'charts/app/values.yaml', path: '.image.tag', value: tag },
+                { path: '.publishedLiteral', value: literal },
+              ]));
+            }
+
+      - name: Act - Reject a missing values file before later writes
+        id: invalid
+        continue-on-error: true
+        uses: $/actions/helm/prepare-chart
+        with:
+          path: ${{ steps.arrange.outputs.invalid-chart }}
+          values: |
+            [
+              { "file": "missing/values.yaml", "path": ".invalid", "value": "invalid" },
+              { "path": ".mustNotBeWritten", "value": "later update" }
+            ]
+
+      - name: Act - Prepare current nested sources over stale packages
+        id: initial
+        uses: $/actions/helm/prepare-chart
+        with:
+          path: ${{ steps.arrange.outputs.chart }}
+          name: prepared
+          tag: "1.2.3"
+          values: ${{ steps.arrange.outputs.initial-values }}
+
+      - name: Arrange - Change the previously packaged nested source
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CHART: ${{ steps.arrange.outputs.chart }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            fs.writeFileSync(path.join(process.env.CHART, 'charts/app/charts/leaf/templates/current.yaml'), '# current nested source 2.0.0\n');
+
+      - name: Act - Reprepare changed inputs in the same source directory
+        id: changed
+        uses: $/actions/helm/prepare-chart
+        with:
+          path: ${{ steps.arrange.outputs.chart }}
+          name: prepared
+          tag: "2.0.0"
+          values: ${{ steps.arrange.outputs.changed-values }}
+
+      - name: Arrange - Change the application without changing local chart versions
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CHART: ${{ steps.arrange.outputs.chart }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            fs.writeFileSync(path.join(process.env.CHART, 'charts/app/charts/leaf/templates/current.yaml'), '# current nested source 3.0.0\n');
+
+      - name: Act - Package a new root version with unchanged local chart versions
+        id: app-only
+        uses: $/actions/helm/prepare-chart
+        with:
+          path: ${{ steps.arrange.outputs.chart }}
+          name: prepared
+          tag: "3.0.0"
+          update-tag-paths: .appVersion
+          values: ${{ steps.arrange.outputs.app-only-values }}
+
+      - name: Assert - Archive contents, changed inputs and failure isolation
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DIRECTORY: ${{ steps.arrange.outputs.directory }}
+          CHART: ${{ steps.arrange.outputs.chart }}
+          INVALID_CHART: ${{ steps.arrange.outputs.invalid-chart }}
+          INVALID_OUTCOME: ${{ steps.invalid.outcome }}
+          INVALID_ARCHIVE: ${{ steps.invalid.outputs.archive }}
+          EXTERNAL: ${{ steps.arrange.outputs.external }}
+          LITERAL: ${{ steps.arrange.outputs.literal }}
+          ARCHIVES: |
+            {
+              "initial": ${{ toJSON(steps.initial.outputs) }},
+              "changed": ${{ toJSON(steps.changed.outputs) }},
+              "app-only": ${{ toJSON(steps.app-only.outputs) }}
+            }
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { createHash } = require('node:crypto');
+            const yaml = require(path.resolve('actions/helm/prepare-chart/node_modules/yaml'));
+            const readYaml = file => yaml.parse(fs.readFileSync(file, 'utf8'));
+            const checksum = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+            const archives = JSON.parse(process.env.ARCHIVES);
+            const external = JSON.parse(process.env.EXTERNAL);
+            assert.equal(process.env.INVALID_OUTCOME, 'failure');
+            assert.equal(process.env.INVALID_ARCHIVE, '');
+            assert.equal(
+              fs.readFileSync(path.join(process.env.INVALID_CHART, 'values.yaml'), 'utf8'),
+              fs.readFileSync(path.join(process.env.DIRECTORY, 'original-values.yaml'), 'utf8'),
+            );
+            for (const [name, tag, localVersion] of [['initial', '1.2.3', '1.2.3'], ['changed', '2.0.0', '2.0.0'], ['app-only', '3.0.0', '2.0.0']]) {
+              const result = archives[name];
+              assert.match(result.checksum, /^[a-f0-9]{64}$/);
+              assert.equal(path.isAbsolute(result.archive), true);
+              assert.equal(checksum(result.archive), result.checksum);
+              const extract = path.join(process.env.DIRECTORY, `extracted-${name}`);
+              fs.mkdirSync(extract);
+              await exec.exec('tar', ['-xzmf', result.archive, '-C', extract]);
+              const prepared = path.join(extract, 'prepared');
+              const metadata = readYaml(path.join(prepared, 'Chart.yaml'));
+              assert.equal(metadata.name, 'prepared');
+              assert.equal(metadata.version, tag);
+              assert.equal(metadata.appVersion, tag);
+              assert.equal(readYaml(path.join(prepared, 'values.yaml')).publishedLiteral, process.env.LITERAL);
+              assert.equal(metadata.dependencies.find(dependency => dependency.name === 'app').version, localVersion);
+              assert.equal(fs.readFileSync(path.join(prepared, 'charts/app/charts/leaf/templates/current.yaml'), 'utf8'), `# current nested source ${tag}\n`);
+              assert.equal(readYaml(path.join(prepared, 'charts/app/values.yaml')).image.tag, tag);
+              assert.equal(readYaml(path.join(prepared, 'charts/app/charts/leaf/Chart.yaml')).version, localVersion);
+              assert.equal(readYaml(path.join(prepared, 'charts/valkey/Chart.yaml')).version, external.version);
+              assert.deepEqual(readYaml(path.join(prepared, 'Chart.lock')).dependencies.find(dependency => dependency.name === 'valkey'), external);
+            }
+            assert.deepEqual(readYaml(path.join(process.env.CHART, 'Chart.lock')).dependencies.find(dependency => dependency.name === 'valkey'), external);
+            assert.equal(new Set(Object.values(archives).map(result => result.archive)).size, 3);
+            assert.equal(new Set(Object.values(archives).map(result => result.checksum)).size, 3);
+
+      - name: Clean fixtures and prepared archives
+        if: ${{ always() }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DIRECTORY: ${{ steps.arrange.outputs.directory }}
+          ARCHIVES: |
+            [
+              "${{ steps.invalid.outputs.archive }}",
+              "${{ steps.initial.outputs.archive }}",
+              "${{ steps.changed.outputs.archive }}",
+              "${{ steps.app-only.outputs.archive }}"
+            ]
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            for (const archive of JSON.parse(process.env.ARCHIVES).filter(Boolean)) {
+              fs.rmSync(path.dirname(archive), { recursive: true, force: true });
+            }
+            if (process.env.DIRECTORY) fs.rmSync(process.env.DIRECTORY, { recursive: true, force: true });
