@@ -107,6 +107,7 @@ runs:
       uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
       with:
         cluster_name: ${{ steps.chart.outputs.cluster-name }}
+        registry_name: ${{ steps.chart.outputs.cluster-name }}-registry
         kubeconfig: ${{ steps.chart.outputs.kubeconfig }}
 
     - name: Install and test prepared chart
