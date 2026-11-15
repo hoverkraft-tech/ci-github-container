@@ -24,7 +24,7 @@
 # Pin callers to a reviewed release SHA. See [ADR 0009](../../docs/adr/0009-compose-helm-validation-and-release-workflows.md).
 ---
 name: Helm chart CI
-on:
+"on":
   workflow_call:
     inputs:
       path:
