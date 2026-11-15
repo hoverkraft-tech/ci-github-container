@@ -127,6 +127,7 @@ function stageChart({
 			stagedConfig,
 			JSON.stringify({
 				...settings,
+				"skip-helm-dependencies": true,
 				"helm-extra-set-args": extraSetArgs.join(" ").trim(),
 			}),
 		);
@@ -184,7 +185,12 @@ async function installChart({
 		verifyInputs(state);
 		const options = {
 			cwd: state.cwd,
-			env: { ...process.env, KUBECONFIG: state.kubeconfig },
+			// ct install reads this setting but exposes the CLI flag only for lint.
+			env: {
+				...process.env,
+				KUBECONFIG: state.kubeconfig,
+				CT_SKIP_HELM_DEPENDENCIES: "true",
+			},
 		};
 		const exists = await exec.exec(
 			"kubectl",
@@ -231,7 +237,6 @@ async function installChart({
 				path.relative(state.cwd, state.chart),
 				"--all=false",
 				"--exclude-deprecated=false",
-				"--skip-helm-dependencies",
 				"--chart-repos=",
 				"--upgrade=false",
 				"--skip-clean-up=false",
