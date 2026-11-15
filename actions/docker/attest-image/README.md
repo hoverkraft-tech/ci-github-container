@@ -74,7 +74,7 @@ permissions:
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/attest-image@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/attest-image@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
   with:
     # Image to attest.
     # It must be identified by an immutable digest reference in the format `registry/name:tag@digest`.
@@ -163,7 +163,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main@${{ steps.build.outputs.digest }}
 
       # 3. Attest build provenance (GitHub-native attestation)
-      - uses: hoverkraft-tech/ci-github-container/actions/docker/attest-image@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
+      - uses: hoverkraft-tech/ci-github-container/actions/docker/attest-image@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main@${{ steps.build.outputs.digest }}
 ```

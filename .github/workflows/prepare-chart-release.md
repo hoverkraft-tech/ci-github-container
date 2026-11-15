@@ -69,7 +69,7 @@ on:
 permissions: {}
 jobs:
   prepare-chart-release:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/prepare-chart-release.yml@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/prepare-chart-release.yml@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
     permissions:
       actions: write
       contents: write
