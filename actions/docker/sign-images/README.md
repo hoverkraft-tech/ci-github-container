@@ -46,7 +46,7 @@ permissions:
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/sign-images@d6569ca423f29f68152ee561f51f7de0c08db709 # 1.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/sign-images@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
   with:
     # Images to sign.
     # Can be a single image or a list of images separated by commas or newlines or spaces.
