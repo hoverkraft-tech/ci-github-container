@@ -99,7 +99,10 @@ jobs:
           checksum: ${{ steps.prepare.outputs.checksum }}
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}
-          oci-repository: ${{ matrix.chart.name == 'application' && matrix.sign == false && format('{0}/charts/custom-release-test', github.repository) || format('{0}/charts/{1}-test', github.repository, matrix.chart.name) }}
+          oci-repository: >-
+            ${{ matrix.chart.name == 'application' && matrix.sign == false
+              && format('{0}/charts/custom-release-test', github.repository)
+              || format('{0}/charts/{1}-test', github.repository, matrix.chart.name) }}
           sign: ${{ matrix.sign }}
 
       - name: Check release chart output
