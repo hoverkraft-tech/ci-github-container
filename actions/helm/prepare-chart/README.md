@@ -40,7 +40,7 @@ The caller owns successful archive cleanup. Failed packaging removes its output.
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-chart@d6569ca423f29f68152ee561f51f7de0c08db709 # 1.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-chart@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
   with:
     # Path to one root chart containing Chart.yaml, not a directory of charts.
     # This input is required.
