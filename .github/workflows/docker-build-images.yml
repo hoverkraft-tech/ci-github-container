@@ -433,7 +433,7 @@ jobs:
       issues: read
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -511,7 +511,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
@@ -529,7 +529,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@2fa562bd44f9e752a99a374c85ae14644e7f2bdd # 4.2.2
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 
