@@ -1,0 +1,56 @@
+---
+name: "Helm - Setup"
+description: |
+  Ensure Helm is available, optionally with chart-testing, Yamale and yamllint.
+  Reuse executables already on PATH and preserve their configuration. Missing tools
+  are installed through the Helm and verified chart-testing installers.
+  Prepare, Lint and Test call this action automatically; no separate setup step is required.
+  To select tool versions, install them before calling the phase actions.
+  Checkout and source generation remain caller-owned.
+author: hoverkraft
+branding:
+  icon: anchor
+  color: blue
+
+inputs:
+  chart-testing:
+    description: "Ensure chart-testing and its Yamale/yamllint dependencies are available in addition to Helm."
+    default: "false"
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Detect installed tools
+      id: tools
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        CHART_TESTING: ${{ inputs.chart-testing }}
+      with:
+        script: |
+          if (!['true', 'false'].includes(process.env.CHART_TESTING)) {
+            throw new Error('chart-testing must be true or false.');
+          }
+          core.setOutput('install-helm', !(await io.which('helm', false)));
+          if (process.env.CHART_TESTING === 'true') {
+            const paths = await Promise.all(['ct', 'yamale', 'yamllint'].map(tool => io.which(tool, false)));
+            core.setOutput('install-chart-testing', paths.some(path => !path));
+          }
+
+    - name: Install Helm
+      if: steps.tools.outputs.install-helm == 'true'
+      uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+
+    - name: Install chart-testing and validation tools
+      if: steps.tools.outputs.install-chart-testing == 'true'
+      uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
+
+    - name: Verify required tools
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        CHART_TESTING: ${{ inputs.chart-testing }}
+      with:
+        script: |
+          const tools = ['helm'];
+          if (process.env.CHART_TESTING === 'true') tools.push('ct', 'yamale', 'yamllint');
+          for (const tool of tools) await io.which(tool, true);

@@ -53,6 +53,8 @@ _Actions dedicated to packaging, validating, signing, and publishing Helm charts
 
 #### - [Parse chart URI](actions/helm/parse-chart-uri/README.md)
 
+#### - [Setup](actions/helm/setup/README.md)
+
 #### - [Sign chart](actions/helm/sign-chart/README.md)
 
 #### - [Update chart values](actions/helm/update-chart-values/README.md)

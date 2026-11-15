@@ -59,10 +59,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
-
-      - uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
-
       - name: Arrange - Packaged scenario requires validation overlays
         run: 'echo "replicaCount: invalid" > tests/charts/application/ci/empty-values.yaml'
 
