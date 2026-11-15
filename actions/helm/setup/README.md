@@ -36,7 +36,7 @@ Checkout and source generation remain caller-owned.
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/setup@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/setup@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
   with:
     # Ensure chart-testing and its Yamale/yamllint dependencies are available in addition to Helm.
     # Default: `false`
