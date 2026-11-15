@@ -29,8 +29,8 @@ lint checks on an isolated extraction, including packaged ci/*-values.yaml scena
 Also renders each scenario with Helm to reject required/fail errors that lint mode
 permits. Rendering uses the same values and shared Helm options; rendered manifests
 are kept out of logs. ct namespace/release-name settings apply to rendering when set.
-Requires Helm, chart-testing, yamale and yamllint on PATH. Checkout and tool setup
-belong to the caller. Dependencies come from the archive and are never rebuilt.
+Ensures Helm, chart-testing, Yamale and yamllint are available, reusing existing installations.
+Checkout belongs to the caller. Dependencies come from the archive and are never rebuilt.
 Temporary extraction and validation overlays are removed after success or failure;
 the caller retains the original archive. Custom commands must leave validation inputs unchanged.
 This explicitly selected chart follows ct --charts semantics: source change detection

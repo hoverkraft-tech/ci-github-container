@@ -27,8 +27,8 @@ Install one prepared Helm chart in a fresh kind cluster and run its Helm tests.
 Verify its expected SHA-256 before cluster creation and keep the archive unchanged.
 Uses chart-testing for packaged ci/*-values.yaml scenarios, readiness, Helm tests,
 diagnostics and release cleanup. Test-only values and registry credentials are overlays.
-Requires Helm and chart-testing on PATH; checkout and shared tool setup belong to
-the caller. Source selection and dependency builds belong before Prepare.
+Ensures Helm and chart-testing are available, reusing existing installations.
+Checkout belongs to the caller. Source selection and dependency builds belong before Prepare.
 The action owns its unique kind cluster and isolated chart extraction. Temporary
 inputs are removed on success, failure or cancellation; kind's post-job hook removes
 the cluster. The caller retains the original archive.
