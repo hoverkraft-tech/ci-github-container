@@ -49,7 +49,7 @@ When calling this action through a reusable workflow, grant `id-token: write` in
 ## Usage
 
 ````yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@0592b66c9ed74d8cb7b0c015881ca590fc5d550b # 2.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@82ab4d006bb08077e01a533d73dbcb3058bad8d3 # feat/prepare-chart-releases
   with:
     # OCI registry where to push chart.
     #
@@ -68,6 +68,11 @@ When calling this action through a reusable workflow, grant `id-token: write` in
     # This input is required.
     # Default: `${{ github.token }}`
     oci-registry-password: ${{ github.token }}
+
+    # OCI namespace without the registry or final chart name.
+    # Defaults to {owner}/{repository}/charts/{chart}. Override to preserve an existing
+    # publication address, for example hoverkraft-tech/charts for a shared chart registry.
+    oci-repository: ""
 
     # Chart name to release
     # This input is required.
@@ -131,6 +136,9 @@ When calling this action through a reusable workflow, grant `id-token: write` in
 | **`oci-registry`**          | OCI registry where to push chart.                                                                                                                                                                          | **true**     | `ghcr.io`                        |
 | **`oci-registry-username`** | OCI registry username.                                                                                                                                                                                     | **true**     | `${{ github.repository_owner }}` |
 | **`oci-registry-password`** | OCI registry password.                                                                                                                                                                                     | **true**     | `${{ github.token }}`            |
+| **`oci-repository`**        | OCI namespace without the registry or final chart name.                                                                                                                                                    | **false**    | -                                |
+|                             | Defaults to {owner}/{repository}/charts/{chart}. Override to preserve an existing                                                                                                                          |              |                                  |
+|                             | publication address, for example hoverkraft-tech/charts for a shared chart registry.                                                                                                                       |              |                                  |
 | **`chart`**                 | Chart name to release                                                                                                                                                                                      | **true**     | -                                |
 | **`path`**                  | Path to the chart to release                                                                                                                                                                               | **true**     | -                                |
 | **`values`**                | Define charts values to be filled.                                                                                                                                                                         | **false**    | -                                |

@@ -76,6 +76,7 @@ jobs:
         with:
           oci-registry: ghcr.io
           oci-registry-password: ${{ github.token }}
+          oci-repository: ${{ matrix.chart.name == 'application' && matrix.sign == false && format('{0}/charts/custom-release-test', github.repository) || '' }}
           chart: ${{ matrix.chart.name }}-test
           path: tests/charts/${{ matrix.chart.name }}
           values: ${{ matrix.chart.values }}
@@ -91,11 +92,14 @@ jobs:
           RELEASED_DIGEST: ${{ steps.release-chart.outputs.digest }}
           RELEASED_IMAGE_DIGEST: ${{ steps.release-chart.outputs.image-digest }}
           CHART_NAME: ${{ matrix.chart.name }}
+          SIGN: ${{ matrix.sign }}
           CHART_TAG: ${{ steps.arrange.outputs.tag }}
         with:
           script: |
             const assert = require('node:assert/strict');
-            const image = `ghcr.io/${context.repo.owner}/${context.repo.repo}/charts/${process.env.CHART_NAME}-test/${context.repo.repo}`;
+            const namespace = process.env.CHART_NAME === 'application' && process.env.SIGN === 'false'
+              ? 'custom-release-test' : `${process.env.CHART_NAME}-test`;
+            const image = `ghcr.io/${context.repo.owner}/${context.repo.repo}/charts/${namespace}/${context.repo.repo}`;
             assert.equal(process.env.RELEASED_IMAGE, `${image}:${process.env.CHART_TAG}`);
             assert.match(process.env.RELEASED_DIGEST, /^sha256:[a-f0-9]{64}$/);
             assert.equal(process.env.RELEASED_IMAGE_DIGEST, `${image}@${process.env.RELEASED_DIGEST}`);

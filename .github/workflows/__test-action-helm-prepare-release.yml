@@ -1,0 +1,24 @@
+---
+name: Test for "helm/prepare-release" action
+run-name: Test for "helm/prepare-release" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  continuous-integration:
+    uses: hoverkraft-tech/ci-github-nodejs/.github/workflows/continuous-integration.yml@6dee39a2a74172ea5539caa886a12b32765d5bd1 # 3.0.3
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+    with:
+      working-directory: actions/helm/prepare-release
+      build: ""
+      lint: ""
+      code-ql: '{"languages":"typescript","config-file":".github/codeql/config.yml"}'
+      test: '{"comment":false,"report-group":"test-action-helm-prepare-release"}'

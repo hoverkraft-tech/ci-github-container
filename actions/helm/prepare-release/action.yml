@@ -1,0 +1,92 @@
+name: Prepare Helm release
+description: |
+  Commit chart versions on the default branch and dispatch the caller at an immutable release tag.
+  Manual and scheduled branch runs use ci-github-publish version planning. Tag dispatches
+  verify the committed chart version and default-branch ancestry before returning ready.
+  Published releases return released; unchanged plans return no-changes. No chart is published.
+author: hoverkraft
+branding:
+  icon: bookmark
+  color: blue
+
+inputs:
+  path:
+    description: Repository-relative directory containing the root Chart.yaml
+    required: true
+  update-app-version:
+    description: Also version the bundled application; leave false for charts deploying an independently versioned application
+    default: "false"
+  force:
+    description: Force planning on manual default-branch runs only; tag recovery retains its existing version
+    default: "false"
+  github-token:
+    description: Token permitted to commit versions, create tags and dispatch workflows, with contents/actions write and pull requests read
+    default: ${{ github.token }}
+
+outputs:
+  status:
+    description: no-changes, dispatched, ready or released; only ready should start validation and publication
+    value: ${{ steps.prepare.outputs.status || steps.inspect.outputs.status }}
+  tag:
+    description: Prepared release tag, available for ready, released and dispatched results
+    value: ${{ steps.prepare.outputs.tag || steps.inspect.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - uses: hoverkraft-tech/ci-github-common/actions/checkout@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
+      with:
+        fetch-depth: "0"
+
+    - id: inspect
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CHART_PATH: ${{ inputs.path }}
+        UPDATE_APP_VERSION: ${{ inputs.update-app-version }}
+        FORCE: ${{ inputs.force }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { pathToFileURL } = require('node:url');
+          const { ChartRelease } = await import(pathToFileURL(`${process.env.ACTION_PATH}/dist/index.js`));
+          if (!['true', 'false'].includes(process.env.FORCE)) throw new Error('force must be true or false.');
+          if (!['true', 'false'].includes(process.env.UPDATE_APP_VERSION)) throw new Error('update-app-version must be true or false.');
+          const release = new ChartRelease({ github, context, exec, workspace: process.env.GITHUB_WORKSPACE });
+          const result = await release.inspect({ directory: process.env.CHART_PATH, updateAppVersion: process.env.UPDATE_APP_VERSION === 'true' });
+          for (const [name, value] of Object.entries(result)) core.setOutput(name, value);
+
+    - id: plan
+      if: steps.inspect.outputs.status == 'plan'
+      uses: hoverkraft-tech/ci-github-publish/actions/release/plan@c3cd9bbbc4909bb341bd2aafe50a8673afc58fd0 # 3.0.6
+      with:
+        target-ref: ${{ github.sha }}
+        force: ${{ github.event_name == 'workflow_dispatch' && inputs.force == 'true' }}
+        github-token: ${{ inputs.github-token }}
+
+    - id: prepare
+      if: steps.inspect.outputs.status == 'plan'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CHART_PATH: ${{ inputs.path }}
+        UPDATE_APP_VERSION: ${{ inputs.update-app-version }}
+        SHOULD_RELEASE: ${{ steps.plan.outputs.should-release }}
+        RELEASE_TAG: ${{ steps.plan.outputs.tag }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          if (process.env.SHOULD_RELEASE === 'false') {
+            core.setOutput('status', 'no-changes');
+            return;
+          }
+          if (process.env.SHOULD_RELEASE !== 'true') throw new Error('The release planner did not return a release decision.');
+          const { pathToFileURL } = require('node:url');
+          const { ChartRelease } = await import(pathToFileURL(`${process.env.ACTION_PATH}/dist/index.js`));
+          const release = new ChartRelease({ github, context, exec, workspace: process.env.GITHUB_WORKSPACE, workflowRef: process.env.GITHUB_WORKFLOW_REF });
+          const result = await release.prepare({
+            directory: process.env.CHART_PATH,
+            tag: process.env.RELEASE_TAG,
+            updateAppVersion: process.env.UPDATE_APP_VERSION === 'true'
+          });
+          for (const [name, value] of Object.entries(result)) core.setOutput(name, value);
