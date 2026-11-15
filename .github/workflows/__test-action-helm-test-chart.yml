@@ -210,7 +210,10 @@ jobs:
                 '--password-stdin', '--registry-config', config], { input: Buffer.from(process.env.GH_TOKEN) });
               await exec.exec('helm', ['pull', `oci://${process.env.IMAGE_DIGEST}`, '--registry-config', config,
                 '--destination', directory]);
-              const archive = fs.readFileSync(path.join(directory, `workflow-application-test-${version}.tgz`));
+              // A digest pull does not promise the filename used by a version pull.
+              const archives = fs.readdirSync(directory).filter(name => name.endsWith('.tgz'));
+              assert.equal(archives.length, 1, 'Expected exactly one downloaded chart archive');
+              const archive = fs.readFileSync(path.join(directory, archives[0]));
               assert.equal(createHash('sha256').update(archive).digest('hex'), process.env.CHECKSUM);
             } finally {
               fs.rmSync(directory, { recursive: true, force: true });
