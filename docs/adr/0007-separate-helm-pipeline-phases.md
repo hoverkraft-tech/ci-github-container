@@ -2,7 +2,7 @@
 
 Date: 2026-11-13
 
-Status: Accepted on 2026-11-13. Prepare released in 1.0.0; Lint implementation in review; remaining phases pending.
+Status: Accepted on 2026-11-13. Prepare and Lint released; Test implementation in review; Release and workflow composition pending.
 
 ## Context
 
@@ -92,8 +92,9 @@ Review and implement one phase at a time using existing fixtures and helpers:
 - [x] Implement Prepare: move final mutations and packaging; verify locked external dependencies, current nested local charts and changed-input invalidation.
 - [x] Review the Prepare implementation and its CI before starting Lint. PR #966 merged and released in 1.0.0.
 - [x] Lint: extract existing static checks; verify invalid metadata, schema or templates fail against the prepared artifact.
-- [ ] Review Lint and its CI before starting Test.
-- [ ] Test: consume that artifact; preserve fresh-cluster readiness, migrations, chart tests, diagnostics and failure/cancellation cleanup.
+- [x] Review Lint and its CI before starting Test. PR #968 merged and released in 2.0.0; Pleey adoption passed and was reviewed on 2026-11-15.
+- [x] Test: consume that artifact; preserve fresh-cluster readiness, migrations, chart tests, diagnostics and failure/cancellation cleanup.
+- [ ] Review the Test implementation and its CI before starting Release.
 - [ ] Release: accept the prepared archive; preserve retries, immutable outputs and signing; reject missing or mismatched artifacts before push.
 - [ ] Compose the reusable workflow; verify failed/skipped/cancelled validation blocks publication and reruns select the correct artifact.
 - [ ] Migrate in-repository callers, fixtures and generated action/workflow docs together, then review and release the complete public contract.
@@ -215,14 +216,54 @@ No additional test image or cluster is introduced. Lint's CI
 must pass and receive review before starting Test. The complete phase workflow
 and performance acceptance remain pending.
 
+### Test increment: 2026-11-15
+
+The user reviewed Pleey's released dependency adoption and authorized the next
+phase. `test-chart` now requires one prepared archive and its SHA-256. It rejects
+missing/mismatched identity and unsafe entries before creating a cluster. It
+installs an isolated extraction of a verified snapshot, never checks out source,
+selects changed charts, registers dependency repositories or rebuilds dependencies.
+The source-oriented `check-diff-only` and `helm-repositories` inputs are removed.
+Checkout, Helm and chart-testing setup belong to the caller, as in Lint.
+
+Keep Test's implementation and bundled dependencies inside its own action. It
+imports no sibling action's JavaScript. It uses the same maintained `tar` and
+`yaml` libraries and distribution workflow as Lint. A shared internal package or
+an extra public staging action is not needed for this increment.
+
+Preserve chart-testing's packaged CI scenarios, readiness waits, Helm tests,
+release settings, timeouts and diagnostics. Ordered `values-files` overlays use
+the same precedence as Lint; `helm-set` remains an installation-only override for
+candidate images and pull secrets. Pass overlays through `helm-extra-set-args`,
+which ct applies only to install/upgrade. Its `helm-extra-args` also reach test and
+uninstall, where values flags are invalid. Force explicit chart selection, no
+upgrades or dependency setup, and release cleanup. Disable ct configuration/debug
+dumps and Helm debug output; registry credentials are not printed.
+
+Each invocation owns a uniquely named kind cluster and kubeconfig. Invalid inputs
+fail before provisioning. Cluster creation keeps kind's post-job cleanup, including
+failure/cancellation; an always-running step removes Test's temporary inputs if
+installation never starts. The installation helper also removes them on success
+or failure. Fingerprints reject changed extracted charts/overlays and checksum
+checks reject changes to the original archive. The caller retains that archive.
+
+Focused source/distribution tests cover the new artifact and cleanup boundaries.
+The existing public-action integration reuses its image and one cluster: a bad
+checksum must fail before cluster creation, and successful installation must use
+the archive after source templates are changed to fail. Conflicting packaged and
+external values verify overlay order. No new image or cluster scenario is added.
+Review CI and this breaking Test contract before implementing Release. The
+unchanged archive's publication and the composed workflow remain separate work;
+this increment does not establish performance acceptance.
+
 ## Consequences and limits
 
 This separates validation from publication and avoids repeated preparation in the
 target pipeline. It adds an artifact handoff to the isolated publication job.
 Performance gains remain unmeasured; this is a responsibility and reuse decision,
 not evidence of a speedup. Existing fresh-install tests, image verification and
-signing remain required. Preparation is released and Lint is implemented for
-review. The complete workflow and remaining phase contracts are not yet available.
+signing remain required. Preparation and Lint are released. Test is implemented for
+review. The complete workflow and Release archive contract are not yet available.
 
 ## References
 

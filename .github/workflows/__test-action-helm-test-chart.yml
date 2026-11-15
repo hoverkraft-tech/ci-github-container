@@ -8,6 +8,21 @@ on: # yamllint disable-line rule:truthy
 permissions: {}
 
 jobs:
+  continuous-integration:
+    uses: hoverkraft-tech/ci-github-nodejs/.github/workflows/continuous-integration.yml@6dee39a2a74172ea5539caa886a12b32765d5bd1 # 3.0.3
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+    with:
+      working-directory: actions/helm/test-chart
+      build: ""
+      lint: ""
+      code-ql: '{"languages":"typescript","config-file":".github/codeql/config.yml"}'
+      test: '{"comment":false,"report-group":"test-action-helm-test-chart"}'
+
   build-test-images:
     uses: $/.github/workflows/docker-build-images.yml
     permissions:
@@ -44,30 +59,102 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Arrange standalone test action
-        run: |
-          mkdir -p .cache/agent-work
-          cp -R actions/helm/test-chart .cache/agent-work/test-chart
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
 
-      - id: test-chart
-        # This runner-created copy is the isolation test target.
-        uses: ./.cache/agent-work/test-chart # zizmor: ignore[self-repository]
+      - uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
+
+      - name: Arrange - Packaged scenario requires validation overlays
+        run: 'echo "replicaCount: invalid" > tests/charts/application/ci/empty-values.yaml'
+
+      - name: Arrange - Prepare existing application fixture
+        id: prepare
+        uses: $/actions/helm/prepare-chart
         with:
-          check-diff-only: false
+          path: tests/charts/application
+          helm-repositories: |
+            valkey https://valkey.io/valkey-helm/
+
+      - name: Arrange - Isolated action, changed source and validation values
+        id: arrange
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'chart-install-tests-'));
+            const workingDirectory = path.join(directory, 'caller with spaces');
+            fs.mkdirSync(workingDirectory);
+            core.setOutput('directory', directory);
+            core.setOutput('working-directory', workingDirectory);
+            fs.writeFileSync(path.join(workingDirectory, 'first values.yaml'), 'replicaCount: invalid\n');
+            fs.writeFileSync(path.join(workingDirectory, 'last values.yaml'), 'replicaCount: 1\n');
+            fs.writeFileSync(path.join(workingDirectory, 'ct.yaml'), JSON.stringify({
+              charts: ['missing-source'], all: true, upgrade: true,
+              'skip-helm-dependencies': false, 'chart-repos': ['unused=https://invalid.invalid'],
+              'skip-clean-up': true,
+            }));
+            fs.writeFileSync('tests/charts/application/templates/source-only.tpl', '{{ fail "source must not be installed" }}');
+            const standalone = '.cache/agent-work/test-chart';
+            fs.mkdirSync(standalone, { recursive: true });
+            fs.copyFileSync('actions/helm/test-chart/action.yml', path.join(standalone, 'action.yml'));
+            fs.cpSync('actions/helm/test-chart/dist', path.join(standalone, 'dist'), { recursive: true });
+
+      - name: Act - Reject checksum mismatch before cluster creation
+        id: mismatch
+        continue-on-error: true
+        uses: ./.cache/agent-work/test-chart # zizmor: ignore[self-repository] Runner-created isolation test target.
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: "0000000000000000000000000000000000000000000000000000000000000000"
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+
+      - name: Act - Install unchanged archive with validation overlays
+        id: test-chart
+        uses: ./.cache/agent-work/test-chart # zizmor: ignore[self-repository] Runner-created isolation test target.
+        with:
+          archive: ${{ steps.prepare.outputs.archive }}
+          checksum: ${{ steps.prepare.outputs.checksum }}
+          working-directory: ${{ steps.arrange.outputs.working-directory }}
+          values-files: |
+            first values.yaml
+            last values.yaml
           namespace: chart-testing
           helm-set: |
             image.tag=${{ fromJson(needs.build-test-images.outputs.built-images).application-test.tags[0] }}
             image.digest=${{ fromJson(needs.build-test-images.outputs.built-images).application-test.digest }}
-          helm-repositories: |
-            valkey https://valkey.io/valkey-helm/
           oci-registry: ghcr.io
           oci-registry-username: ${{ github.repository_owner }}
           oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The action's checkout can remove the fixture. Post-job hooks reload its manifest.
-      # Keep this copy until the hosted runner disposes of the workspace after those hooks.
-      - name: Restore standalone action for post-job hooks
+      - name: Assert - Artifact identity, outcomes and temporary cleanup
+        if: ${{ !cancelled() && steps.arrange.outcome == 'success' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+          CHECKSUM: ${{ steps.prepare.outputs.checksum }}
+          WORKING_DIRECTORY: ${{ steps.arrange.outputs.working-directory }}
+          MISMATCH_OUTCOME: ${{ steps.mismatch.outcome }}
+          TEST_OUTCOME: ${{ steps.test-chart.outcome }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs');
+            const { createHash } = require('node:crypto');
+            assert.equal(process.env.MISMATCH_OUTCOME, 'failure');
+            assert.equal(process.env.TEST_OUTCOME, 'success');
+            assert.equal(createHash('sha256').update(fs.readFileSync(process.env.ARCHIVE)).digest('hex'), process.env.CHECKSUM);
+            assert.deepEqual(fs.readdirSync(process.env.WORKING_DIRECTORY).sort(), ['ct.yaml', 'first values.yaml', 'last values.yaml']);
+
+      - name: Clean fixture and prepared archive
         if: always()
-        run: |
-          mkdir -p .cache/agent-work/test-chart
-          cp actions/helm/test-chart/action.yml .cache/agent-work/test-chart/action.yml
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+          DIRECTORY: ${{ steps.arrange.outputs.directory }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            if (process.env.DIRECTORY) fs.rmSync(process.env.DIRECTORY, { recursive: true, force: true });
+            if (process.env.ARCHIVE) fs.rmSync(path.dirname(process.env.ARCHIVE), { recursive: true, force: true });
+            // Keep the standalone action until kind's post-job cleanup loads its manifest.

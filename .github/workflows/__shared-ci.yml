@@ -165,7 +165,8 @@ jobs:
       id-token: write
       issues: read
       packages: write
-      pull-requests: read
+      pull-requests: write
+      security-events: write
 
   test-workflow-docker-build-images-building:
     name: Test docker build images - Building
@@ -245,6 +246,7 @@ jobs:
       - test-action-helm-prepare-chart
       - test-action-helm-prepare-release
       - test-action-helm-lint-chart
+      - test-action-helm-test-chart
       - test-action-helm-release-chart
       - test-action-docker-promote-images
       - test-action-docker-verify-images
