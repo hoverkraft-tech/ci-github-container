@@ -256,6 +256,30 @@ Review CI and this breaking Test contract before implementing Release. The
 unchanged archive's publication and the composed workflow remain separate work;
 this increment does not establish performance acceptance.
 
+### Tool setup ownership after review: 2026-11-15
+
+[Review on PR #975](https://github.com/hoverkraft-tech/ci-github-container/pull/975#discussion_r4579701404)
+identified that direct phase-action callers still had to manage Helm and
+chart-testing setup. The future reusable workflow alone does not address that
+interface. This revises the caller-owned tool setup described above: Prepare,
+Lint and Test ensure their prerequisites through a shared public `helm/setup`
+action. Checkout and source generation remain caller-owned.
+
+Setup reuses executables already on PATH. It installs missing Helm through the
+existing Helm installer, and installs chart-testing with its Yamale/yamllint
+dependencies through the existing verified installer when that tool set is
+incomplete. Missing tools after installation fail setup. Callers that need specific
+versions can install them first; setup does not replace a complete tool set or
+overwrite its configuration. Prepare needs only Helm. Lint and Test request the
+chart-testing tool set. Phase actions call the public setup action, never its
+private files. Release continues delegating preparation, which now ensures Helm.
+
+The reusable workflow remains the intended consumer entry point for phase
+ordering, shared runner state, archive handoff and publication gating. Tool setup
+no longer depends on that later increment. Existing public-action integrations
+exercise automatic setup and preservation of caller-provided configuration across
+repeated calls, using the same fixtures, runners and cluster.
+
 ## Consequences and limits
 
 This separates validation from publication and avoids repeated preparation in the

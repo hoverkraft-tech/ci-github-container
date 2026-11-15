@@ -37,12 +37,6 @@ jobs:
         with:
           working-directory: actions/helm/prepare-chart
 
-      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
-
-      - name: Test nested chart preparation with Helm
-        working-directory: actions/helm/prepare-chart
-        run: npm run test:integration
-
       - name: Prepare existing application fixture
         id: prepare
         uses: $/actions/helm/prepare-chart
@@ -68,6 +62,10 @@ jobs:
             const result = await exec.getExecOutput('helm', ['show', 'chart', process.env.ARCHIVE]);
             assert.match(result.stdout, /^name: prepared-application$/m);
             assert.match(result.stdout, /^version: 1\.2\.3$/m);
+
+      - name: Test nested chart preparation with Helm
+        working-directory: actions/helm/prepare-chart
+        run: npm run test:integration
 
       - name: Clean prepared archive
         if: ${{ always() && steps.prepare.outputs.archive != '' }}

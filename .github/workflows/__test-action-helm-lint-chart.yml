@@ -33,10 +33,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
-
-      - uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
-
       - name: Arrange - Prepare existing application fixture
         id: prepare
         uses: $/actions/helm/prepare-chart
@@ -111,6 +107,18 @@ jobs:
           checksum: ${{ steps.prepare.outputs.checksum }}
           working-directory: ${{ steps.arrange.outputs.working-directory }}
 
+      - name: Arrange - Preserve caller tool configuration across later invocations
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DIRECTORY: ${{ steps.arrange.outputs.directory }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const configDirectory = path.join(process.env.DIRECTORY, 'caller-ct-config');
+            fs.cpSync(process.env.CT_CONFIG_DIR, configDirectory, { recursive: true });
+            core.exportVariable('CT_CONFIG_DIR', configDirectory);
+
       - name: Act - Reject invalid metadata
         id: metadata
         continue-on-error: true
@@ -178,6 +186,8 @@ jobs:
             const assert = require('node:assert/strict');
             const fs = require('node:fs');
             const { createHash } = require('node:crypto');
+            const path = require('node:path');
+            assert.equal(process.env.CT_CONFIG_DIR, path.join(path.dirname(process.env.WORKING_DIRECTORY), 'caller-ct-config'));
             const outcomes = JSON.parse(process.env.OUTCOMES);
             for (const scenario of ['valid', 'overlays']) {
               assert.equal(outcomes[scenario], 'success', `${scenario} must pass validation`);
