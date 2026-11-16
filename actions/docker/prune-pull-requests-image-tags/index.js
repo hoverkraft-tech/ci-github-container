@@ -9,6 +9,7 @@ module.exports = async ({
 }) => {
 	const repositoryOwner = `${context.repo.owner}`.toLowerCase();
 	const packageName = imageName.replace(`${repositoryOwner}/`, "");
+	const closedPullRequests = new Map();
 
 	let currentPage = 1;
 	const allTagsToDelete = [];
@@ -36,6 +37,7 @@ module.exports = async ({
 					pullRequestTagFilter,
 					preserveTagsFilter,
 					packageVersion,
+					closedPullRequests,
 				}),
 			),
 		);
@@ -88,6 +90,7 @@ async function getTagsToDeleteFromPackageVersion({
 	pullRequestTagFilter,
 	preserveTagsFilter,
 	packageVersion,
+	closedPullRequests,
 }) {
 	const tags = packageVersion.metadata.container.tags;
 
@@ -117,6 +120,7 @@ async function getTagsToDeleteFromPackageVersion({
 		github,
 		context,
 		pullRequestNumber,
+		closedPullRequests,
 	});
 
 	if (!currentPullRequestIsClosed) {
@@ -191,16 +195,21 @@ function filterPreservedTags({ tags, preserveTagsFilter, core }) {
 	});
 }
 
-const closedPullRequests = new Map();
-async function isPullRequestClosed({ github, context, pullRequestNumber }) {
+async function isPullRequestClosed({
+	github,
+	context,
+	pullRequestNumber,
+	closedPullRequests,
+}) {
 	if (!closedPullRequests.has(pullRequestNumber)) {
-		const {
-			data: { state },
-		} = await rateLimitRetryCall(github.rest.pulls.get, {
-			...context.repo,
-			pull_number: pullRequestNumber,
-		});
-		closedPullRequests.set(pullRequestNumber, state === "closed");
+		// Share the pending request before another version can start the same lookup.
+		closedPullRequests.set(
+			pullRequestNumber,
+			rateLimitRetryCall(github.rest.pulls.get, {
+				...context.repo,
+				pull_number: pullRequestNumber,
+			}).then(({ data }) => data.state === "closed"),
+		);
 	}
 	return closedPullRequests.get(pullRequestNumber);
 }
