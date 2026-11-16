@@ -12,3 +12,4 @@
 - [Separate Helm pipeline phases](adr/0007-separate-helm-pipeline-phases.md)
 - [Committed Helm release preparation](adr/0008-prepare-committed-helm-releases.md)
 - [Shared Helm validation and release workflows](adr/0009-compose-helm-validation-and-release-workflows.md)
+- [Concurrent PR-state lookup deduplication](adr/0010-deduplicate-concurrent-pr-state-lookups.md)

@@ -14,10 +14,26 @@ jobs:
   arrange-prepare-variables:
     name: Arrange - Prepare variables
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       tag: ${{ steps.prepare-variables.outputs.tag }}
       packages: ${{ steps.prepare-variables.outputs.packages }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify package tag selection
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await exec.exec(process.execPath, [
+              '--test',
+              'actions/docker/prune-pull-requests-image-tags/index.test.js',
+            ]);
+
       - id: prepare-variables
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
