@@ -19,9 +19,11 @@ starting it manually; other branches and tags cannot publish a release.
 
 The workflow runs the full shared CI suite, including action distribution checks,
 before planning and publishing a release. Both actions target the exact commit
-that passed CI, even if `main` advances while the workflow runs. Concurrent
-release runs are serialized, and a running release is never automatically
-cancelled by a later run.
+that passed CI. The image promotion integration tests require that commit to
+remain the current `main` revision until promotion completes. A merge during CI,
+including an automated documentation update, can therefore stop the release with
+`Source ref has changed since validation`. Concurrent release runs are serialized,
+and a running release is never automatically cancelled by a later run.
 
 No release is created when the planner finds no changes. The optional manual
 `force` input bypasses only that no-change decision. It does not bypass CI or
@@ -42,8 +44,17 @@ published tag and any documentation pull request it creates. Documentation
 updates use squash merging and the bot's pull-request-only ruleset bypass;
 signed commits remain required.
 
-If CI or planning fails, fix the failure and rerun the workflow. If publication
-fails, inspect the repository's tags and releases before retrying: a draft may
-already exist. Do not move or replace a published tag. Follow the shared
+If CI reports `Source ref has changed since validation`, wait for pending merges
+and documentation automation to finish, then start a new release run on `main`.
+Do not rerun the failed run: [GitHub reruns retain the original commit and ref](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
+The new run builds and validates the current revision before publishing.
+
+For another CI or planning failure, fix its cause first. If the fix changes
+`main`, start a new run. If the source is unchanged, rerun all jobs so candidate
+builds, validation and promotion belong to the same attempt. Rerunning only
+promotion cannot reuse candidates from an earlier attempt.
+
+If publication fails, inspect the repository's tags and releases before retrying:
+a draft may already exist. Do not move or replace a published tag. Follow the shared
 [release guide](https://github.com/hoverkraft-tech/ci-github-publish/blob/3.0.2/docs/usage/release.md)
 for release state and recovery behavior.
