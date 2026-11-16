@@ -32,12 +32,24 @@ snapshot, not persistent evidence that a PR is still closed.
 
 ## Validation
 
-Use dependency-free Node tests beside the existing selector, invoked by its
-existing integration workflow before registry setup. Cover concurrent duplicate
-lookups across pages, distinct PR states and protected/ambiguous tags, isolation
-between invocations/repositories and rejected lookups. Demonstrate the duplicate
-request and stale-state regressions against the previous selector. Retain the
-existing image-build/prune integration for the registry boundary.
+Use dependency-free Node tests beside the selector under `src/`, following the
+[JavaScript action package and CI pattern](../development/action-distributions.md).
+The action imports its ES module directly, without a bundle. Its package owns the
+lockfile and test scripts; the reusable Node CI workflow produces JUnit and LCOV
+reports and retains CodeQL and dependency review. The repository's existing
+report job consolidates results under this action's calling job ID. Keep source
+tests separate from image-build/prune integration, which verifies the registry
+boundary.
+
+Cover concurrent duplicate lookups across pages, distinct PR states and
+protected/ambiguous tags, isolation between invocations/repositories and rejected
+lookups. Demonstrate the duplicate-request and stale-state regressions against
+the previous selector. Reuse these five cases when changing the CI integration.
+
+[Review 5924742514](https://github.com/hoverkraft-tech/ci-github-container/pull/981#pullrequestreview-5924742514)
+replaces the initial custom test step in registry setup with the established
+package workflow. This adds the missing reporting and security integration;
+it does not change the selector's behavior or add runtime dependencies.
 
 The caller's local GitHub credential cannot read package versions, so production
 request-volume and elapsed-time savings are not established by this change.

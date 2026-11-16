@@ -1,6 +1,9 @@
 ---
 name: "Prune pull requests image tags from GitHub Packages"
-description: "Action to prune existing package versions related to closed pull requests"
+description: |
+  Action to prune existing package versions related to closed pull requests.
+
+  For development and tests, see the [action package guide](../../../docs/development/action-distributions.md).
 author: hoverkraft
 branding:
   icon: delete
@@ -85,8 +88,9 @@ runs:
           const isOrganization = (process.env.IS_ORGANIZATION_OUTPUT || "") === 'true';
           const preserveTagsFilter = process.env.INPUT_PRESERVE_TAGS_FILTER || "";
 
-          const script = require(`${process.env.ACTION_PATH}/index.js`)
-          const tagsToDelete = await script({
+          const { pathToFileURL } = require('node:url');
+          const { selectTags } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/index.js`));
+          const tagsToDelete = await selectTags({
             github,
             context,
             core,

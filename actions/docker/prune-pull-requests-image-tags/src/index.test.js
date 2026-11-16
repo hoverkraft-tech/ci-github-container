@@ -1,6 +1,6 @@
-const assert = require("node:assert/strict");
-const { test } = require("node:test");
-const selectTags = require("./index.js");
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { selectTags } from "./index.js";
 
 function fixture({
 	pages,
