@@ -3,7 +3,7 @@
 # ![Icon](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItZGVsZXRlIiBjb2xvcj0iYmx1ZSI+PHBhdGggZD0iTTIxIDRIOGwtNyA4IDcgOGgxM2EyIDIgMCAwIDAgMi0yVjZhMiAyIDAgMCAwLTItMnoiPjwvcGF0aD48bGluZSB4MT0iMTgiIHkxPSI5IiB4Mj0iMTIiIHkyPSIxNSI+PC9saW5lPjxsaW5lIHgxPSIxMiIgeTE9IjkiIHgyPSIxOCIgeTI9IjE1Ij48L2xpbmU+PC9zdmc+) GitHub Action: Prune pull requests image tags from GitHub Packages
 
 <div align="center">
-  <img src="https://repository-images.githubusercontent.com/612154707/5e5db519-7053-4c76-b7af-6249ed7abc3e" width="60px" align="center" alt="Prune pull requests image tags from GitHub Packages" />
+  <img src="../../../.github/logo.svg" width="60px" align="center" alt="Prune pull requests image tags from GitHub Packages" />
 </div>
 
 ---
@@ -33,7 +33,7 @@ For development and tests, see the [action package guide](../../../docs/developm
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@3feb56e45f82273a7eded46ac3b9364c08337cee
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
   with:
     # Image name
     image: ""
