@@ -1,4 +1,4 @@
-module.exports = async ({
+export async function selectTags({
 	github,
 	context,
 	core,
@@ -6,7 +6,7 @@ module.exports = async ({
 	pullRequestTagFilter,
 	preserveTagsFilter,
 	isOrganization,
-}) => {
+}) {
 	const repositoryOwner = `${context.repo.owner}`.toLowerCase();
 	const packageName = imageName.replace(`${repositoryOwner}/`, "");
 	const closedPullRequests = new Map();
@@ -45,7 +45,7 @@ module.exports = async ({
 	}
 
 	return [...new Set(allTagsToDelete)];
-};
+}
 
 async function getAllPackageVersions({
 	context,

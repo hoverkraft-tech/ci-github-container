@@ -82,7 +82,8 @@ jobs:
       id-token: write
       issues: read
       packages: write
-      pull-requests: read
+      pull-requests: write
+      security-events: write
 
   test-action-get-image-metadata:
     needs: lint
@@ -250,6 +251,7 @@ jobs:
       - test-action-helm-release-chart
       - test-action-docker-promote-images
       - test-action-docker-verify-images
+      - test-action-docker-prune-pull-requests-image-tags
     if: always()
     uses: hoverkraft-tech/ci-github-common/.github/workflows/ci-reports.yml@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
     permissions:
