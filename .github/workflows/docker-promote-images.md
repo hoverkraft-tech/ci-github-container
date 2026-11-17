@@ -38,7 +38,7 @@ validate:
 promote:
   if: always()
   needs: [candidates, validate, lint]
-  uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@main
+  uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f
   permissions:
     actions: read
     attestations: read
@@ -147,7 +147,7 @@ on:
 permissions: {}
 jobs:
   docker-promote-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f # ci/update-shared-workflows-20261117
     permissions:
       actions: read
       attestations: read
