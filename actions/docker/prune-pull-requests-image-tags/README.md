@@ -33,7 +33,7 @@ For development and tests, see the [action package guide](../../../docs/developm
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/prune-pull-requests-image-tags@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
   with:
     # Image name
     image: ""

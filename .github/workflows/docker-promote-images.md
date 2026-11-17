@@ -147,7 +147,7 @@ on:
 permissions: {}
 jobs:
   docker-promote-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f # ci/update-shared-workflows-20261117
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
     permissions:
       actions: read
       attestations: read
