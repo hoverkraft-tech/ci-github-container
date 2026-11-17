@@ -1,0 +1,24 @@
+---
+name: Test for "helm/generate-docs" action
+run-name: Test for "helm/generate-docs" action
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  continuous-integration:
+    uses: hoverkraft-tech/ci-github-nodejs/.github/workflows/continuous-integration.yml@98d91b1cc347efc64cd5fb20bc0ebc076acad114 # 3.1.0
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+    with:
+      working-directory: actions/helm/generate-docs
+      build: ""
+      lint: ""
+      code-ql: '{"languages":"typescript","config-file":".github/codeql/config.yml"}'
+      test: '{"comment":false,"report-group":"test-action-helm-generate-docs"}'
