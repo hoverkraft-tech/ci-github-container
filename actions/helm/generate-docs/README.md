@@ -41,7 +41,7 @@ See [the bundling decision](../../../docs/adr/0012-bundle-helm-documentation-too
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@114cb5455b377d17eb774dab44862a1fb4c0761c # feat/review-ci-composition
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@b71c7d7250255ebe0d0de6b64aae7cf5ea91e3c7 # feat/review-ci-composition
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
