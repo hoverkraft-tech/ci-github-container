@@ -36,7 +36,7 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@d03aac10d532198d5465f787ad9a18abddf1b77a
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
@@ -52,6 +52,20 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
     # Path to the values file to use for generating the documentation.
     # See https://github.com/losisin/helm-values-schema-json-action.
     values-file: ""
+
+    # Optional newline-separated repository-relative files or directories whose changes cannot affect chart documentation.
+    # Paths are literal, and directories must end with a slash. Empty keeps generation unconditional.
+    # On the first attempt of a default-branch push, skip only when every change since the same workflow's last successful push is listed.
+    # Chart search paths and the explicit values file always require generation. Missing history, API/Git uncertainty, local edits and reruns generate normally.
+    # Requires a caller checkout and actions: read plus contents: read to inspect history; missing access falls back to generation.
+    # Invoke after required checks on every default-branch push; additional job/path filters can hide pending documentation changes.
+    # Keep this list aligned with custom templates. For example:
+    # application/
+    # docs/
+    # e2e/
+    # README.md
+    # See [the decision](../../../docs/adr/0011-skip-unchanged-helm-documentation.md) for safety and recovery behavior.
+    skip-if-only-changed: ""
 
     # Merge strategy for the documentation pull request: `merge`, `rebase`, or `squash`.
     # Use `squash` for branches requiring signed commits and enable squash merging in the repository settings.
@@ -82,24 +96,36 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 
 ## Inputs
 
-| **Input**                  | **Description**                                                                                          | **Required** | **Default**               |
-| -------------------------- | -------------------------------------------------------------------------------------------------------- | ------------ | ------------------------- |
-| **`working-directory`**    | Working directory                                                                                        | **false**    | `${{ github.workspace }}` |
-| **`checkout-ref`**         | The Git ref to checkout before generating documentation.                                                 | **false**    | `${{ github.ref }}`       |
-|                            | Can be a branch, tag or commit SHA.                                                                      |              |                           |
-|                            | Set to an empty string to skip checkout.                                                                 |              |                           |
-| **`values-file`**          | Path to the values file to use for generating the documentation.                                         | **false**    | -                         |
-|                            | See <https://github.com/losisin/helm-values-schema-json-action>.                                         |              |                           |
-| **`merge-method`**         | Merge strategy for the documentation pull request: `merge`, `rebase`, or `squash`.                       | **false**    | `rebase`                  |
-|                            | Use `squash` for branches requiring signed commits and enable squash merging in the repository settings. |              |                           |
-| **`github-token`**         | GitHub Token to create and merge pull request.                                                           | **false**    | `${{ github.token }}`     |
-|                            | Permissions:                                                                                             |              |                           |
-|                            | - contents: write                                                                                        |              |                           |
-|                            | - pull-requests: write                                                                                   |              |                           |
-| **`github-app-client-id`** | GitHub App client ID to generate GitHub token in place of github-token.                                  | **false**    | -                         |
-|                            | See <https://github.com/actions/create-github-app-token>.                                                |              |                           |
-| **`github-app-key`**       | GitHub App private key to generate GitHub token in place of github-token.                                | **false**    | -                         |
-|                            | See <https://github.com/actions/create-github-app-token>.                                                |              |                           |
+| **Input**                  | **Description**                                                                                                                                            | **Required** | **Default**               |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------- |
+| **`working-directory`**    | Working directory                                                                                                                                          | **false**    | `${{ github.workspace }}` |
+| **`checkout-ref`**         | The Git ref to checkout before generating documentation.                                                                                                   | **false**    | `${{ github.ref }}`       |
+|                            | Can be a branch, tag or commit SHA.                                                                                                                        |              |                           |
+|                            | Set to an empty string to skip checkout.                                                                                                                   |              |                           |
+| **`values-file`**          | Path to the values file to use for generating the documentation.                                                                                           | **false**    | -                         |
+|                            | See <https://github.com/losisin/helm-values-schema-json-action>.                                                                                           |              |                           |
+| **`skip-if-only-changed`** | Optional newline-separated repository-relative files or directories whose changes cannot affect chart documentation.                                       | **false**    | -                         |
+|                            | Paths are literal, and directories must end with a slash. Empty keeps generation unconditional.                                                            |              |                           |
+|                            | On the first attempt of a default-branch push, skip only when every change since the same workflow's last successful push is listed.                       |              |                           |
+|                            | Chart search paths and the explicit values file always require generation. Missing history, API/Git uncertainty, local edits and reruns generate normally. |              |                           |
+|                            | Requires a caller checkout and actions: read plus contents: read to inspect history; missing access falls back to generation.                              |              |                           |
+|                            | Invoke after required checks on every default-branch push; additional job/path filters can hide pending documentation changes.                             |              |                           |
+|                            | Keep this list aligned with custom templates. For example:                                                                                                 |              |                           |
+|                            | application/                                                                                                                                               |              |                           |
+|                            | docs/                                                                                                                                                      |              |                           |
+|                            | e2e/                                                                                                                                                       |              |                           |
+|                            | README.md                                                                                                                                                  |              |                           |
+|                            | See [the decision](../../../docs/adr/0011-skip-unchanged-helm-documentation.md) for safety and recovery behavior.                                          |              |                           |
+| **`merge-method`**         | Merge strategy for the documentation pull request: `merge`, `rebase`, or `squash`.                                                                         | **false**    | `rebase`                  |
+|                            | Use `squash` for branches requiring signed commits and enable squash merging in the repository settings.                                                   |              |                           |
+| **`github-token`**         | GitHub Token to create and merge pull request.                                                                                                             | **false**    | `${{ github.token }}`     |
+|                            | Permissions:                                                                                                                                               |              |                           |
+|                            | - contents: write                                                                                                                                          |              |                           |
+|                            | - pull-requests: write                                                                                                                                     |              |                           |
+| **`github-app-client-id`** | GitHub App client ID to generate GitHub token in place of github-token.                                                                                    | **false**    | -                         |
+|                            | See <https://github.com/actions/create-github-app-token>.                                                                                                  |              |                           |
+| **`github-app-key`**       | GitHub App private key to generate GitHub token in place of github-token.                                                                                  | **false**    | -                         |
+|                            | See <https://github.com/actions/create-github-app-token>.                                                                                                  |              |                           |
 
 <!-- inputs:end -->
 

@@ -117,6 +117,16 @@ jobs:
     permissions:
       contents: read
 
+  test-action-helm-generate-docs:
+    needs: lint
+    uses: $/.github/workflows/__test-action-helm-generate-docs.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+
   test-action-helm-prepare-chart:
     needs: lint
     uses: $/.github/workflows/__test-action-helm-prepare-chart.yml
@@ -244,6 +254,7 @@ jobs:
   reports:
     needs:
       - lint
+      - test-action-helm-generate-docs
       - test-action-helm-prepare-chart
       - test-action-helm-prepare-release
       - test-action-helm-lint-chart
