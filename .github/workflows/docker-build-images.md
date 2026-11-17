@@ -76,7 +76,7 @@ on:
 permissions: {}
 jobs:
   docker-build-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-build-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
     permissions:
       attestations: write
       contents: read
