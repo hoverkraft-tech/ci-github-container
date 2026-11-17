@@ -8,7 +8,7 @@ description: |
   Retains Textlint/Markdownlint configuration and ignores, Prettier configuration and caller-owned plugins.
   Custom modules must already be available in the caller checkout; missing modules or invalid configuration fail.
   Remaining Markdown style findings are advisory; Textlint errors and Prettier failures block publication.
-  See [the bundling decision](../../../docs/adr/0012-bundle-helm-documentation-tools.md).
+  See [the bundling decision](../../../docs/adr/0011-skip-unchanged-helm-documentation.md#bundle-formatting-tools).
 author: hoverkraft
 branding:
   icon: book-open

@@ -44,7 +44,7 @@ The shared test action supplies an isolated `dist/index.js`, clears external mod
 lookup settings, propagates failures and removes the copy after every run.
 The documentation formatter uses esbuild to preserve caller config/plugin imports
 and ncc to collect dependency licenses; its package exposes the same build/check/test
-commands. See [ADR 0012](../adr/0012-bundle-helm-documentation-tools.md).
+commands. See [ADR 0011](../adr/0011-skip-unchanged-helm-documentation.md#bundle-formatting-tools).
 
 No repository-level test runner is needed. Keep assertions for errors and
 caller-owned files in the action's tests; security checks remain enabled.

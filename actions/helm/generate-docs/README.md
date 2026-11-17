@@ -32,7 +32,7 @@ Formatting runs from committed JavaScript and data in dist, without Node.js setu
 Retains Textlint/Markdownlint configuration and ignores, Prettier configuration and caller-owned plugins.
 Custom modules must already be available in the caller checkout; missing modules or invalid configuration fail.
 Remaining Markdown style findings are advisory; Textlint errors and Prettier failures block publication.
-See [the bundling decision](../../../docs/adr/0012-bundle-helm-documentation-tools.md).
+See [the bundling decision](../../../docs/adr/0011-skip-unchanged-helm-documentation.md#bundle-formatting-tools).
 
 <!-- overview:end -->
 
@@ -41,7 +41,7 @@ See [the bundling decision](../../../docs/adr/0012-bundle-helm-documentation-too
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@89d8a1e3b5152b4899522c51c04d1cb581edec4e # feat/review-ci-composition
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@18eb44d394746f292429fb1232a6c9d886e75d8d # feat/review-ci-composition
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
