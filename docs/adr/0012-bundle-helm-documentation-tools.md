@@ -67,6 +67,11 @@ verify isolated operation before claiming workflow savings. Caller-provided
 extensions retain their own setup requirements; this change does not package
 arbitrary consumer dependencies.
 
+Keep secret scanning enabled on distributions. Gitleaks misidentifies three
+bundled Markdownlint/Prettier variable expressions as generic API keys. Allow only
+those complete expressions in this bundle, with both path and expression required;
+retain the default rules and scanning of all other content.
+
 ## Local validation, 2026-11-17
 
 The final source and isolated distribution each pass 67 tests on Node.js 24.

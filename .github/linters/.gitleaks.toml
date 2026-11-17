@@ -1,0 +1,18 @@
+title = "Repository secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Verified Markdownlint declarations and Prettier visitor-key access in the documentation bundle"
+condition = "AND"
+paths = ['''(^|/)actions/helm/generate-docs/dist/index\.js$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*var import_helpers[0-9]+, tokenTypeToStyle, md046_default;\s*$''',
+  '''^\s*var import_helpers[0-9]+, import_micromark_helpers[0-9]+, idRe, nameRe, anchorRe, lineFragmentRe, childrenExclude, tokensInclude, md051_default;\s*$''',
+  '''^\s*\}, visitorKeys: [A-Za-z_$][A-Za-z0-9_$]*\.visitorKeys \}\), [A-Za-z_$][A-Za-z0-9_$]*;\s*$''',
+]
