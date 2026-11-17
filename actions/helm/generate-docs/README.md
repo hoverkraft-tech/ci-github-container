@@ -41,7 +41,7 @@ See [the bundling decision](../../../docs/adr/0011-skip-unchanged-helm-documenta
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@18eb44d394746f292429fb1232a6c9d886e75d8d # feat/review-ci-composition
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
   with:
     # Working directory
     # Default: `${{ github.workspace }}`
