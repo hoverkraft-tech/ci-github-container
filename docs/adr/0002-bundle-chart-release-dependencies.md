@@ -37,7 +37,7 @@ selected dynamically. The
 records the plugin-distribution acceptance criteria.
 
 The documentation-tool deferral is superseded by
-[ADR 0012](0012-bundle-helm-documentation-tools.md), which retains caller-selected
+[ADR 0011](0011-skip-unchanged-helm-documentation.md#bundle-formatting-tools), which retains caller-selected
 configuration while explicitly bundling the action-owned rules and plugins.
 
 ## Automated dependency updates
