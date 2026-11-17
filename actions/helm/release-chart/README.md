@@ -24,9 +24,14 @@
 ## Overview
 
 Publish one prepared Helm chart archive to an OCI registry.
-Requires the archive and its expected SHA-256 checksum. Lint and test those same
-bytes before calling this action. The caller retains its archive; temporary
-publication files and registry credentials are removed on success or failure.
+Supply either a local archive or an immutable artifact-id and archive-name from
+this workflow run, plus the archive's expected SHA-256 checksum. Lint and test
+those same bytes before calling this action. Artifact input downloads only that
+ID, fails on artifact digest mismatch, and verifies the archive checksum before
+registry access. The caller retains local archives; downloaded archives,
+temporary publication files and credentials are removed on success or failure.
+Gate publication on successful validation. Publication-only retries reuse its
+artifact ID and checksum; missing or expired artifacts require validation again.
 Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
 Set `sign` to `false` to opt out and still consume the immutable digest output.
 Does not check out source, mutate values/metadata, rebuild dependencies or package.
@@ -37,20 +42,22 @@ Push retries reuse a verified snapshot of the supplied archive. Ensures Helm is 
 
 ## Inputs
 
-| **Input**                   | **Description**                                                                       | **Required** | **Default**                       |
-| --------------------------- | ------------------------------------------------------------------------------------- | ------------ | --------------------------------- |
-| **`oci-registry`**          | OCI registry where to push chart.                                                     | **true**     | `ghcr.io`                         |
-| **`oci-registry-username`** | OCI registry username.                                                                | **true**     | `${{ github.repository_owner }}`  |
-| **`oci-registry-password`** | OCI registry password.                                                                | **true**     | `${{ github.token }}`             |
-| **`oci-repository`**        | OCI namespace without the registry or final chart name.                               | **false**    | `${{ github.repository }}/charts` |
-|                             | Defaults to {owner}/{repository}/charts. The archive supplies its chart name/version. |              |                                   |
-|                             | Set this explicitly to preserve a different publication namespace.                    |              |                                   |
-| **`archive`**               | Path to the prepared .tgz archive. Relative paths use the current working directory.  | **true**     | -                                 |
-| **`checksum`**              | Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters.        | **true**     | -                                 |
-| **`sign`**                  | Sign the published OCI chart using Cosign and GitHub Actions OIDC.                    | **false**    | `true`                            |
-|                             | Enabled by default. Set to `false` to opt out.                                        |              |                                   |
-|                             | Requires `id-token: write` and write access to the OCI registry.                      |              |                                   |
-|                             | Does not generate a Helm PGP provenance (.prov) file.                                 |              |                                   |
+| **Input**                   | **Description**                                                                                                                                       | **Required** | **Default**                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------- |
+| **`oci-registry`**          | OCI registry where to push chart.                                                                                                                     | **true**     | `ghcr.io`                         |
+| **`oci-registry-username`** | OCI registry username.                                                                                                                                | **true**     | `${{ github.repository_owner }}`  |
+| **`oci-registry-password`** | OCI registry password.                                                                                                                                | **true**     | `${{ github.token }}`             |
+| **`oci-repository`**        | OCI namespace without the registry or final chart name.                                                                                               | **false**    | `${{ github.repository }}/charts` |
+|                             | Defaults to {owner}/{repository}/charts. The archive supplies its chart name/version.                                                                 |              |                                   |
+|                             | Set this explicitly to preserve a different publication namespace.                                                                                    |              |                                   |
+| **`archive`**               | Path to the prepared .tgz archive. Relative paths use the current working directory. Mutually exclusive with artifact-id and archive-name.            | **false**    | -                                 |
+| **`artifact-id`**           | One immutable artifact ID from this workflow run, such as helm-chart-ci's artifact-id output. Requires archive-name; mutually exclusive with archive. | **false**    | -                                 |
+| **`archive-name`**          | Prepared .tgz basename inside the artifact, such as helm-chart-ci's archive-name output. Required only with artifact-id.                              | **false**    | -                                 |
+| **`checksum`**              | Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters.                                                                        | **true**     | -                                 |
+| **`sign`**                  | Sign the published OCI chart using Cosign and GitHub Actions OIDC.                                                                                    | **false**    | `true`                            |
+|                             | Enabled by default. Set to `false` to opt out.                                                                                                        |              |                                   |
+|                             | Requires `id-token: write` and write access to the OCI registry.                                                                                      |              |                                   |
+|                             | Does not generate a Helm PGP provenance (.prov) file.                                                                                                 |              |                                   |
 
 <!-- inputs:end -->
 <!-- secrets:start -->
@@ -102,7 +109,7 @@ This documentation was automatically generated by [CI Dokumentor](https://github
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/release-chart@733a81feaab09ff9918cacc4f22f30c254e10527 # feat/helm-release-artifact-input
   with:
     # OCI registry where to push chart.
     #
@@ -129,9 +136,14 @@ This documentation was automatically generated by [CI Dokumentor](https://github
     # Default: `${{ github.repository }}/charts`
     oci-repository: ${{ github.repository }}/charts
 
-    # Path to the prepared .tgz archive. Relative paths use the current working directory.
-    # This input is required.
+    # Path to the prepared .tgz archive. Relative paths use the current working directory. Mutually exclusive with artifact-id and archive-name.
     archive: ""
+
+    # One immutable artifact ID from this workflow run, such as helm-chart-ci's artifact-id output. Requires archive-name; mutually exclusive with archive.
+    artifact-id: ""
+
+    # Prepared .tgz basename inside the artifact, such as helm-chart-ci's archive-name output. Required only with artifact-id.
+    archive-name: ""
 
     # Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters.
     # This input is required.
