@@ -2,9 +2,14 @@
 name: "Release Helm Chart"
 description: |
   Publish one prepared Helm chart archive to an OCI registry.
-  Requires the archive and its expected SHA-256 checksum. Lint and test those same
-  bytes before calling this action. The caller retains its archive; temporary
-  publication files and registry credentials are removed on success or failure.
+  Supply either a local archive or an immutable artifact-id and archive-name from
+  this workflow run, plus the archive's expected SHA-256 checksum. Lint and test
+  those same bytes before calling this action. Artifact input downloads only that
+  ID, fails on artifact digest mismatch, and verifies the archive checksum before
+  registry access. The caller retains local archives; downloaded archives,
+  temporary publication files and credentials are removed on success or failure.
+  Gate publication on successful validation. Publication-only retries reuse its
+  artifact ID and checksum; missing or expired artifacts require validation again.
   Signs the published chart digest with Cosign and GitHub Actions OIDC by default.
   Set `sign` to `false` to opt out and still consume the immutable digest output.
   Does not check out source, mutate values/metadata, rebuild dependencies or package.
@@ -37,8 +42,17 @@ inputs:
       Set this explicitly to preserve a different publication namespace.
     default: "${{ github.repository }}/charts"
   archive:
-    description: "Path to the prepared .tgz archive. Relative paths use the current working directory."
-    required: true
+    description: "Path to the prepared .tgz archive. Relative paths use the current working directory. Mutually exclusive with artifact-id and archive-name."
+    required: false
+    default: ""
+  artifact-id:
+    description: "One immutable artifact ID from this workflow run, such as helm-chart-ci's artifact-id output. Requires archive-name; mutually exclusive with archive."
+    required: false
+    default: ""
+  archive-name:
+    description: "Prepared .tgz basename inside the artifact, such as helm-chart-ci's archive-name output. Required only with artifact-id."
+    required: false
+    default: ""
   checksum:
     description: "Expected SHA-256 of the archive bytes, as 64 lowercase hexadecimal characters."
     required: true
@@ -80,6 +94,38 @@ runs:
             throw new Error('Signing charts requires the workflow job to grant id-token: write.');
           }
 
+    - name: Resolve archive input
+      id: archive
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CHART_ARCHIVE: ${{ inputs.archive }}
+        ARTIFACT_ID: ${{ inputs.artifact-id }}
+        ARCHIVE_NAME: ${{ inputs.archive-name }}
+        CHART_CHECKSUM: ${{ inputs.checksum }}
+      with:
+        script: |
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { prepareArchiveInput } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'src/archive.js')));
+          const input = prepareArchiveInput({
+            archive: process.env.CHART_ARCHIVE,
+            artifactId: process.env.ARTIFACT_ID,
+            archiveName: process.env.ARCHIVE_NAME,
+            expectedChecksum: process.env.CHART_CHECKSUM,
+            runnerTemp: process.env.RUNNER_TEMP,
+          });
+          core.setOutput('archive', input.archive);
+          core.setOutput('directory', input.directory);
+
+    - name: Download validated archive
+      if: inputs.artifact-id != ''
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        artifact-ids: ${{ inputs.artifact-id }}
+        path: ${{ steps.archive.outputs.directory }}
+        digest-mismatch: error
+
     - name: Ensure Helm is available
       uses: $/actions/helm/setup
 
@@ -88,7 +134,7 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
-        CHART_ARCHIVE: ${{ inputs.archive }}
+        CHART_ARCHIVE: ${{ steps.archive.outputs.archive }}
         CHART_CHECKSUM: ${{ inputs.checksum }}
         INPUT_REGISTRY: ${{ inputs.oci-registry }}
         INPUT_USERNAME: ${{ inputs.oci-registry-username }}
@@ -118,3 +164,16 @@ runs:
         oci-registry-username: ${{ inputs.oci-registry-username }}
         oci-registry-password: ${{ inputs.oci-registry-password }}
         charts: ${{ steps.chart-releaser.outputs.image }}@${{ steps.chart-releaser.outputs.digest }}
+
+    - name: Clean downloaded archive
+      if: always() && steps.archive.outputs.directory != ''
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DOWNLOAD_DIRECTORY: ${{ steps.archive.outputs.directory }}
+      with:
+        script: |
+          const { join } = require('node:path');
+          const { pathToFileURL } = require('node:url');
+          const { cleanupArchiveInput } = await import(pathToFileURL(join(process.env.ACTION_PATH, 'src/archive.js')));
+          cleanupArchiveInput(process.env.DOWNLOAD_DIRECTORY);

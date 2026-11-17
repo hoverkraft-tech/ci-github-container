@@ -51,6 +51,10 @@ Publishing remains gated by successful validation. Callers own trusted release
 triggers, environment protection and non-cancelling release concurrency. An in-flight
 registry request cannot be undone by cancelling a workflow.
 
+The [artifact input decision](0012-release-chart-artifact-input.md) later moves
+artifact identity checks, download and cleanup from the composed workflow into
+the release action, preserving this phase separation and integrity contract.
+
 ## Validation and rollout
 
 Extend existing release tests for the public artifact boundary and input mutation;

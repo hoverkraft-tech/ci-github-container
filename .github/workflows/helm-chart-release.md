@@ -24,8 +24,8 @@
 
 Validate and publish the same prepared Helm chart archive.
 
-This workflow reuses Helm chart CI, then downloads only its immutable artifact ID
-in a separate publication job. The original checksum is checked before registry
+This workflow reuses Helm chart CI, then passes its immutable artifact ID
+to the release action in a separate publication job. The original checksum is checked before registry
 login; no source checkout, packaging or dependency rebuild occurs in publication.
 Validation uses read permissions and separate read-only image credentials.
 Only publication receives packages write and OIDC. A failed/skipped/cancelled
