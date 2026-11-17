@@ -106,7 +106,7 @@ jobs:
       packages: write
     steps:
       - id: is-organization-or-user
-        uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@c63b4ce928082260ab263abc01faf3c1fa20c52b # 4.2.3
+        uses: hoverkraft-tech/ci-github-common/actions/repository-owner-is-organization@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4
 
       - name: Wait for package visibility
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
