@@ -42,6 +42,10 @@ contract tests on a host and in a Node.js container. Each package's
 `process.env.ACTION_ENTRYPOINT` when supplied, falling back to source locally.
 The shared test action supplies an isolated `dist/index.js`, clears external module
 lookup settings, propagates failures and removes the copy after every run.
+The documentation formatter uses esbuild to preserve caller config/plugin imports
+and ncc to collect dependency licenses; its package exposes the same build/check/test
+commands. See [ADR 0012](../adr/0012-bundle-helm-documentation-tools.md).
+
 No repository-level test runner is needed. Keep assertions for errors and
 caller-owned files in the action's tests; security checks remain enabled.
 
