@@ -154773,7 +154773,8 @@ var DocumentationChanges = class {
     this.context = context;
     this.git = git;
   }
-  async readGit(args, workspace) {
+  async #readCheckout(property, workspace) {
+    const args = property === "head" ? ["rev-parse", "HEAD"] : ["status", "--porcelain=v1", "-z", "--untracked-files=all"];
     if (this.git) return this.git(args);
     const { stdout } = await execFileAsync("git", args, {
       cwd: workspace,
@@ -154819,13 +154820,9 @@ var DocumentationChanges = class {
       const values = valuesFile ? path.relative(workspace, valuesFile) : "";
       if (chart && !this.validPath(chart) || values && !this.validPath(values))
         return true;
-      if ((await this.readGit(["rev-parse", "HEAD"], workspace)).trim() !== context.sha)
+      if ((await this.#readCheckout("head", workspace)).trim() !== context.sha)
         return true;
-      if (await this.readGit(
-        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-        workspace
-      ))
-        return true;
+      if (await this.#readCheckout("status", workspace)) return true;
       const { data } = await github.rest.actions.listWorkflowRuns({
         ...context.repo,
         workflow_id: workflow,

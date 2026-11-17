@@ -83,8 +83,8 @@ exclusions are exercised. The existing 56 change-detection cases run unchanged
 against the bundle.
 
 `check:dist` passes on the host. Rebuilding under Node.js 24 at another filesystem
-path also produces identical staged files. `index.js` is 8,252,877 bytes
-(1,943,949 bytes with gzip); dependency licenses are 148,159 bytes. These are local
+path also produces identical staged files. `index.js` is 8,252,925 bytes
+(1,943,967 bytes with gzip); dependency licenses are 148,159 bytes. These are local
 distribution checks, not workflow performance measurements or main/release bot
 publication evidence.
 
