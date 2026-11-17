@@ -14,3 +14,4 @@
 - [Shared Helm validation and release workflows](adr/0009-compose-helm-validation-and-release-workflows.md)
 - [Concurrent PR-state lookup deduplication](adr/0010-deduplicate-concurrent-pr-state-lookups.md)
 - [Helm documentation generation and bundled formatting](adr/0011-skip-unchanged-helm-documentation.md)
+- [Release action artifact ownership](adr/0012-release-chart-artifact-input.md)
