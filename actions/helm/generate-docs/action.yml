@@ -4,6 +4,11 @@ description: |
   Action to generate documentation for a Helm chart.
   It will generate the documentation in the `docs/` directory of the chart.
   Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-docs-github-action).
+  Formatting runs from committed JavaScript and data in dist, without Node.js setup or npm installation.
+  Retains Textlint/Markdownlint configuration and ignores, Prettier configuration and caller-owned plugins.
+  Custom modules must already be available in the caller checkout; missing modules or invalid configuration fail.
+  Remaining Markdown style findings are advisory; Textlint errors and Prettier failures block publication.
+  See [the bundling decision](../../../docs/adr/0012-bundle-helm-documentation-tools.md).
 author: hoverkraft
 branding:
   icon: book-open
@@ -97,9 +102,6 @@ runs:
           core.setOutput("working-directory", workingDirectory);
           core.setOutput("working-directory-name", basename(workingDirectory));
 
-          const filesPattern = join(workingDirectory, "**/*.md");;
-          core.setOutput("files-pattern", filesPattern);
-
           let valuesFile = process.env.INPUT_VALUES_FILE || "";
           if (valuesFile && valuesFile.length) {
             if(isAbsolute(valuesFile)) {
@@ -116,10 +118,6 @@ runs:
             valuesFile = realpathSync(valuesFile);
             core.setOutput("values-file", valuesFile);
           }
-
-          // Generate textlint cache path
-          const textlintCachePath = join(process.env.RUNNER_TEMP, `.cache-textlint`);
-          core.setOutput("textlint-cache-path", textlintCachePath);
 
           // Generate textlint config file if not exists
           let textlintConfigPath = join(workingDirectory, ".textlintrc");
@@ -140,10 +138,6 @@ runs:
           }
           core.setOutput("textlint-config-path", textlintConfigPath);
 
-          // Generate prettier cache path
-          const prettierCachePath = join(process.env.RUNNER_TEMP, `.cache-prettier`);
-          core.setOutput("prettier-cache-path", prettierCachePath);
-
           // Generate markdownlint config file if not exists
           let markdownlintConfigPath = join(workingDirectory, ".markdownlint.json");
           if (!existsSync(markdownlintConfigPath)) {
@@ -151,16 +145,7 @@ runs:
 
             const defaultConfig = {
               "default": true,
-              "line-length": false,
-              "outputFormatters": [
-                [
-                  "markdownlint-cli2-formatter-template",
-                  {
-                    "template": "::${errorSeverity:${errorSeverity}}${errorSeverity!error} " +
-                      "file=${fileName},line=${lineNumber},${columnNumber:col=${columnNumber},}title=${ruleName}::${ruleDescription}"
-                  }
-                ]
-              ]
+              "line-length": false
             };
             writeFileSync(markdownlintConfigPath, JSON.stringify(defaultConfig, null, 2));
           }
@@ -181,7 +166,7 @@ runs:
       with:
         script: |
           const { pathToFileURL } = require('node:url');
-          const { DocumentationChanges } = await import(pathToFileURL(`${process.env.ACTION_PATH}/src/change-detection.js`));
+          const { DocumentationChanges } = await import(pathToFileURL(`${process.env.ACTION_PATH}/dist/index.js`));
           const required = await new DocumentationChanges({ github, context }).requiresGeneration({
             paths: process.env.SKIP_IF_ONLY_CHANGED,
             checkoutRef: process.env.CHECKOUT_REF,
@@ -210,101 +195,25 @@ runs:
         values: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
 
-    - name: Setup Node.js
-      if: steps.changes.outputs.required == 'true'
-      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-      with:
-        # The action's tools live outside the caller's checkout. Avoid creating
-        # cache links or changing ignore files in the documentation pull request.
-        package-manager-cache: false
-
-    - name: Install documentation tools
-      if: steps.changes.outputs.required == 'true'
-      shell: bash
-      working-directory: ${{ github.action_path }}
-      run: npm ci --ignore-scripts
-
-    - name: Cache textlint
-      if: steps.changes.outputs.required == 'true'
-      id: cache-textlint
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ${{ steps.prepare-variables.outputs.textlint-cache-path }}
-        key: ${{ runner.os }}-textlint-${{ hashFiles(steps.prepare-variables.outputs.textlint-config-path) }}
-
-    - name: Text lint and fix files
+    - name: Format generated documentation
       if: steps.changes.outputs.required == 'true'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        NODE_PATH: ${{ github.action_path }}/node_modules
+        ACTION_PATH: ${{ github.action_path }}
         WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
-        FILES_PATTERN: ${{ steps.prepare-variables.outputs.files-pattern }}
-        CACHE_PATH: ${{ steps.prepare-variables.outputs.textlint-cache-path }}
-        CONFIG_PATH: ${{ steps.prepare-variables.outputs.textlint-config-path }}
-      with:
-        script: |
-          await exec.exec('npx', [
-            'textlint',
-            '--cache-location', process.env.CACHE_PATH,
-            '--fix',
-            '--config', process.env.CONFIG_PATH,
-            process.env.FILES_PATTERN,
-          ], {
-            cwd: process.env.WORKING_DIRECTORY,
-          });
-
-    - name: Lint Fix markdown files
-      if: steps.changes.outputs.required == 'true'
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        NODE_PATH: ${{ github.action_path }}/node_modules
-        WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
-        FILES_PATTERN: ${{ steps.prepare-variables.outputs.files-pattern }}
-        CONFIG_PATH: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
-      with:
-        script: |
-          await exec.exec('npx', [
-            'markdownlint-cli2',
-            '--fix',
-            '--config', process.env.CONFIG_PATH,
-            process.env.FILES_PATTERN,
-          ], {
-            cwd: process.env.WORKING_DIRECTORY,
-            ignoreReturnCode: true,
-          });
-
-    - name: Cache prettier
-      if: steps.changes.outputs.required == 'true'
-      id: cache-prettier
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ${{ steps.prepare-variables.outputs.prettier-cache-path }}
-        key: ${{ runner.os }}-prettier
-
-    - name: Prettify markdown and values file
-      if: steps.changes.outputs.required == 'true'
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-      env:
-        NODE_PATH: ${{ github.action_path }}/node_modules
-        WORKING_DIRECTORY: ${{ steps.prepare-variables.outputs.working-directory }}
-        CACHE_PATH: ${{ steps.prepare-variables.outputs.prettier-cache-path }}
-        FILES_PATTERN: ${{ steps.prepare-variables.outputs.files-pattern }}
         VALUES_FILE: ${{ steps.prepare-variables.outputs.values-file }}
+        TEXTLINT_CONFIG: ${{ steps.prepare-variables.outputs.textlint-config-path }}
+        MARKDOWNLINT_CONFIG: ${{ steps.prepare-variables.outputs.markdownlint-config-path }}
       with:
         script: |
-          const args = [
-            'prettier',
-            '--cache-location', process.env.CACHE_PATH,
-            '--write',
-            process.env.FILES_PATTERN,
-          ];
-
-          if (process.env.VALUES_FILE) {
-            args.push(process.env.VALUES_FILE);
-          }
-
-          await exec.exec('npx', args, {
-            cwd: process.env.WORKING_DIRECTORY,
+          const { pathToFileURL } = require('node:url');
+          const { formatDocumentation } = await import(pathToFileURL(`${process.env.ACTION_PATH}/dist/index.js`));
+          await formatDocumentation({
+            workingDirectory: process.env.WORKING_DIRECTORY,
+            valuesFile: process.env.VALUES_FILE,
+            textlintConfig: process.env.TEXTLINT_CONFIG,
+            markdownlintConfig: process.env.MARKDOWNLINT_CONFIG,
+            core,
           });
 
     - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0

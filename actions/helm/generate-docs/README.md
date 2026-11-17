@@ -28,6 +28,11 @@
 Action to generate documentation for a Helm chart.
 It will generate the documentation in the `docs/` directory of the chart.
 Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-docs-github-action).
+Formatting runs from committed JavaScript and data in dist, without Node.js setup or npm installation.
+Retains Textlint/Markdownlint configuration and ignores, Prettier configuration and caller-owned plugins.
+Custom modules must already be available in the caller checkout; missing modules or invalid configuration fail.
+Remaining Markdown style findings are advisory; Textlint errors and Prettier failures block publication.
+See [the bundling decision](../../../docs/adr/0012-bundle-helm-documentation-tools.md).
 
 <!-- overview:end -->
 
@@ -36,7 +41,7 @@ Mainly using [losisin/helm-docs-github-action](https://github.com/losisin/helm-d
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@d03aac10d532198d5465f787ad9a18abddf1b77a
+- uses: hoverkraft-tech/ci-github-container/actions/helm/generate-docs@114cb5455b377d17eb774dab44862a1fb4c0761c # feat/review-ci-composition
   with:
     # Working directory
     # Default: `${{ github.workspace }}`

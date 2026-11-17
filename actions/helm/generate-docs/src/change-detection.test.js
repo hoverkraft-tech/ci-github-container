@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DocumentationChanges } from "./change-detection.js";
+import { pathToFileURL } from "node:url";
+
+const { DocumentationChanges } = await import(
+	process.env.ACTION_ENTRYPOINT
+		? pathToFileURL(process.env.ACTION_ENTRYPOINT)
+		: new URL("./change-detection.js", import.meta.url)
+);
 
 const head = "a".repeat(40);
 const previous = "b".repeat(40);

@@ -14,3 +14,4 @@
 - [Shared Helm validation and release workflows](adr/0009-compose-helm-validation-and-release-workflows.md)
 - [Concurrent PR-state lookup deduplication](adr/0010-deduplicate-concurrent-pr-state-lookups.md)
 - [Conservative Helm documentation generation](adr/0011-skip-unchanged-helm-documentation.md)
+- [ADR 0012: Bundle Helm documentation tools](adr/0012-bundle-helm-documentation-tools.md)

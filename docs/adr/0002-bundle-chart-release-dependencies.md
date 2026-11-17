@@ -36,6 +36,10 @@ selected dynamically. The
 [cross-repository audit](https://github.com/hoverkraft-tech/ci-github-common/blob/perf/475-p2-report-parser-bundle/docs/adr/0002-audit-action-dependency-distributions.md)
 records the plugin-distribution acceptance criteria.
 
+The documentation-tool deferral is superseded by
+[ADR 0012](0012-bundle-helm-documentation-tools.md), which retains caller-selected
+configuration while explicitly bundling the action-owned rules and plugins.
+
 ## Automated dependency updates
 
 Adopt the single public distribution workflow and dedicated action from ci-github-common.
