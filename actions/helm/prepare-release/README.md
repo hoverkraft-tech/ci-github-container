@@ -34,7 +34,7 @@ Published releases return released; unchanged plans return no-changes. No chart 
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-release@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/helm/prepare-release@b055d6ce0f3a5e223615ad494d88d92e17af11e5 # 4.2.0
   with:
     # Repository-relative directory containing the root Chart.yaml
     # This input is required.
