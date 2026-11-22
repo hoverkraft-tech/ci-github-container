@@ -70,4 +70,5 @@ jobs:
           tag: ${{ steps.plan-release.outputs.tag }}
           target-ref: ${{ github.sha }}
           publish: "true"
+          changelog-summary: ${{ secrets.CHANGELOG_SUMMARY }}
           github-token: ${{ steps.generate-token.outputs.token }}
