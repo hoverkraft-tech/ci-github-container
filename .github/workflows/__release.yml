@@ -57,7 +57,7 @@ jobs:
 
       - name: Plan release
         id: plan-release
-        uses: hoverkraft-tech/ci-github-publish/actions/release/plan@79515002f850e714d4c76f07983e6eb1ba97bea5 # 3.1.1
+        uses: hoverkraft-tech/ci-github-publish/actions/release/plan@bf24f894f60a3def62a8750f3964d05acb052c11 # 3.1.2
         with:
           target-ref: ${{ github.sha }}
           force: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
@@ -65,7 +65,7 @@ jobs:
 
       - name: Create and publish release
         if: steps.plan-release.outputs.should-release == 'true' && steps.plan-release.outputs.tag != ''
-        uses: hoverkraft-tech/ci-github-publish/actions/release/create@79515002f850e714d4c76f07983e6eb1ba97bea5 # 3.1.1
+        uses: hoverkraft-tech/ci-github-publish/actions/release/create@bf24f894f60a3def62a8750f3964d05acb052c11 # 3.1.2
         with:
           tag: ${{ steps.plan-release.outputs.tag }}
           target-ref: ${{ github.sha }}

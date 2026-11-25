@@ -58,7 +58,7 @@ runs:
 
     - id: plan
       if: steps.inspect.outputs.status == 'plan'
-      uses: hoverkraft-tech/ci-github-publish/actions/release/plan@79515002f850e714d4c76f07983e6eb1ba97bea5 # 3.1.1
+      uses: hoverkraft-tech/ci-github-publish/actions/release/plan@bf24f894f60a3def62a8750f3964d05acb052c11 # 3.1.2
       with:
         target-ref: ${{ github.sha }}
         force: ${{ github.event_name == 'workflow_dispatch' && inputs.force == 'true' }}
