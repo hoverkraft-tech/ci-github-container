@@ -151,12 +151,15 @@ on:
 permissions: {}
 jobs:
   helm-chart-release:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/helm-chart-release.yml@988ccc2b85dec5822e801d7bc0622cad7cc94870 # 4.1.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/helm-chart-release.yml@b055d6ce0f3a5e223615ad494d88d92e17af11e5 # 4.2.0
     permissions:
       contents: read
       id-token: write
       packages: write
     secrets:
+      # Optional publication username kept as a secret. Overrides the username input; used only in publication.
+      oci-registry-username: ""
+
       # Read-only image pull credential for validation; defaults to its read-only GITHUB_TOKEN.
       test-oci-registry-password: ""
 
