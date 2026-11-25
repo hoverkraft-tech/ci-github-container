@@ -151,7 +151,7 @@ on:
 permissions: {}
 jobs:
   helm-chart-release:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/helm-chart-release.yml@b055d6ce0f3a5e223615ad494d88d92e17af11e5 # 4.2.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/helm-chart-release.yml@d21c49f884d2ca8406bcab4bce9c44b29ce4a8ed # fix/helm-release-secret-username
     permissions:
       contents: read
       id-token: write
