@@ -115,6 +115,9 @@ name: Helm chart release
         type: string
         default: ""
     secrets:
+      oci-registry-username:
+        description: Optional publication username kept as a secret. Overrides the username input; used only in publication.
+        required: false
       test-oci-registry-password:
         description: Read-only image pull credential for validation; defaults to its read-only GITHUB_TOKEN.
         required: false
@@ -191,7 +194,7 @@ jobs:
           archive-name: ${{ needs.validate.outputs.archive-name }}
           checksum: ${{ needs.validate.outputs.checksum }}
           oci-registry: ${{ inputs.oci-registry }}
-          oci-registry-username: ${{ inputs.oci-registry-username || github.repository_owner }}
+          oci-registry-username: ${{ secrets.oci-registry-username || inputs.oci-registry-username || github.repository_owner }}
           oci-registry-password: ${{ secrets.oci-registry-password || github.token }}
           oci-repository: ${{ inputs.oci-repository || format('{0}/charts', github.repository) }}
           sign: ${{ inputs.sign }}
