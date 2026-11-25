@@ -89,10 +89,11 @@ See [ADR 0009](../../docs/adr/0009-compose-helm-validation-and-release-workflows
 
 ## Secrets
 
-| **Secret**                       | **Description**                                                                         | **Required** |
-| -------------------------------- | --------------------------------------------------------------------------------------- | ------------ |
-| **`test-oci-registry-password`** | Read-only image pull credential for validation; defaults to its read-only GITHUB_TOKEN. | **false**    |
-| **`oci-registry-password`**      | Chart publication credential; defaults to the publication job's GITHUB_TOKEN.           | **false**    |
+| **Secret**                       | **Description**                                                                                         | **Required** |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------ |
+| **`oci-registry-username`**      | Optional publication username kept as a secret. Overrides the username input; used only in publication. | **false**    |
+| **`test-oci-registry-password`** | Read-only image pull credential for validation; defaults to its read-only GITHUB_TOKEN.                 | **false**    |
+| **`oci-registry-password`**      | Chart publication credential; defaults to the publication job's GITHUB_TOKEN.                           | **false**    |
 
 <!-- secrets:end -->
 <!-- outputs:start -->
@@ -151,7 +152,7 @@ on:
 permissions: {}
 jobs:
   helm-chart-release:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/helm-chart-release.yml@d21c49f884d2ca8406bcab4bce9c44b29ce4a8ed # fix/helm-release-secret-username
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/helm-chart-release.yml@b055d6ce0f3a5e223615ad494d88d92e17af11e5 # 4.2.0
     permissions:
       contents: read
       id-token: write
