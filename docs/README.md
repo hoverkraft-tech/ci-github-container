@@ -15,3 +15,4 @@
 - [Concurrent PR-state lookup deduplication](adr/0010-deduplicate-concurrent-pr-state-lookups.md)
 - [Helm documentation generation and bundled formatting](adr/0011-skip-unchanged-helm-documentation.md)
 - [Release action artifact ownership](adr/0012-release-chart-artifact-input.md)
+- [Shared container image tests](adr/0014-standardize-container-image-tests.md)
