@@ -1,0 +1,5 @@
+{
+	"nodeRunner": "ghcr.io/hoverkraft-tech/docker-base-images/testcontainers-node:1.0.5@sha256:0a8eabad2b41854803acd0608472ef404b94aa8d8ee29e472cf6e86a1ee53248",
+	"reaper": "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",
+	"gossVersion": "v0.4.10"
+}

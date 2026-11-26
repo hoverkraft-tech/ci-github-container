@@ -12,6 +12,10 @@
 		{
 			"matchManagers": ["custom.regex"],
 			"groupName": "Docker build tooling"
+		},
+		{
+			"matchFileNames": ["actions/docker/test-image/tooling.json"],
+			"groupName": "Container test tooling"
 		}
 	],
 	"customManagers": [
@@ -21,6 +25,21 @@
 			"matchStrings": [
 				"# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+default: \"(?:[^\"\\s]+:)?(?<currentValue>[^\"\\s]+)\""
 			]
+		},
+		{
+			"customType": "regex",
+			"managerFilePatterns": ["/^actions/docker/test-image/tooling\\.json$/"],
+			"matchStrings": [
+				"\"(?:nodeRunner|reaper)\":\\s*\"(?<depName>[^\"@]+):(?<currentValue>[^\"@:]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
+			],
+			"datasourceTemplate": "docker"
+		},
+		{
+			"customType": "regex",
+			"managerFilePatterns": ["/^actions/docker/test-image/tooling\\.json$/"],
+			"matchStrings": ["\"gossVersion\":\\s*\"(?<currentValue>v[0-9.]+)\""],
+			"datasourceTemplate": "github-releases",
+			"depNameTemplate": "goss-org/goss"
 		}
 	]
 }

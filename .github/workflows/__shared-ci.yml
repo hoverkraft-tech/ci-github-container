@@ -49,6 +49,16 @@ jobs:
       pull-requests: write
       security-events: write
 
+  test-action-docker-test-image:
+    needs: lint
+    uses: $/.github/workflows/__test-action-docker-test-image.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+
   test-action-docker-build-image:
     needs: lint
     uses: $/.github/workflows/__test-action-docker-build-image.yml
@@ -262,6 +272,7 @@ jobs:
       - test-action-helm-release-chart
       - test-action-docker-promote-images
       - test-action-docker-verify-images
+      - test-action-docker-test-image
       - test-action-docker-prune-pull-requests-image-tags
     if: always()
     uses: hoverkraft-tech/ci-github-common/.github/workflows/ci-reports.yml@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4

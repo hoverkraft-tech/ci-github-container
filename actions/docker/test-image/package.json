@@ -1,0 +1,23 @@
+{
+	"name": "test-image",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"dependencies": {
+		"fast-xml-parser": "^5.12.1"
+	},
+	"devDependencies": {
+		"@vercel/ncc": "0.45.0"
+	},
+	"scripts": {
+		"build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && ncc build src/index.js --out dist --target es2022 --no-cache --license licenses.txt",
+		"check:dist": "npm run build && git diff --exit-code -- dist && test -z \"$(git ls-files --others --exclude-standard -- dist)\"",
+		"test": "node --test src/*.test.js",
+		"test:watch": "node --test --watch src/*.test.js",
+		"pretest:ci": "node -e \"require('node:fs').mkdirSync('coverage', { recursive: true })\"",
+		"test:ci": "node --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test src/*.test.js",
+		"test:distribution": "node --test src/contract.test.js"
+	}
+}
