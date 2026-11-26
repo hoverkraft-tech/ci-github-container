@@ -142,3 +142,9 @@ cover PR, branch and release tags; hosted PR tests do not claim a real release r
 - [GitHub deployments API](https://docs.github.com/en/rest/deployments/deployments)
 - [Attestation verification policy](https://cli.github.com/manual/gh_attestation_verify)
 - [Action repository context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context)
+
+## Extension
+
+[ADR 0013](0013-promote-to-additional-destinations.md) extends the same-repository
+publication restriction with explicitly configured additional destinations, while
+retaining the original candidate validation and journal guarantees.

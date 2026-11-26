@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { ImageVerification } from "../../verify-images/src/verification.js";
 import { promotionContract } from "./contract.js";
+import { PromotionDestinations } from "./destinations.js";
 
 const journal = {
 	environment: "ci-image-promotion",
@@ -16,6 +18,7 @@ class ImagePromotion {
 		attempt,
 		verifiedImages,
 		buildWorkflow,
+		additionalDestinations = "{}",
 	}) {
 		this.builder = promotionContract.builder(buildWorkflow);
 		Object.assign(this, {
@@ -26,6 +29,7 @@ class ImagePromotion {
 			runId,
 			attempt,
 			verifiedImages,
+			additionalDestinations,
 		});
 	}
 
@@ -133,6 +137,10 @@ class ImagePromotion {
 		assert(manifest.endsWith("\n"), "Unexpected Buildx dry-run output");
 		const digest = `sha256:${createHash("sha256").update(manifest.slice(0, -1)).digest("hex")}`;
 		assert.equal(digest, image.digest, "Promotion would change manifest bytes");
+		await this.verifyProvenance(image, reference);
+	}
+
+	async verifyProvenance(image, reference) {
 		const output = await this.command("gh", [
 			"attestation",
 			"verify",
@@ -165,14 +173,14 @@ class ImagePromotion {
 		);
 	}
 
-	async recordClaim(images, run) {
+	async recordClaim(destinations, run) {
 		const claim = {
 			schema: 1,
 			runId: this.runId,
 			attempt: this.attempt,
 			createdAt: run.created_at,
 			revision: this.context.sha,
-			destinations: promotionContract.destinations(images),
+			destinations,
 		};
 		const records = await this.github.paginate(
 			this.github.rest.repos.listDeployments,
@@ -210,6 +218,11 @@ class ImagePromotion {
 	}
 
 	async promote(images) {
+		this.additionalImages = undefined;
+		const destinations = new PromotionDestinations(
+			images,
+			this.additionalDestinations,
+		);
 		assert(
 			Array.isArray(this.verifiedImages),
 			"Missing signature verification output",
@@ -228,23 +241,17 @@ class ImagePromotion {
 		for (const image of Object.values(images))
 			await this.verifyCandidate(image);
 		const run = await this.currentRun();
-		const deploymentId = await this.recordClaim(images, run);
+		const deploymentId = await this.recordClaim(destinations.claim, run);
 		try {
 			await this.status(deploymentId, "in_progress");
 			const promoted = {};
 			for (const [name, image] of Object.entries(images)) {
-				const reference = `${image.registry}/${image.repository}@${image.digest}`;
-				for (const destination of image.candidate.destinations) {
+				for (const destination of [
+					...image.candidate.destinations,
+					...(destinations.additional[name] || []),
+				]) {
 					await this.currentRun();
-					await this.command("docker", [
-						"buildx",
-						"imagetools",
-						"create",
-						"--prefer-index=false",
-						"--tag",
-						destination,
-						reference,
-					]);
+					await this.publishDestination(image, destination);
 					assert.equal(
 						await this.digest(destination),
 						image.digest,
@@ -265,6 +272,7 @@ class ImagePromotion {
 			}
 			await this.currentRun();
 			await this.status(deploymentId, "success");
+			this.additionalImages = destinations.references();
 			return promoted;
 		} catch (error) {
 			await this.status(deploymentId, "failure").catch(() =>
@@ -274,6 +282,39 @@ class ImagePromotion {
 			);
 			throw error;
 		}
+	}
+
+	async publishDestination(image, destination) {
+		const source = `${image.registry}/${image.repository}@${image.digest}`;
+		const repository = destination.slice(0, destination.lastIndexOf(":"));
+		const target = `${repository}@${image.digest}`;
+		if (target !== source) {
+			// Copy immutable content and its security evidence before exposing the tag.
+			await this.command("regctl", [
+				"image",
+				"copy",
+				"--referrers",
+				"--digest-tags",
+				source,
+				target,
+			]);
+			await new ImageVerification({
+				images: JSON.stringify([target]),
+				identityRegexp: this.builder.identityRegexp,
+				issuer: "https://token.actions.githubusercontent.com",
+			}).verify(this.exec);
+			await this.verifyProvenance(image, target);
+			await this.currentRun();
+		}
+		await this.command("docker", [
+			"buildx",
+			"imagetools",
+			"create",
+			"--prefer-index=false",
+			"--tag",
+			destination,
+			target,
+		]);
 	}
 }
 

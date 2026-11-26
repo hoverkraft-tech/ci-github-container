@@ -15,3 +15,4 @@
 - [Concurrent PR-state lookup deduplication](adr/0010-deduplicate-concurrent-pr-state-lookups.md)
 - [Helm documentation generation and bundled formatting](adr/0011-skip-unchanged-helm-documentation.md)
 - [Release action artifact ownership](adr/0012-release-chart-artifact-input.md)
+- [Promotion to additional destinations](adr/0013-promote-to-additional-destinations.md)

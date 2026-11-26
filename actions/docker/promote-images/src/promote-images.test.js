@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { promotionContract } from "./contract.js";
+import { PromotionDestinations } from "./destinations.js";
 import { ImagePromotion } from "./promotion.js";
 
 const raw =
@@ -69,6 +70,7 @@ function claim(overrides = {}) {
 function harness(overrides = {}) {
 	const state = {
 		writes: [],
+		copies: [],
 		records: [],
 		statuses: [],
 		commands: [],
@@ -103,10 +105,18 @@ function harness(overrides = {}) {
 		paginate: async () => state.records,
 	};
 	const exec = {
+		exec: async (command, args) => {
+			state.commands.push([command, ...args]);
+			assert.equal(command, "cosign");
+			return state.badDestinationSignature ? 1 : 0;
+		},
 		getExecOutput: async (command, args) => {
 			state.commands.push([command, ...args]);
 			if (command === "gh") {
-				if (state.badProvenance)
+				if (
+					state.badProvenance ||
+					(state.badDestinationProvenance && state.copies.length)
+				)
 					throw new Error("Provenance verification failed");
 				return {
 					stdout: JSON.stringify([
@@ -131,6 +141,16 @@ function harness(overrides = {}) {
 						},
 					]),
 				};
+			}
+			if (command === "regctl") {
+				assert(
+					state.records.length > 0,
+					"Copies must be journaled before registry writes",
+				);
+				if (state.failCopy) throw new Error("Registry copy failed");
+				state.copies.push(args.at(-1));
+				if (state.cancelAfterCopy) state.run.status = "completed";
+				return { stdout: "" };
 			}
 			if (args.includes("--dry-run")) return { stdout: `${state.manifest}\n` };
 			if (args.includes("inspect"))
@@ -157,6 +177,7 @@ function harness(overrides = {}) {
 		attempt: "1",
 		verifiedImages: state.verifiedImages,
 		buildWorkflow: state.buildWorkflow,
+		additionalDestinations: state.additionalDestinations,
 	});
 	return { state, promotion, github };
 }
@@ -686,4 +707,192 @@ test("accepts a current run reported as queued while its promotion job executes"
 	state.run.status = "queued";
 	await promotion.promote({ backend: candidate() });
 	assert.equal(state.statuses.at(-1), "success");
+});
+
+const extraDestination = "docker.io/example/backend:1.2.3";
+const additionalDestinations = JSON.stringify({ backend: [extraDestination] });
+
+test("explicit extra destinations retain original outputs and share one publication claim", async () => {
+	const { state, promotion } = harness({ additionalDestinations });
+	const output = await promotion.promote({ backend: candidate() });
+	assert.deepEqual(state.writes, [
+		...candidate().candidate.destinations,
+		extraDestination,
+	]);
+	assert.deepEqual(state.records[0].payload.destinations, {
+		...claim().destinations,
+		[extraDestination]: digest,
+	});
+	assert.deepEqual(
+		output.backend.images,
+		candidate().candidate.destinations.map((ref) => `${ref}@${digest}`),
+	);
+	assert.deepEqual(promotion.additionalImages, {
+		backend: [`${extraDestination}@${digest}`],
+	});
+	const copy = state.commands.find(([command]) => command === "regctl");
+	assert(copy.includes("--referrers") && copy.includes("--digest-tags"));
+	const verification = state.commands.find(([command]) => command === "cosign");
+	assert.equal(verification.at(-1), `docker.io/example/backend@${digest}`);
+	assert.equal(
+		verification[verification.indexOf("--certificate-identity-regexp") + 1],
+		promotionContract.builder(state.buildWorkflow).identityRegexp,
+	);
+	assert.equal(
+		state.commands.filter(([command]) => command === "gh").at(-1)[3],
+		`oci://docker.io/example/backend@${digest}`,
+	);
+	assert.deepEqual(await promotion.promote({ backend: candidate() }), output);
+	assert.deepEqual(state.statuses, [
+		"in_progress",
+		"success",
+		"in_progress",
+		"success",
+	]);
+});
+
+test("an extra tag in the source repository needs no copy", async () => {
+	const { state, promotion } = harness({
+		additionalDestinations: JSON.stringify({
+			backend: ["ghcr.io/example/application/backend:stable"],
+		}),
+	});
+	await promotion.promote({ backend: candidate() });
+	assert.deepEqual(state.copies, []);
+	assert.equal(
+		state.writes.at(-1),
+		"ghcr.io/example/application/backend:stable",
+	);
+});
+
+test("a newer claim overlapping only an additional destination blocks every write", async () => {
+	const { state, promotion } = harness({
+		additionalDestinations,
+		records: [
+			{
+				payload: claim({
+					runId: "21",
+					destinations: { [extraDestination]: digest },
+				}),
+			},
+		],
+	});
+	await assert.rejects(promotion.promote({ backend: candidate() }), /newer/i);
+	assert.deepEqual(state.writes, []);
+	assert.deepEqual(state.copies, []);
+});
+
+for (const [name, override] of [
+	["copy failure", { failCopy: true }],
+	["invalid copied signature", { badDestinationSignature: true }],
+	["invalid copied provenance", { badDestinationProvenance: true }],
+	["cancellation during copy", { cancelAfterCopy: true }],
+	["extra tag write failure", { failDestination: extraDestination }],
+]) {
+	test(`${name} retains the claim, withholds extra output and prevents the extra tag`, async () => {
+		const { state, promotion } = harness({
+			additionalDestinations,
+			...override,
+		});
+		await assert.rejects(promotion.promote({ backend: candidate() }));
+		assert.equal(state.records.length, 1);
+		assert.equal(
+			state.records[0].payload.destinations[extraDestination],
+			digest,
+		);
+		assert.deepEqual(state.writes, candidate().candidate.destinations);
+		assert.equal(promotion.additionalImages, undefined);
+		assert.deepEqual(state.statuses, ["in_progress", "failure"]);
+		Object.assign(state, {
+			failCopy: false,
+			badDestinationSignature: false,
+			badDestinationProvenance: false,
+			cancelAfterCopy: false,
+			failDestination: undefined,
+		});
+		state.run.status = "in_progress";
+		await promotion.promote({ backend: candidate() });
+		assert.equal(state.statuses.at(-1), "success");
+		assert.deepEqual(promotion.additionalImages, {
+			backend: [`${extraDestination}@${digest}`],
+		});
+	});
+}
+
+for (const value of [
+	"not JSON",
+	"null",
+	"[]",
+	'{"unknown":["docker.io/example/backend:1.2.3"]}',
+	'{"backend":[]}',
+	'{"backend":[42]}',
+	JSON.stringify({ backend: [extraDestination, extraDestination] }),
+	JSON.stringify({ backend: [candidate().candidate.destinations[0]] }),
+	...[
+		"example/backend:1.2.3",
+		"docker.io/example/backend",
+		"docker.io/example/backend:candidate-old",
+		`docker.io/example/backend@${digest}`,
+		"docker.io/example/backend:bad;tag",
+		" docker.io/example/backend:1.2.3",
+	].map((ref) => JSON.stringify({ backend: [ref] })),
+]) {
+	test(`rejects invalid additional destinations ${value}`, () => {
+		assert.throws(
+			() => new PromotionDestinations({ backend: candidate() }, value),
+		);
+	});
+}
+
+test("registry credentials are explicit per host and never fall back to the source token", () => {
+	const destinations = new PromotionDestinations(
+		{ backend: candidate() },
+		additionalDestinations,
+	);
+	const source = {
+		registry: "ghcr.io",
+		username: "source-user",
+		password: "source-token",
+	};
+	assert.throws(
+		() => destinations.authentication(source),
+		/Explicit credentials/,
+	);
+	for (const credentials of [
+		'{"docker.io":{"username":"user"}}',
+		'{"docker.io":{"username":"user","password":"","typo":"secret"}}',
+		'{"unconfigured.example":{"username":"user","password":"other"}}',
+		'{"docker.io":{"username":"user","password":"secret"}',
+	]) {
+		assert.throws(
+			() => destinations.authentication({ ...source, credentials }),
+			(error) => !error.message.includes("secret"),
+		);
+	}
+	const auth = destinations.authentication({
+		...source,
+		credentials: JSON.stringify({
+			"docker.io": { username: "dest-user", password: "dest-token" },
+		}),
+	});
+	assert.deepEqual(auth.registries, {
+		push: "ghcr.io",
+		"pull:docker.io": "docker.io",
+	});
+	assert.deepEqual(auth.usernames, {
+		push: "source-user",
+		"pull:docker.io": "dest-user",
+	});
+	assert.deepEqual(auth.passwords, {
+		push: "source-token",
+		"pull:docker.io": "dest-token",
+	});
+	const sameRegistry = new PromotionDestinations(
+		{ backend: candidate() },
+		JSON.stringify({ backend: ["ghcr.io/other/backend:stable"] }),
+	);
+	assert.equal(sameRegistry.requiresCopy, true);
+	assert.deepEqual(sameRegistry.authentication(source).passwords, {
+		push: "source-token",
+	});
 });
