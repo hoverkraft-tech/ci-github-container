@@ -2,7 +2,8 @@
 name: Test for "docker/test-image" action
 run-name: Test for "docker/test-image" action
 
-on: # yamllint disable-line rule:truthy
+on:
+  # yamllint disable-line rule:truthy
   workflow_call:
 
 permissions: {}
@@ -84,7 +85,6 @@ jobs:
         with:
           image: ${{ env.IMAGE }}
           working-directory: ${{ steps.arrange.outputs.root }}/success
-          report-group: test-action-docker-test-image
 
       - name: Act - Retain native reports after a failing assertion
         id: failing
@@ -93,7 +93,6 @@ jobs:
         with:
           image: ${{ steps.arrange.outputs.image-id }}
           working-directory: ${{ steps.arrange.outputs.root }}/failure
-          report-group: fixture-container-negative
 
       - name: Act - Bound execution and clean resources after timeout
         id: timeout
@@ -103,7 +102,6 @@ jobs:
           image: ${{ steps.arrange.outputs.image-id }}
           working-directory: ${{ steps.arrange.outputs.root }}/timeout
           timeout: "10"
-          report-group: fixture-container-negative
 
       - name: Act - Reject a short-lived image with Goss
         id: incompatible
@@ -114,7 +112,6 @@ jobs:
           image: docker.io/library/hello-world:latest@sha256:1e4c05b897a751332ce85c7e9449da2d93514ea2dea6dbb0e2753c9e949b2bfa
           working-directory: ${{ steps.arrange.outputs.root }}/success
           timeout: "10"
-          report-group: fixture-container-negative
 
       - name: Download failed test reports
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -162,6 +159,10 @@ jobs:
               assert.equal(process.env.INCOMPATIBLE_RESULT, '');
               assert.ok(process.env.INCOMPATIBLE_LOGS);
             }
+            const manifest = JSON.parse(require('node:fs').readFileSync(path.join(process.env.ROOT,'download','ci-report.json'),'utf8'));
+            assert.equal(manifest.metadata.engine,process.env.ENGINE);
+            assert.equal(manifest.metadata.imageId,result['image-id']);
+            assert.equal(manifest.metadata.platform,result.platform);
             const files = await glob.create(`${process.env.ROOT}/download/**/*.xml`);
             assert.ok((await files.glob()).some(file => new Reports(file).inspect().failed > 0));
             await exec.exec('docker', ['container', 'inspect', process.env.CALLER]);
