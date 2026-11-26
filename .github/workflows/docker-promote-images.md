@@ -38,7 +38,7 @@ validate:
 promote:
   if: always()
   needs: [candidates, validate, lint]
-  uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f
+  uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@a5dc1ea7c1f4c2dffc3267c5be7304d01284f2ec # 4.2.1
   permissions:
     actions: read
     attestations: read
@@ -56,7 +56,25 @@ Pin the reusable workflow to a reviewed release SHA. The example assumes a
 `candidate: true` build and an existing application-specific validation script.
 Signatures and provenance from Docker build images are required. Promotion checks
 the candidate tag/digest, exact manifest bytes, source ref and current run/attempt.
-Only same-repository tag updates within the configured registry/prefix are allowed.
+Candidate metadata can only request same-repository tags in the authorized prefix.
+To publish the validated digest elsewhere, explicitly configure `additional-destinations`.
+
+## Additional registries and repositories
+
+`additional-destinations` maps candidate image names to fully qualified tagged refs:
+`{"app":["docker.io/example/app:1.2.3"]}`. Original destinations remain unchanged.
+Each different registry requires its own credentials through the optional secret
+`destination-credentials`: `{"docker.io":{"username":"...","password":"..."}}`.
+Pass this JSON from a repository secret or construct it using `toJSON` for each
+credential. Another repository on the source registry reuses its existing login.
+
+Copies preserve the digest, platforms, OCI referrers and legacy signature tags.
+The destination signature and original build provenance are verified before its
+consumer tag is written. This requires registry support for the copied metadata.
+`regctl` is installed only when copying to another repository is required.
+`built-images` retains the original repository metadata; `additional-images` maps
+image names to arrays of additional `registry/repository:tag@sha256:...` references.
+Both outputs are withheld on failure. No rebuild or new signature is performed.
 
 The trusted builder defaults to `docker-build-images.yml` in the promotion action's
 repository, resolved through `github.action_repository`. Forks therefore use their
@@ -68,7 +86,7 @@ The builder must preserve the candidate metadata and current-run provenance cont
 ## Publication and recovery
 
 The workflow serializes promotions per calling repository and records validated
-claims through GitHub deployments in `ci-image-promotion`. No app credentials or
+claims for all original and additional destinations through GitHub deployments in `ci-image-promotion`. No app credentials or
 external database are required. All writers of the destinations must use this
 workflow. Retain these journal records while destinations may be reused; deleting
 them removes supersession protection. A newer claim blocks older runs even when
@@ -81,7 +99,8 @@ new attempt; rerunning only promotion with old outputs fails. Cancellation check
 cannot revoke a registry request already in flight.
 
 No candidate, digest, signature or attestation is deleted. Use registry-specific
-retention that preserves consumer-tagged content. See [ADR 0006](../../docs/adr/0006-promote-validated-image-digests.md).
+retention that preserves consumer-tagged content. See [ADR 0006](../../docs/adr/0006-promote-validated-image-digests.md)
+and [ADR 0013](../../docs/adr/0013-promote-to-additional-destinations.md).
 
 ### Permissions
 
@@ -99,23 +118,25 @@ retention that preserves consumer-tagged content. See [ADR 0006](../../docs/adr/
 
 ### Workflow Call Inputs
 
-| **Input**                   | **Description**                                                                                                                                                                                                                              | **Required** | **Type**   | **Default**         |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- | ------------------- |
-| **`job-results`**           | Direct dependency results from toJSON(needs), including candidate and validation outputs.                                                                                                                                                    | **true**     | **string** | -                   |
-| **`build-workflow`**        | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in the promotion action's repository. Used for both signatures and provenance; override when the builder lives elsewhere. | **false**    | **string** | -                   |
-| **`oci-registry`**          | Authorized publication registry hostname.                                                                                                                                                                                                    | **false**    | **string** | `ghcr.io`           |
-| **`repository`**            | Authorized image repository prefix; defaults to the calling repository.                                                                                                                                                                      | **false**    | **string** | -                   |
-| **`oci-registry-username`** | Registry username; defaults to the calling repository owner.                                                                                                                                                                                 | **false**    | **string** | -                   |
-| **`runs-on`**               | JSON array of runner labels. Requires Docker and GitHub CLI.                                                                                                                                                                                 | **false**    | **string** | `["ubuntu-latest"]` |
+| **Input**                     | **Description**                                                                                                                                                                                                                              | **Required** | **Type**   | **Default**         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- | ------------------- |
+| **`job-results`**             | Direct dependency results from toJSON(needs), including candidate and validation outputs.                                                                                                                                                    | **true**     | **string** | -                   |
+| **`build-workflow`**          | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in the promotion action's repository. Used for both signatures and provenance; override when the builder lives elsewhere. | **false**    | **string** | -                   |
+| **`additional-destinations`** | JSON object mapping validated image names to additional fully qualified tagged destinations.                                                                                                                                                 | **false**    | **string** | `{}`                |
+| **`oci-registry`**            | Authorized publication registry hostname.                                                                                                                                                                                                    | **false**    | **string** | `ghcr.io`           |
+| **`repository`**              | Authorized image repository prefix; defaults to the calling repository.                                                                                                                                                                      | **false**    | **string** | -                   |
+| **`oci-registry-username`**   | Registry username; defaults to the calling repository owner.                                                                                                                                                                                 | **false**    | **string** | -                   |
+| **`runs-on`**                 | JSON array of runner labels. Requires Docker and GitHub CLI.                                                                                                                                                                                 | **false**    | **string** | `["ubuntu-latest"]` |
 
 <!-- inputs:end -->
 <!-- outputs:start -->
 
 ## Outputs
 
-| **Output**         | **Description**                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| **`built-images`** | Image metadata with verified consumer tags and unchanged digests; empty on failure. |
+| **Output**              | **Description**                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| **`built-images`**      | Image metadata with verified consumer tags and unchanged digests; empty on failure.                 |
+| **`additional-images`** | JSON object mapping image names to verified additional tag-and-digest references; empty on failure. |
 
 <!-- outputs:end -->
 <!-- generated:start -->
@@ -147,7 +168,7 @@ on:
 permissions: {}
 jobs:
   docker-promote-images:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f # 4.0.0
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@2518a5da86e89c9ffc661e5b8b7235eca6b905ce # feat/docker-mirror-image
     permissions:
       actions: read
       attestations: read
@@ -159,6 +180,9 @@ jobs:
       # Registry password or token with write access to the authorized image repositories.
       # This input is required.
       oci-registry-password: ""
+
+      # JSON object mapping each additional registry hostname to its username and password.
+      destination-credentials: ""
     with:
       # Direct dependency results from toJSON(needs), including candidate and validation outputs.
       # This input is required.
@@ -166,6 +190,10 @@ jobs:
 
       # Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in the promotion action's repository. Used for both signatures and provenance; override when the builder lives elsewhere.
       build-workflow: ""
+
+      # JSON object mapping validated image names to additional fully qualified tagged destinations.
+      # Default: `{}`
+      additional-destinations: "{}"
 
       # Authorized publication registry hostname.
       # Default: `ghcr.io`
