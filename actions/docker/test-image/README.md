@@ -2,12 +2,6 @@
 
 # ![Icon](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItY2hlY2stY2lyY2xlIiBjb2xvcj0iYmx1ZSI+PHBhdGggZD0iTTIyIDExLjA4VjEyYTEwIDEwIDAgMSAxLTUuOTMtOS4xNCI+PC9wYXRoPjxwb2x5bGluZSBwb2ludHM9IjIyIDQgMTIgMTQuMDEgOSAxMS4wMSI+PC9wb2x5bGluZT48L3N2Zz4=) GitHub Action: Docker - Test Image
 
-<div align="center">
-  <img src="../../../.github/logo.svg" width="60px" align="center" alt="Docker - Test Image" />
-</div>
-
----
-
 <!-- header:end -->
 <!-- badges:start -->
 
@@ -41,10 +35,10 @@ explicitly for mixed directories. A failed run never switches engines.
   and optional `goss_wait.yaml`. The image must stay running and provide `sh`;
   use Node for CLI or shell-less images. Goss keeps the image's user and entrypoint.
 
-Native JUnit reports and diagnostics are retained for seven days, including after
+Native JUnit report bundles and diagnostics are retained for seven days, including after
 failures. Missing, stale, invalid, empty or all-skipped results fail validation.
 Use the common `ci-reports` workflow with producer jobs in `needs`, `if: always()`
-and `job-results` set to the JSON representation of `needs`. Set `report-group` to the outer job ID.
+and `job-results` set to the JSON representation of `needs`. Forward the action's `report-plan` output from the calling job.
 The action posts no PR comments and cleans only its own resources; cancellation
 cleanup is best effort. Keep native suite cleanup in place.
 
@@ -71,7 +65,7 @@ node actions/docker/test-image/bin/test-image.mjs \
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/test-image@a5dc1ea7c1f4c2dffc3267c5be7304d01284f2ec # 4.2.1
+- uses: hoverkraft-tech/ci-github-container/actions/docker/test-image@3515f6f4736151728e2e6e7d8b8c39bb3faf5753
   with:
     # Fully qualified registry reference containing @sha256, or an exact local Docker sha256 image ID. Tag-only references are rejected.
     # This input is required.
@@ -85,21 +79,26 @@ node actions/docker/test-image/bin/test-image.mjs \
     # Default: `auto`
     engine: auto
 
-    # Requested Linux image platform (amd64 or arm64, optionally with variant). Defaults to the daemon's native platform. Configure compatible runners or emulation explicitly.
+    # Requested Linux image platform (amd64 or arm64, optionally with variant). Defaults to the daemon's native
+    # platform. Configure compatible runners or emulation explicitly.
     platform: ""
 
-    # Overall engine execution timeout in seconds, from 1 to 3600. Defaults to 300. Tool acquisition is separately bounded; Goss readiness is limited to 30 seconds or this timeout, whichever is shorter.
+    # Overall engine execution timeout in seconds, from 1 to 3600. Defaults to 300. Tool acquisition is
+    # separately bounded; Goss readiness is limited to 30 seconds or this timeout, whichever is shorter.
     # Default: `300`
     timeout: "300"
 
-    # Optional native JUnit paths or globs, relative to working-directory or absolute, separated by newlines, commas or semicolons. Every explicit entry must match a new or changed report from this invocation. Defaults to the adapter's own JUnit report, which is always required for validation.
+    # Optional native JUnit paths or globs, relative to working-directory or absolute, separated by newlines,
+    # commas or semicolons. Every explicit entry must match a new or changed report from this invocation.
+    # Defaults to the adapter's own JUnit report, which is always required for validation.
     report-file: ""
 
-    # Report path mappings forwarded to the common parser. Defaults to mapping the Node runner suite path into working-directory. An explicit value replaces that mapping.
+    # Report path mappings forwarded to the common parser. Defaults to mapping the Node runner suite path into
+    # working-directory. An explicit value replaces that mapping.
     path-mapping: ""
 
-    # Outer calling job ID for consolidated ci-reports. Defaults to the current job ID. Use the job ID appearing in the reporting workflow's needs.
-    report-group: ""
+    # Expected producer metadata supplied by orchestration. Leave empty for standalone use.
+    report-plan: ""
 ```
 
 <!-- usage:end -->
@@ -107,16 +106,21 @@ node actions/docker/test-image/bin/test-image.mjs \
 
 ## Inputs
 
-| **Input**               | **Description**                                                                                                                                                                                                                                                                                  | **Required** | **Default** |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ----------- |
-| **`image`**             | Fully qualified registry reference containing @sha256, or an exact local Docker sha256 image ID. Tag-only references are rejected.                                                                                                                                                               | **true**     | -           |
-| **`working-directory`** | Suite directory, absolute or relative to the repository root.                                                                                                                                                                                                                                    | **false**    | `.`         |
-| **`engine`**            | Test engine, auto, testcontainers-node or goss. Auto requires exactly one suite kind.                                                                                                                                                                                                            | **false**    | `auto`      |
-| **`platform`**          | Requested Linux image platform (amd64 or arm64, optionally with variant). Defaults to the daemon's native platform. Configure compatible runners or emulation explicitly.                                                                                                                        | **false**    | -           |
-| **`timeout`**           | Overall engine execution timeout in seconds, from 1 to 3600. Defaults to 300. Tool acquisition is separately bounded; Goss readiness is limited to 30 seconds or this timeout, whichever is shorter.                                                                                             | **false**    | `300`       |
-| **`report-file`**       | Optional native JUnit paths or globs, relative to working-directory or absolute, separated by newlines, commas or semicolons. Every explicit entry must match a new or changed report from this invocation. Defaults to the adapter's own JUnit report, which is always required for validation. | **false**    | -           |
-| **`path-mapping`**      | Report path mappings forwarded to the common parser. Defaults to mapping the Node runner suite path into working-directory. An explicit value replaces that mapping.                                                                                                                             | **false**    | -           |
-| **`report-group`**      | Outer calling job ID for consolidated ci-reports. Defaults to the current job ID. Use the job ID appearing in the reporting workflow's needs.                                                                                                                                                    | **false**    | -           |
+| **Input**               | **Description**                                                                                                                    | **Required** | **Default** |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------- |
+| **`image`**             | Fully qualified registry reference containing @sha256, or an exact local Docker sha256 image ID. Tag-only references are rejected. | **true**     | -           |
+| **`working-directory`** | Suite directory, absolute or relative to the repository root.                                                                      | **false**    | `.`         |
+| **`engine`**            | Test engine, auto, testcontainers-node or goss. Auto requires exactly one suite kind.                                              | **false**    | `auto`      |
+| **`platform`**          | Requested Linux image platform (amd64 or arm64, optionally with variant). Defaults to the daemon's native                          | **false**    | -           |
+|                         | platform. Configure compatible runners or emulation explicitly.                                                                    |              |             |
+| **`timeout`**           | Overall engine execution timeout in seconds, from 1 to 3600. Defaults to 300. Tool acquisition is                                  | **false**    | `300`       |
+|                         | separately bounded; Goss readiness is limited to 30 seconds or this timeout, whichever is shorter.                                 |              |             |
+| **`report-file`**       | Optional native JUnit paths or globs, relative to working-directory or absolute, separated by newlines,                            | **false**    | -           |
+|                         | commas or semicolons. Every explicit entry must match a new or changed report from this invocation.                                |              |             |
+|                         | Defaults to the adapter's own JUnit report, which is always required for validation.                                               |              |             |
+| **`path-mapping`**      | Report path mappings forwarded to the common parser. Defaults to mapping the Node runner suite path into                           | **false**    | -           |
+|                         | working-directory. An explicit value replaces that mapping.                                                                        |              |             |
+| **`report-plan`**       | Expected producer metadata supplied by orchestration. Leave empty for standalone use.                                              | **false**    | -           |
 
 <!-- inputs:end -->
 <!-- secrets:start -->
@@ -125,11 +129,14 @@ node actions/docker/test-image/bin/test-image.mjs \
 
 ## Outputs
 
-| **Output**                   | **Description**                                                                                                                                                                                                             |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`report-artifact-id`**     | Native JUnit report artifact ID, including after failed tests. Empty when no valid report artifact is available.                                                                                                            |
-| **`diagnostic-artifact-id`** | Engine and available container log artifact ID, including after failures and timeouts.                                                                                                                                      |
-| **`validation`**             | Successful image validation JSON with image identity, resolved engine, suite, observed platform, run/attempt, executed test counts and report/log paths. Empty on failure; a diagnostic artifact never establishes success. |
+| **Output**                   | **Description**                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **`report-artifact-id`**     | Native report bundle, including diagnostic metadata and available test reports after failures.        |
+| **`diagnostic-artifact-id`** | Engine and available container log artifact ID, including after failures and timeouts.                |
+| **`validation`**             | Successful image validation JSON with image identity, resolved engine, suite, observed platform,      |
+|                              | run/attempt, executed test counts and report/log paths. Empty on failure; a diagnostic artifact never |
+|                              | establishes success.                                                                                  |
+| **`report-plan`**            | Expected native report plan. Forward this from the calling job to ci-reports.                         |
 
 <!-- outputs:end -->
 <!-- examples:start -->
