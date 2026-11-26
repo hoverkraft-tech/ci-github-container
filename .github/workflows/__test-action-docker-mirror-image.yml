@@ -1,0 +1,77 @@
+---
+name: Test for "docker/mirror-image" action
+
+"on":
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  continuous-integration:
+    uses: hoverkraft-tech/ci-github-nodejs/.github/workflows/continuous-integration.yml@191d7230d57982bfc11d57f68b005f386a6d7fbf # 3.1.1
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+    with:
+      working-directory: actions/docker/mirror-image
+      build: ""
+      lint: ""
+      code-ql: '{"languages":"typescript","config-file":".github/codeql/config.yml"}'
+      test: '{"comment":false,"report-group":"test-action-docker-mirror-image"}'
+
+  registry-copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    services:
+      source:
+        image: registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
+        ports:
+          - 5000/tcp
+      destination:
+        image: registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
+        ports:
+          - 5000/tcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker
+      - id: fixture
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SOURCE_REGISTRY: localhost:${{ job.services.source.ports['5000'] }}
+          DESTINATION_REGISTRY: localhost:${{ job.services.destination.ports['5000'] }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const { prepare } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/tests/docker-mirror-image/fixture.mjs`));
+            const images = await prepare(exec, process.env.RUNNER_TEMP, process.env.SOURCE_REGISTRY, process.env.DESTINATION_REGISTRY);
+            core.setOutput('images', images);
+      - id: single
+        uses: $/actions/docker/mirror-image
+        with:
+          source-image: ${{ fromJSON(steps.fixture.outputs.images).single.source }}
+          destination-image: ${{ fromJSON(steps.fixture.outputs.images).single.destination }}
+      - id: multi
+        uses: $/actions/docker/mirror-image
+        with:
+          source-image: ${{ fromJSON(steps.fixture.outputs.images).multi.source }}
+          destination-image: ${{ fromJSON(steps.fixture.outputs.images).multi.destination }}
+      - name: Verify unchanged manifests, digests and platforms
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          IMAGES: ${{ steps.fixture.outputs.images }}
+          SINGLE: ${{ steps.single.outputs.image }}
+          MULTI: ${{ steps.multi.outputs.image }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const { verify } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/tests/docker-mirror-image/fixture.mjs`));
+            await verify(exec, JSON.parse(process.env.IMAGES), { single: process.env.SINGLE, multi: process.env.MULTI });

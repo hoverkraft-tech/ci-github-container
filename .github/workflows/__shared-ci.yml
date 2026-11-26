@@ -29,6 +29,16 @@ jobs:
     with:
       comment: false
 
+  test-action-docker-mirror-image:
+    needs: lint
+    uses: $/.github/workflows/__test-action-docker-mirror-image.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: write
+      security-events: write
+
   test-action-docker-promote-images:
     needs: lint
     uses: $/.github/workflows/__test-action-docker-promote-images.yml

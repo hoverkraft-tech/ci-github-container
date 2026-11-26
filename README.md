@@ -35,6 +35,8 @@ _Actions that operate on OCI images across their build, metadata, and lifecycle 
 
 #### - [Get image name](actions/docker/get-image-name/README.md)
 
+#### - [Mirror image](actions/docker/mirror-image/README.md)
+
 #### - [Promote images](actions/docker/promote-images/README.md)
 
 #### - [Prune pull requests image tags](actions/docker/prune-pull-requests-image-tags/README.md)
@@ -72,6 +74,8 @@ _Actions dedicated to packaging, validating, signing, and publishing Helm charts
 _Orchestrated workflows you can plug directly into repositories to automate container-focused CI routines._
 
 ### - [Docker build images](.github/workflows/docker-build-images.md)
+
+### - [Docker mirror image](.github/workflows/docker-mirror-image.md)
 
 ### - [Docker promote images](.github/workflows/docker-promote-images.md)
 
