@@ -1,6 +1,6 @@
 # Copy an already validated image to one explicit registry tag without rebuilding.
 # The source must include its immutable SHA-256 digest. Single-platform manifests
-# and multi-platform indexes retain their digest; a changed digest fails the action.
+# and multi-platform indices retain their digest; a changed digest fails the action.
 # Registry signatures and referrers are not copied separately. Verify the source
 # before calling and use the shared mirror workflow to serialize destination writes.
 # Requires Docker and a Linux runner. Credentials are optional for local test registries.

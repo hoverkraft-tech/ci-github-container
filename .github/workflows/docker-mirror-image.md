@@ -17,7 +17,7 @@ Mirror a validated immutable image to another registry without rebuilding it.
 Require successful source validation or promotion through the calling job's needs.
 Pass a digest-qualified source and one explicit destination tag. The workflow
 serializes writes to that destination and returns its verified immutable reference.
-It preserves image manifests and indexes, but does not copy separate signatures
+It preserves image manifests and indices, but does not copy separate signatures
 or referrers. Source validation remains the caller's responsibility.
 
 Registry credentials are supplied as secrets. The GitHub job token is used only
@@ -44,7 +44,7 @@ on:
 permissions: {}
 jobs:
   docker-mirror-image:
-    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-mirror-image.yml@e8bd81eb506404d63f0304b02ff254e5fd2f0ce5 # feat/docker-mirror-image
+    uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-mirror-image.yml@a3584451e5b6a068b5857a940bd1901a0b203d54 # feat/docker-mirror-image
     permissions:
       contents: read
       packages: read

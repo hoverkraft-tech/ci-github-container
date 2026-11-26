@@ -17,7 +17,7 @@ Copy an immutable image to another registry without changing its digest.
 
 Copy an already validated image to one explicit registry tag without rebuilding.
 The source must include its immutable SHA-256 digest. Single-platform manifests
-and multi-platform indexes retain their digest; a changed digest fails the action.
+and multi-platform indices retain their digest; a changed digest fails the action.
 Registry signatures and referrers are not copied separately. Verify the source
 before calling and use the shared mirror workflow to serialize destination writes.
 Requires Docker and a Linux runner. Credentials are optional for local test registries.
@@ -28,7 +28,7 @@ Requires Docker and a Linux runner. Credentials are optional for local test regi
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/mirror-image@e8bd81eb506404d63f0304b02ff254e5fd2f0ce5 # feat/docker-mirror-image
+- uses: hoverkraft-tech/ci-github-container/actions/docker/mirror-image@a3584451e5b6a068b5857a940bd1901a0b203d54 # feat/docker-mirror-image
   with:
     # Fully qualified source image including its SHA-256 digest.
     # This input is required.
