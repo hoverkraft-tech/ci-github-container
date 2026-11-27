@@ -433,7 +433,7 @@ jobs:
       issues: read
       packages: write
     steps:
-      - uses: hoverkraft-tech/ci-github-common/actions/checkout@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4
+      - uses: hoverkraft-tech/ci-github-common/actions/checkout@f165c0ca3e88604611481e1408ace1e0e3a5ee47 # 4.3.1
         with:
           lfs: ${{ inputs.lfs }}
 
@@ -441,7 +441,7 @@ jobs:
         shell: bash
         run: git lfs pull
 
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         if: inputs.build-secret-github-app-client-id
         id: generate-token
         with:
@@ -511,7 +511,7 @@ jobs:
 
       # FIXME: Set built images infos in file to be uploaded as artifacts, because github action does not handle job outputs for matrix
       # https://github.com/orgs/community/discussions/26639
-      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4
+      - uses: hoverkraft-tech/ci-github-common/actions/set-matrix-output@f165c0ca3e88604611481e1408ace1e0e3a5ee47 # 4.3.1
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
           value: ${{ steps.build.outputs.built-image }}
@@ -529,7 +529,7 @@ jobs:
       built-images: ${{ steps.create-images-manifests.outputs.built-images }}
     steps:
       - id: get-matrix-outputs
-        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4
+        uses: hoverkraft-tech/ci-github-common/actions/get-matrix-outputs@f165c0ca3e88604611481e1408ace1e0e3a5ee47 # 4.3.1
         with:
           artifact-name: ${{ needs.prepare-variables.outputs.artifact-name }}
 

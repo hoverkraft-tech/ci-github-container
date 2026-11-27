@@ -180,7 +180,7 @@ runs:
           core.info(required ? 'Generate Helm documentation.' : 'Helm documentation inputs are unchanged since successful CI.');
 
     - if: ${{ steps.changes.outputs.required == 'true' && (inputs.checkout-ref != '') }}
-      uses: hoverkraft-tech/ci-github-common/actions/checkout@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4
+      uses: hoverkraft-tech/ci-github-common/actions/checkout@f165c0ca3e88604611481e1408ace1e0e3a5ee47 # 4.3.1
       with:
         ref: ${{ inputs.checkout-ref }}
 
@@ -190,7 +190,7 @@ runs:
         chart-search-root: ${{ steps.prepare-variables.outputs.working-directory }}
 
     - if: ${{ steps.changes.outputs.required == 'true' && (steps.prepare-variables.outputs.values-file) }}
-      uses: losisin/helm-values-schema-json-action@9ed68d9d464a5e6f7f5fc1f3dc071828cf7d13a2 # v3.2.0
+      uses: losisin/helm-values-schema-json-action@3bbbe5960e765b4e45205e6b3af45daeaec7d7f5 # v3.2.1
       with:
         values: ${{ steps.prepare-variables.outputs.values-file }}
         working-directory: ${{ steps.prepare-variables.outputs.working-directory }}
@@ -216,7 +216,7 @@ runs:
             core,
           });
 
-    - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+    - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
       if: ${{ steps.changes.outputs.required == 'true' && (inputs.github-app-client-id) }}
       id: generate-token
       with:
@@ -225,7 +225,7 @@ runs:
         permission-contents: write
         permission-pull-requests: write
 
-    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@d606f77fad305ef07dfde3db5270f5e324019c97 # 4.2.4
+    - uses: hoverkraft-tech/ci-github-common/actions/create-and-merge-pull-request@f165c0ca3e88604611481e1408ace1e0e3a5ee47 # 4.3.1
       if: steps.changes.outputs.required == 'true'
       id: create-and-merge-pull-request
       with:
