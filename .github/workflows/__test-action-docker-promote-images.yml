@@ -22,3 +22,44 @@ jobs:
       lint: ""
       code-ql: '{"languages":"typescript","config-file":".github/codeql/config.yml"}'
       test: '{"comment":false,"report-group":"test-action-docker-promote-images"}'
+
+  registry-copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    services:
+      source:
+        image: registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
+        ports:
+          - 5000/tcp
+      destination:
+        image: registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
+        ports:
+          - 5000/tcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker
+      - uses: regclient/actions/regctl-installer@dd58ad94f76adb73d8ac1bf75ed25f01545d5b32 # v0.2.0
+        with:
+          # renovate: datasource=github-releases depName=regclient/regclient
+          release: v0.11.7
+      - name: Verify cross-registry manifests and attachments
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SOURCE_REGISTRY: localhost:${{ job.services.source.ports['5000'] }}
+          DESTINATION_REGISTRY: localhost:${{ job.services.destination.ports['5000'] }}
+          REGCTL_CONFIG: ${{ runner.temp }}/regctl-copy-fixture.json
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const { prepare, copyAndVerify } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/tests/docker-promote-images/registry-fixture.mjs`));
+            for (const registry of [process.env.SOURCE_REGISTRY, process.env.DESTINATION_REGISTRY]) {
+              await exec.exec('regctl', ['registry', 'set', registry, '--tls', 'disabled']);
+            }
+            const images = await prepare(exec, process.env.RUNNER_TEMP, process.env.SOURCE_REGISTRY, process.env.DESTINATION_REGISTRY);
+            await copyAndVerify(exec, images);

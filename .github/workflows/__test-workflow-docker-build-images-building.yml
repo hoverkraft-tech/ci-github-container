@@ -279,6 +279,15 @@ jobs:
       pull-requests: read
     with:
       job-results: ${{ toJSON(needs) }}
+      additional-destinations: |
+        {
+          "test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-single": [
+            "ghcr.io/${{ github.repository }}/test-promoted-${{ github.run_id }}-${{ github.run_attempt }}-single:1.2.3"
+          ],
+          "test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-multi": [
+            "ghcr.io/${{ github.repository }}/test-promoted-${{ github.run_id }}-${{ github.run_attempt }}-multi:1.2.3"
+          ]
+        }
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -305,12 +314,15 @@ jobs:
         env:
           CANDIDATES: ${{ needs.act-candidates.outputs.built-images }}
           PROMOTED: ${{ needs.promote-candidates.outputs.built-images }}
+          ADDITIONAL: ${{ needs.promote-candidates.outputs.additional-images }}
           GH_TOKEN: ${{ github.token }}
         with:
           script: |
             const assert = require('node:assert/strict');
             const candidates = JSON.parse(process.env.CANDIDATES);
             const promoted = JSON.parse(process.env.PROMOTED);
+            const additional = JSON.parse(process.env.ADDITIONAL);
+            assert.deepEqual(Object.keys(additional).sort(), Object.keys(candidates).sort());
             assert.deepEqual(Object.keys(promoted).sort(), Object.keys(candidates).sort());
             for (const [name, candidate] of Object.entries(candidates)) {
               const image = promoted[name];
@@ -324,9 +336,15 @@ jobs:
               const before = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', `${reference}@${candidate.digest}`]);
               const after = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', `${reference}:1.2.3`]);
               assert.equal(after.stdout, before.stdout, 'Promotion must retain exact manifest bytes');
-              await exec.exec('gh', ['attestation', 'verify', `oci://${image.images[0]}`, '--repo', process.env.GITHUB_REPOSITORY]);
+              const extra = `${reference.replace('/test-candidate-', '/test-promoted-')}:1.2.3`;
+              assert.deepEqual(additional[name], [`${extra}@${candidate.digest}`]);
+              const copied = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', extra]);
+              assert.equal(copied.stdout, before.stdout, 'Cross-repository copies must retain exact manifest bytes');
+              for (const reference of [...image.images, ...additional[name]]) {
+                await exec.exec('gh', ['attestation', 'verify', `oci://${reference}`, '--repo', process.env.GITHUB_REPOSITORY]);
+              }
             }
-            core.setOutput('references', JSON.stringify(Object.values(promoted).flatMap(image => image.images)));
+            core.setOutput('references', JSON.stringify([...Object.values(promoted).flatMap(image => image.images), ...Object.values(additional).flat()]));
 
       - name: Verify retained image signatures
         uses: $/actions/docker/verify-images
@@ -347,6 +365,15 @@ jobs:
       pull-requests: read
     with:
       job-results: ${{ toJSON(needs) }}
+      additional-destinations: |
+        {
+          "test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-single": [
+            "ghcr.io/${{ github.repository }}/test-promoted-${{ github.run_id }}-${{ github.run_attempt }}-single:1.2.3"
+          ],
+          "test-candidate-${{ github.run_id }}-${{ github.run_attempt }}-multi": [
+            "ghcr.io/${{ github.repository }}/test-promoted-${{ github.run_id }}-${{ github.run_attempt }}-multi:1.2.3"
+          ]
+        }
       build-workflow: ${{ github.repository }}/.github/workflows/docker-build-images.yml
     secrets:
       oci-registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -362,13 +389,21 @@ jobs:
         env:
           FIRST: ${{ needs.promote-candidates.outputs.built-images }}
           SECOND: ${{ needs.repeat-promotion.outputs.built-images }}
+          FIRST_ADDITIONAL: ${{ needs.promote-candidates.outputs.additional-images }}
+          SECOND_ADDITIONAL: ${{ needs.repeat-promotion.outputs.additional-images }}
         with:
           script: |
             const assert = require('node:assert/strict');
             const images = JSON.parse(process.env.FIRST);
             assert.deepEqual(images, JSON.parse(process.env.SECOND));
+            const additional = JSON.parse(process.env.FIRST_ADDITIONAL);
+            assert.deepEqual(additional, JSON.parse(process.env.SECOND_ADDITIONAL));
             const destinations = Object.fromEntries(Object.values(images).flatMap(image =>
               image.tags.map(tag => [`${image.registry}/${image.repository}:${tag}`, image.digest])));
+            for (const reference of Object.values(additional).flat()) {
+              const [destination, digest] = reference.split('@');
+              destinations[destination] = digest;
+            }
             const records = await github.paginate(github.rest.repos.listDeployments, {
               ...context.repo, environment: 'ci-image-promotion', task: 'ci-image-promotion', per_page: 100,
             });
@@ -434,8 +469,9 @@ jobs:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            for (const suffix of ['single', 'multi', 'failed']) {
-              const name = `test-candidate-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-${suffix}`;
+            for (const suffix of ['candidate-single', 'candidate-multi', 'candidate-failed', 'promoted-single', 'promoted-multi']) {
+              const [kind, platform] = suffix.split('-');
+              const name = `test-${kind}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-${platform}`;
               try {
                 await github.rest.packages.deletePackageForOrg({
                   package_type: 'container', package_name: `${context.repo.repo}/${name}`, org: context.repo.owner,
@@ -448,12 +484,14 @@ jobs:
             const records = await github.paginate(github.rest.repos.listDeployments, {
               ...context.repo, environment: 'ci-image-promotion', task: 'ci-image-promotion', per_page: 100,
             });
-            const prefix = `ghcr.io/${process.env.GITHUB_REPOSITORY.toLowerCase()}/test-candidate-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}-`;
+            const repository = process.env.GITHUB_REPOSITORY.toLowerCase();
+            const run = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+            const prefixes = ['candidate', 'promoted'].map(kind => `ghcr.io/${repository}/test-${kind}-${run}-`);
             for (const record of records) {
               const payload = record.payload;
               if (payload?.runId !== String(context.runId) || payload.attempt !== process.env.GITHUB_RUN_ATTEMPT) continue;
               const destinations = Object.keys(payload.destinations || {});
-              if (!destinations.length || !destinations.every(destination => destination.startsWith(prefix))) continue;
+              if (!destinations.length || !destinations.every(destination => prefixes.some(prefix => destination.startsWith(prefix)))) continue;
               await github.rest.repos.createDeploymentStatus({ ...context.repo, deployment_id: record.id, state: 'inactive', auto_inactive: false });
               await github.rest.repos.deleteDeployment({ ...context.repo, deployment_id: record.id });
             }

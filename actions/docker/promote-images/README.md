@@ -26,23 +26,26 @@ or require OIDC write permission.
 
 ## Inputs
 
-| **Input**                   | **Description**                                                                                                                                                                                                                     | **Required** | **Default**                      |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
-| **`job-results`**           | Direct dependency results, including built-images and validated-images outputs.                                                                                                                                                     | **true**     | -                                |
-| **`build-workflow`**        | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in this action's repository. Used for both signatures and provenance; override when the builder lives elsewhere. | **false**    | -                                |
-| **`oci-registry`**          | Authorized publication registry hostname.                                                                                                                                                                                           | **false**    | `ghcr.io`                        |
-| **`repository`**            | Authorized image repository prefix.                                                                                                                                                                                                 | **false**    | `${{ github.repository }}`       |
-| **`oci-registry-username`** | Registry username.                                                                                                                                                                                                                  | **false**    | `${{ github.repository_owner }}` |
-| **`oci-registry-password`** | Registry password or token.                                                                                                                                                                                                         | **true**     | -                                |
+| **Input**                     | **Description**                                                                                                                                                                                                                     | **Required** | **Default**                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------- |
+| **`job-results`**             | Direct dependency results, including built-images and validated-images outputs.                                                                                                                                                     | **true**     | -                                |
+| **`build-workflow`**          | Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in this action's repository. Used for both signatures and provenance; override when the builder lives elsewhere. | **false**    | -                                |
+| **`additional-destinations`** | JSON object mapping validated image names to additional fully qualified tagged destinations, for example {"app":["docker.io/example/app:1.2.3"]}. Original candidate destinations are always retained.                              | **false**    | `{}`                             |
+| **`destination-credentials`** | JSON object mapping each additional registry hostname to its username and password. Required for destinations outside oci-registry; credentials are never shared between hosts.                                                     | **false**    | `{}`                             |
+| **`oci-registry`**            | Authorized publication registry hostname.                                                                                                                                                                                           | **false**    | `ghcr.io`                        |
+| **`repository`**              | Authorized image repository prefix.                                                                                                                                                                                                 | **false**    | `${{ github.repository }}`       |
+| **`oci-registry-username`**   | Registry username.                                                                                                                                                                                                                  | **false**    | `${{ github.repository_owner }}` |
+| **`oci-registry-password`**   | Registry password or token.                                                                                                                                                                                                         | **true**     | -                                |
 
 <!-- inputs:end -->
 <!-- outputs:start -->
 
 ## Outputs
 
-| **Output**         | **Description**                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| **`built-images`** | Image metadata with verified consumer tags and unchanged digests; empty on failure. |
+| **Output**              | **Description**                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| **`built-images`**      | Image metadata with verified consumer tags and unchanged digests; empty on failure.                 |
+| **`additional-images`** | JSON object mapping image names to verified additional tag-and-digest references; empty on failure. |
 
 <!-- outputs:end -->
 <!-- generated:start -->
@@ -67,7 +70,7 @@ This documentation was automatically generated by [CI Dokumentor](https://github
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/promote-images@3feb56e45f82273a7eded46ac3b9364c08337cee # 3.0.0
+- uses: hoverkraft-tech/ci-github-container/actions/docker/promote-images@2518a5da86e89c9ffc661e5b8b7235eca6b905ce # feat/docker-mirror-image
   with:
     # Direct dependency results, including built-images and validated-images outputs.
     # This input is required.
@@ -75,6 +78,14 @@ This documentation was automatically generated by [CI Dokumentor](https://github
 
     # Trusted builder as owner/repository/.github/workflows/file.yml, without a ref. Defaults to docker-build-images.yml in this action's repository. Used for both signatures and provenance; override when the builder lives elsewhere.
     build-workflow: ""
+
+    # JSON object mapping validated image names to additional fully qualified tagged destinations, for example {"app":["docker.io/example/app:1.2.3"]}. Original candidate destinations are always retained.
+    # Default: `{}`
+    additional-destinations: "{}"
+
+    # JSON object mapping each additional registry hostname to its username and password. Required for destinations outside oci-registry; credentials are never shared between hosts.
+    # Default: `{}`
+    destination-credentials: "{}"
 
     # Authorized publication registry hostname.
     # Default: `ghcr.io`

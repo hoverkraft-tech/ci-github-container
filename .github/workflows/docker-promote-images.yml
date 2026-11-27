@@ -23,7 +23,7 @@
 # promote:
 #   if: always()
 #   needs: [candidates, validate, lint]
-#   uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@7442ea53022a6365d3be7259634aaaf095bf5d3f
+#   uses: hoverkraft-tech/ci-github-container/.github/workflows/docker-promote-images.yml@a5dc1ea7c1f4c2dffc3267c5be7304d01284f2ec # 4.2.1
 #   permissions:
 #     actions: read
 #     attestations: read
@@ -41,7 +41,25 @@
 # `candidate: true` build and an existing application-specific validation script.
 # Signatures and provenance from Docker build images are required. Promotion checks
 # the candidate tag/digest, exact manifest bytes, source ref and current run/attempt.
-# Only same-repository tag updates within the configured registry/prefix are allowed.
+# Candidate metadata can only request same-repository tags in the authorized prefix.
+# To publish the validated digest elsewhere, explicitly configure `additional-destinations`.
+#
+# ## Additional registries and repositories
+#
+# `additional-destinations` maps candidate image names to fully qualified tagged refs:
+# `{"app":["docker.io/example/app:1.2.3"]}`. Original destinations remain unchanged.
+# Each different registry requires its own credentials through the optional secret
+# `destination-credentials`: `{"docker.io":{"username":"...","password":"..."}}`.
+# Pass this JSON from a repository secret or construct it using `toJSON` for each
+# credential. Another repository on the source registry reuses its existing login.
+#
+# Copies preserve the digest, platforms, OCI referrers and legacy signature tags.
+# The destination signature and original build provenance are verified before its
+# consumer tag is written. This requires registry support for the copied metadata.
+# `regctl` is installed only when copying to another repository is required.
+# `built-images` retains the original repository metadata; `additional-images` maps
+# image names to arrays of additional `registry/repository:tag@sha256:...` references.
+# Both outputs are withheld on failure. No rebuild or new signature is performed.
 #
 # The trusted builder defaults to `docker-build-images.yml` in the promotion action's
 # repository, resolved through `github.action_repository`. Forks therefore use their
@@ -53,7 +71,7 @@
 # ## Publication and recovery
 #
 # The workflow serializes promotions per calling repository and records validated
-# claims through GitHub deployments in `ci-image-promotion`. No app credentials or
+# claims for all original and additional destinations through GitHub deployments in `ci-image-promotion`. No app credentials or
 # external database are required. All writers of the destinations must use this
 # workflow. Retain these journal records while destinations may be reused; deleting
 # them removes supersession protection. A newer claim blocks older runs even when
@@ -66,7 +84,8 @@
 # cannot revoke a registry request already in flight.
 #
 # No candidate, digest, signature or attestation is deleted. Use registry-specific
-# retention that preserves consumer-tagged content. See [ADR 0006](../../docs/adr/0006-promote-validated-image-digests.md).
+# retention that preserves consumer-tagged content. See [ADR 0006](../../docs/adr/0006-promote-validated-image-digests.md)
+# and [ADR 0013](../../docs/adr/0013-promote-to-additional-destinations.md).
 ---
 name: Docker promote images
 on: # yamllint disable-line rule:truthy
@@ -83,6 +102,10 @@ on: # yamllint disable-line rule:truthy
           Used for both signatures and provenance; override when the builder lives elsewhere.
         type: string
         default: ""
+      additional-destinations:
+        description: JSON object mapping validated image names to additional fully qualified tagged destinations.
+        type: string
+        default: "{}"
       oci-registry:
         description: Authorized publication registry hostname.
         type: string
@@ -103,10 +126,16 @@ on: # yamllint disable-line rule:truthy
       oci-registry-password:
         description: Registry password or token with write access to the authorized image repositories.
         required: true
+      destination-credentials:
+        description: JSON object mapping each additional registry hostname to its username and password.
+        required: false
     outputs:
       built-images:
         description: Image metadata with verified consumer tags and unchanged digests; empty on failure.
         value: ${{ jobs.promote.outputs.built-images }}
+      additional-images:
+        description: JSON object mapping image names to verified additional tag-and-digest references; empty on failure.
+        value: ${{ jobs.promote.outputs.additional-images }}
 permissions: {}
 jobs:
   promote:
@@ -126,12 +155,15 @@ jobs:
       pull-requests: read
     outputs:
       built-images: ${{ job.status == 'success' && steps.promote.outputs.built-images || '' }}
+      additional-images: ${{ job.status == 'success' && steps.promote.outputs.additional-images || '' }}
     steps:
       - id: promote
         uses: $/actions/docker/promote-images
         with:
           job-results: ${{ inputs.job-results }}
           build-workflow: ${{ inputs.build-workflow }}
+          additional-destinations: ${{ inputs.additional-destinations }}
+          destination-credentials: ${{ secrets.destination-credentials || '{}' }} # zizmor: ignore[secrets-outside-env]
           oci-registry: ${{ inputs.oci-registry }}
           repository: ${{ inputs.repository || github.repository }}
           oci-registry-username: ${{ inputs.oci-registry-username || github.repository_owner }}
