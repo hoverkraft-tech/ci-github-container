@@ -298,26 +298,20 @@ var require_promise_event_emitter = __commonJS({
   "node_modules/@textlint/kernel/lib/src/task/promise-event-emitter.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var __classPrivateFieldGet = exports && exports.__classPrivateFieldGet || function(receiver, state, kind, f4) {
-      if (kind === "a" && !f4) throw new TypeError("Private accessor was defined without a getter");
-      if (typeof state === "function" ? receiver !== state || !f4 : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-      return kind === "m" ? f4 : kind === "a" ? f4.call(receiver) : f4 ? f4.value : state.get(receiver);
-    };
-    var _EventEmitter_listeners;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PromiseEventEmitter = exports.EventEmitter = void 0;
     var EventEmitter = class {
       constructor() {
-        _EventEmitter_listeners.set(this, /* @__PURE__ */ new Map());
+        this._listeners = /* @__PURE__ */ new Map();
       }
       on(type, listener) {
-        const prevSet = __classPrivateFieldGet(this, _EventEmitter_listeners, "f").get(type);
+        const prevSet = this._listeners.get(type);
         const listenerSet = prevSet !== null && prevSet !== void 0 ? prevSet : /* @__PURE__ */ new Set();
         listenerSet === null || listenerSet === void 0 ? void 0 : listenerSet.add(listener);
-        __classPrivateFieldGet(this, _EventEmitter_listeners, "f").set(type, listenerSet);
+        this._listeners.set(type, listenerSet);
       }
       emit(type, ...args) {
-        const listenerSet = __classPrivateFieldGet(this, _EventEmitter_listeners, "f").get(type);
+        const listenerSet = this._listeners.get(type);
         if (!listenerSet) {
           return;
         }
@@ -326,7 +320,7 @@ var require_promise_event_emitter = __commonJS({
         }
       }
       off(type, listener) {
-        const listenerSet = __classPrivateFieldGet(this, _EventEmitter_listeners, "f").get(type);
+        const listenerSet = this._listeners.get(type);
         if (!listenerSet) {
           return;
         }
@@ -337,19 +331,22 @@ var require_promise_event_emitter = __commonJS({
         }
       }
       removeAllListeners() {
-        __classPrivateFieldGet(this, _EventEmitter_listeners, "f").clear();
+        this._listeners.clear();
       }
       listenerCount(type) {
         var _a6, _b2;
-        return (_b2 = (_a6 = __classPrivateFieldGet(this, _EventEmitter_listeners, "f").get(type)) === null || _a6 === void 0 ? void 0 : _a6.size) !== null && _b2 !== void 0 ? _b2 : 0;
+        return (_b2 = (_a6 = this._listeners.get(type)) === null || _a6 === void 0 ? void 0 : _a6.size) !== null && _b2 !== void 0 ? _b2 : 0;
+      }
+      listenerSet(type) {
+        const set = this._listeners.get(type);
+        return set !== void 0 && set.size > 0 ? set : void 0;
       }
       listeners(type) {
         var _a6;
-        return Array.from((_a6 = __classPrivateFieldGet(this, _EventEmitter_listeners, "f").get(type)) !== null && _a6 !== void 0 ? _a6 : []);
+        return Array.from((_a6 = this._listeners.get(type)) !== null && _a6 !== void 0 ? _a6 : []);
       }
     };
     exports.EventEmitter = EventEmitter;
-    _EventEmitter_listeners = /* @__PURE__ */ new WeakMap();
     var PromiseEventEmitter = class {
       constructor() {
         this.events = new EventEmitter();
@@ -360,12 +357,24 @@ var require_promise_event_emitter = __commonJS({
       on(event, listener) {
         return this.events.on(event, listener);
       }
-      emit(event, ...args) {
-        const promises = [];
-        this.events.listeners(event).forEach((listener) => {
-          promises.push(Promise.resolve(listener(...args)));
-        });
-        return Promise.all(promises);
+      /**
+       * Call the listeners of `event` with `arg`.
+       * It is called for every node of the AST, so it does not allocate when no listener returns a promise.
+       * @returns a promise of all the promises that the listeners returned, or `undefined` when none of them returned a promise
+       */
+      emit(event, arg) {
+        const listenerSet = this.events.listenerSet(event);
+        if (listenerSet === void 0) {
+          return void 0;
+        }
+        let promises;
+        for (const listener of listenerSet) {
+          const result = listener(arg);
+          if (result != null && typeof result.then === "function") {
+            (promises !== null && promises !== void 0 ? promises : promises = []).push(result);
+          }
+        }
+        return promises === void 0 ? void 0 : Promise.all(promises);
       }
     };
     exports.PromiseEventEmitter = PromiseEventEmitter;
@@ -689,6 +698,102 @@ var require_logger = __commonJS({
   }
 });
 
+// node_modules/@textlint/kernel/lib/src/util/serial-listener-runner.js
+var require_serial_listener_runner = __commonJS({
+  "node_modules/@textlint/kernel/lib/src/util/serial-listener-runner.js"(exports) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.sharedSerialListenerRunner = void 0;
+    exports.createSerialListenerRunner = createSerialListenerRunner;
+    var isPromiseLike2 = (value) => {
+      return typeof value === "object" && value !== null && typeof value.then === "function";
+    };
+    var createAsyncLocalStorage = () => {
+      var _a6;
+      if (typeof process === "undefined") {
+        return void 0;
+      }
+      const getBuiltinModule = process.getBuiltinModule;
+      const AsyncLocalStorage2 = (_a6 = getBuiltinModule === null || getBuiltinModule === void 0 ? void 0 : getBuiltinModule("node:async_hooks")) === null || _a6 === void 0 ? void 0 : _a6.AsyncLocalStorage;
+      return AsyncLocalStorage2 ? new AsyncLocalStorage2() : void 0;
+    };
+    function createSerialListenerRunner() {
+      let pending;
+      const runningListener = createAsyncLocalStorage();
+      let immediateTime = 0;
+      const setPending = (promise) => {
+        const tail = promise.catch(() => void 0);
+        pending = tail;
+        void tail.then(() => {
+          if (pending === tail) {
+            pending = void 0;
+          }
+        });
+      };
+      const measure = (fn9, record) => {
+        const runAsync = async (args) => {
+          const start = performance.now();
+          try {
+            const result = fn9(...args);
+            if (isPromiseLike2(result)) {
+              await result;
+            }
+          } finally {
+            record(performance.now() - start);
+          }
+        };
+        const runAtOnce = (args) => {
+          const start = performance.now();
+          let result;
+          try {
+            result = runningListener ? runningListener.run(true, () => fn9(...args)) : fn9(...args);
+          } catch (error2) {
+            const time = performance.now() - start;
+            immediateTime += time;
+            record(time);
+            return Promise.reject(error2);
+          }
+          if (!isPromiseLike2(result)) {
+            record(performance.now() - start);
+            immediateTime += performance.now() - start;
+            return void 0;
+          }
+          immediateTime += performance.now() - start;
+          const settled = Promise.resolve(result).then(() => {
+            record(performance.now() - start);
+          }, (error2) => {
+            record(performance.now() - start);
+            throw error2;
+          });
+          setPending(settled);
+          return settled;
+        };
+        return function(...args) {
+          if (!runningListener || runningListener.getStore() !== void 0) {
+            return runAsync(args);
+          }
+          if (pending === void 0) {
+            return runAtOnce(args);
+          }
+          const start = performance.now();
+          const result = pending.then(() => runningListener.run(true, () => runAsync(args)));
+          setPending(result);
+          immediateTime += performance.now() - start;
+          return result;
+        };
+      };
+      return {
+        measure,
+        get immediateTime() {
+          return immediateTime;
+        }
+      };
+    }
+    exports.sharedSerialListenerRunner = createSerialListenerRunner();
+  }
+});
+
 // node_modules/@textlint/kernel/lib/src/util/timing.js
 var require_timing = __commonJS({
   "node_modules/@textlint/kernel/lib/src/util/timing.js"(exports) {
@@ -698,12 +803,14 @@ var require_timing = __commonJS({
       return mod && mod.__esModule ? mod : { "default": mod };
     };
     Object.defineProperty(exports, "__esModule", { value: true });
+    exports.createTiming = createTiming;
     var logger_js_1 = __importDefault(require_logger());
-    function alignLeft(str, len, ch3) {
-      return str + new Array(len - str.length + 1).join(ch3 || " ");
+    var serial_listener_runner_js_1 = require_serial_listener_runner();
+    function alignLeft(str, len2, ch3) {
+      return str + new Array(len2 - str.length + 1).join(ch3 || " ");
     }
-    function alignRight(str, len, ch3) {
-      return new Array(len - str.length + 1).join(ch3 || " ") + str;
+    function alignRight(str, len2, ch3) {
+      return new Array(len2 - str.length + 1).join(ch3 || " ") + str;
     }
     var isBrowser = typeof process === "undefined";
     var enabled = isBrowser ? false : Boolean(process.env.TIMING);
@@ -734,36 +841,46 @@ var require_timing = __commonJS({
           }
         }
       });
-      const table2 = rows.map(function(row) {
+      const table3 = rows.map(function(row) {
         return row.map(function(cell, index) {
           return ALIGN[index](String(cell), widths[index]);
         }).join(" | ");
       });
-      table2.splice(1, 0, widths.map(function(w8, index) {
+      table3.splice(1, 0, widths.map(function(w8, index) {
         if (index !== 0 && index !== widths.length - 1) {
           w8++;
         }
         return ALIGN[index](":", w8 + 1, "-");
       }).join("|"));
-      logger_js_1.default.log(table2.join("\n"));
+      logger_js_1.default.log(table3.join("\n"));
     }
-    exports.default = (function() {
+    function createTiming(runner = (0, serial_listener_runner_js_1.createSerialListenerRunner)()) {
       const data = /* @__PURE__ */ Object.create(null);
       function time(key3, fn9) {
-        if (isBrowser) {
-          return fn9;
-        }
         if (typeof data[key3] === "undefined") {
           data[key3] = 0;
         }
-        return async function(...args) {
-          let t42 = process.hrtime();
-          await fn9(...args);
-          t42 = process.hrtime(t42);
-          data[key3] += t42[0] * 1e3 + t42[1] / 1e6;
+        return runner.measure(fn9, (milliseconds) => {
+          data[key3] += milliseconds;
+        });
+      }
+      return {
+        time,
+        data
+      };
+    }
+    exports.default = (function() {
+      if (isBrowser) {
+        return {
+          // In browser environment, return function as-is without timing measurement
+          time(_key, fn9) {
+            return fn9;
+          },
+          enabled
         };
       }
-      if (enabled && !isBrowser) {
+      const { time, data } = createTiming(serial_listener_runner_js_1.sharedSerialListenerRunner);
+      if (enabled) {
         process.on("exit", function() {
           display(data);
         });
@@ -773,6 +890,137 @@ var require_timing = __commonJS({
         enabled
       };
     })();
+  }
+});
+
+// node_modules/@textlint/kernel/lib/src/profile/profiler.js
+var require_profiler = __commonJS({
+  "node_modules/@textlint/kernel/lib/src/profile/profiler.js"(exports) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.profiler = exports.TextlintProfiler = void 0;
+    var serial_listener_runner_js_1 = require_serial_listener_runner();
+    var FILE_TYPE = "file";
+    var TextlintProfiler = class {
+      constructor() {
+        this._enabled = false;
+        this._entries = /* @__PURE__ */ new Map();
+      }
+      get enabled() {
+        return this._enabled;
+      }
+      enable() {
+        this._enabled = true;
+      }
+      /**
+       * Disable the profiler and clear the totals
+       */
+      disable() {
+        this._enabled = false;
+        this._entries.clear();
+      }
+      /**
+       * Add a record to the total of the type and the id.
+       * When `filePath` is given, the time is also added to the total of the file.
+       */
+      record(type, id2, milliseconds, filePath) {
+        if (!this._enabled) {
+          return;
+        }
+        this._add(type, id2, milliseconds);
+        if (filePath !== void 0) {
+          this._add(FILE_TYPE, filePath, milliseconds);
+        }
+      }
+      /**
+       * Run `fn` and record its time. It returns the result of `fn`.
+       */
+      measure(type, id2, fn9, filePath) {
+        if (!this._enabled) {
+          return fn9();
+        }
+        const start = performance.now();
+        try {
+          return fn9();
+        } finally {
+          this.record(type, id2, performance.now() - start, filePath);
+        }
+      }
+      /**
+       * Run `fn` and record the time until the Promise settles. It returns the result of `fn`.
+       */
+      async measureAsync(type, id2, fn9, filePath) {
+        if (!this._enabled) {
+          return fn9();
+        }
+        const start = performance.now();
+        try {
+          return await fn9();
+        } finally {
+          this.record(type, id2, performance.now() - start, filePath);
+        }
+      }
+      /**
+       * Wrap a listener of a rule so that its time is recorded.
+       * The wrapped listeners run one after another. See createSerialListenerRunner.
+       * @private
+       */
+      wrapListener(type, id2, filePath, fn9) {
+        const entry = this._entry(type, id2);
+        const fileEntry = filePath !== void 0 ? this._entry(FILE_TYPE, filePath) : void 0;
+        return serial_listener_runner_js_1.sharedSerialListenerRunner.measure(fn9, (milliseconds) => {
+          if (!this._enabled) {
+            return;
+          }
+          addTo(entry, milliseconds);
+          if (fileEntry !== void 0) {
+            addTo(fileEntry, milliseconds);
+          }
+        });
+      }
+      /**
+       * The total time of the wrapped listeners that ran, or were queued, when they were called.
+       * The traversal subtracts it from its own time.
+       * @private
+       */
+      get listenerTime() {
+        return serial_listener_runner_js_1.sharedSerialListenerRunner.immediateTime;
+      }
+      /**
+       * Return a copy of the totals
+       */
+      getEntries() {
+        const entries = [];
+        for (const entry of this._entries.values()) {
+          if (entry.count > 0) {
+            entries.push({ ...entry });
+          }
+        }
+        return entries;
+      }
+      _add(type, id2, milliseconds) {
+        addTo(this._entry(type, id2), milliseconds);
+      }
+      _entry(type, id2) {
+        const key3 = id2 === void 0 ? type : `${type}\0${id2}`;
+        let entry = this._entries.get(key3);
+        if (entry === void 0) {
+          entry = { type, id: id2, count: 0, total: 0, max: 0 };
+          this._entries.set(key3, entry);
+        }
+        return entry;
+      }
+    };
+    exports.TextlintProfiler = TextlintProfiler;
+    var addTo = (entry, milliseconds) => {
+      entry.count++;
+      entry.total += milliseconds;
+      if (milliseconds > entry.max) {
+        entry.max = milliseconds;
+      }
+    };
+    exports.profiler = new TextlintProfiler();
   }
 });
 
@@ -815,18 +1063,62 @@ var require_KeyPathUtil = __commonJS({
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.removePrefixFromPackageName = exports.splitKeyToPresetSubRule = void 0;
-    var patternOrgXOrg = /^(@.*?\/.*?)\/(@.*?\/.*?)$/;
-    var patternOrgXRule = /^(@.*?\/.*?)\/(.*?)$/;
-    var patternPresetXOrg = /^(.*?)\/(@.*?)$/;
-    var patternPresetXRule = /^([^@].*?)\/(.*?)$/;
-    var patternList = [patternOrgXOrg, patternOrgXRule, patternPresetXOrg, patternPresetXRule];
+    var LINE_TERMINATOR = /[\n\r\u2028\u2029]/;
+    var splitAt = (name, index) => {
+      return { preset: name.slice(0, index), rule: name.slice(index + 1) };
+    };
+    var matchOrgXOrg = (name) => {
+      if (name.charAt(0) !== "@") {
+        return null;
+      }
+      const orgSlash = name.indexOf("/", 1);
+      if (orgSlash === -1) {
+        return null;
+      }
+      const separator = name.indexOf("/@", orgSlash + 1);
+      if (separator === -1 || name.lastIndexOf("/") < separator + 2) {
+        return null;
+      }
+      return splitAt(name, separator);
+    };
+    var matchOrgXRule = (name) => {
+      if (name.charAt(0) !== "@") {
+        return null;
+      }
+      const orgSlash = name.indexOf("/", 1);
+      if (orgSlash === -1) {
+        return null;
+      }
+      const separator = name.indexOf("/", orgSlash + 1);
+      if (separator === -1) {
+        return null;
+      }
+      return splitAt(name, separator);
+    };
+    var matchPresetXOrg = (name) => {
+      const separator = name.indexOf("/@");
+      if (separator === -1) {
+        return null;
+      }
+      return splitAt(name, separator);
+    };
+    var matchPresetXRule = (name) => {
+      if (name.length === 0 || name.charAt(0) === "@") {
+        return null;
+      }
+      const separator = name.indexOf("/", 1);
+      if (separator === -1) {
+        return null;
+      }
+      return splitAt(name, separator);
+    };
     var splitKeyToPresetSubRule = (name) => {
-      for (const pattern2 of patternList) {
-        const result = name.match(pattern2);
-        if (!result) {
-          continue;
+      var _a6, _b2, _c4;
+      if (!LINE_TERMINATOR.test(name.slice(1))) {
+        const result = LINE_TERMINATOR.test(name.charAt(0)) ? matchPresetXRule(name) : (_c4 = (_b2 = (_a6 = matchOrgXOrg(name)) !== null && _a6 !== void 0 ? _a6 : matchOrgXRule(name)) !== null && _b2 !== void 0 ? _b2 : matchPresetXOrg(name)) !== null && _c4 !== void 0 ? _c4 : matchPresetXRule(name);
+        if (result) {
+          return result;
         }
-        return { preset: result[1], rule: result[2] };
       }
       return {
         preset: null,
@@ -1161,7 +1453,7 @@ var require_ms = __commonJS({
       options7 = options7 || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse11(val);
+        return parse12(val);
       } else if (type === "number" && isFinite(val)) {
         return options7.long ? fmtLong(val) : fmtShort(val);
       }
@@ -1169,7 +1461,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse11(str) {
+    function parse12(str) {
       str = String(str);
       if (str.length > 100) {
         return;
@@ -1831,22 +2123,20 @@ var require_src4 = __commonJS({
       Skip: SKIP
     };
     exports.VisitorOption = VisitorOption;
+    var SENTINEL = {};
     var Controller = class {
       __willStartTraverse() {
         this.__current = null;
         this.__worklist = [];
         this.__leavelist = [];
       }
-      __execute(callback, element) {
+      __execute(callback, node) {
         let result = void 0;
         const previous4 = this.__current;
-        this.__current = element;
+        this.__current = node;
         if (callback) {
-          const parentNode = this.__leavelist[this.__leavelist.length - 1].node;
-          if (!element.node) {
-            return;
-          }
-          result = callback.call(this, element.node, parentNode);
+          const parentNode = this.__leavelist[this.__leavelist.length - 1];
+          result = callback.call(this, node, parentNode);
         }
         this.__current = previous4;
         return result;
@@ -1859,11 +2149,9 @@ var require_src4 = __commonJS({
        * @public
        */
       parents() {
-        let i, iz;
         const result = [];
-        for (i = 1, iz = this.__leavelist.length; i < iz; ++i) {
-          const txtElement = this.__leavelist[i];
-          const node = txtElement.node;
+        for (let i = 1, iz = this.__leavelist.length; i < iz; ++i) {
+          const node = this.__leavelist[i];
           if (node) {
             result.push(node);
           }
@@ -1876,10 +2164,8 @@ var require_src4 = __commonJS({
        * @public
        */
       current() {
-        if (!this.__current) {
-          return null;
-        }
-        return this.__current.node;
+        var _a6;
+        return (_a6 = this.__current) !== null && _a6 !== void 0 ? _a6 : null;
       }
       /**
        * Traverse AST with visitor
@@ -1889,19 +2175,15 @@ var require_src4 = __commonJS({
       traverse(root3, visitor) {
         let ret;
         this.__willStartTraverse();
-        const sentinel = new TxtElement(null);
         const worklist = this.__worklist;
         const leavelist = this.__leavelist;
-        worklist.push(new TxtElement(root3));
-        leavelist.push(new TxtElement(null));
+        worklist.push(root3);
+        leavelist.push(null);
         while (worklist.length) {
-          let element = worklist.pop();
-          if (element === void 0) {
-            continue;
-          }
-          if (element === sentinel) {
-            element = leavelist.pop();
-            if (element === void 0) {
+          const node = worklist.pop();
+          if (node === SENTINEL) {
+            const element = leavelist.pop();
+            if (!element) {
               continue;
             }
             ret = this.__execute(visitor.leave, element);
@@ -1910,47 +2192,33 @@ var require_src4 = __commonJS({
             }
             continue;
           }
-          if (element.node) {
-            ret = this.__execute(visitor.enter, element);
-            if (ret === BREAK) {
-              return;
-            }
-            worklist.push(sentinel);
-            leavelist.push(element);
-            if (ret === SKIP) {
+          ret = this.__execute(visitor.enter, node);
+          if (ret === BREAK) {
+            return;
+          }
+          worklist.push(SENTINEL);
+          leavelist.push(node);
+          if (ret === SKIP) {
+            continue;
+          }
+          const nodeRecord = node;
+          const candidates = Object.keys(node);
+          let current = candidates.length;
+          while ((current -= 1) >= 0) {
+            const candidate = nodeRecord[candidates[current]];
+            if (!candidate || typeof candidate !== "object") {
               continue;
             }
-            const node = element.node;
-            if (typeof node !== "object" || node === null) {
-              continue;
-            }
-            const nodeRecord = node;
-            const candidates = Object.keys(node);
-            let current = candidates.length;
-            while ((current -= 1) >= 0) {
-              const key3 = candidates[current];
-              const candidate = nodeRecord[key3];
-              if (!candidate) {
-                continue;
-              }
-              if (Array.isArray(candidate)) {
-                let current2 = candidate.length;
-                while ((current2 -= 1) >= 0) {
-                  if (!candidate[current2]) {
-                    continue;
-                  }
-                  if (isNode(candidate[current2])) {
-                    element = new TxtElement(candidate[current2]);
-                  } else {
-                    continue;
-                  }
-                  if (element) {
-                    worklist.push(element);
-                  }
+            if (Array.isArray(candidate)) {
+              let current2 = candidate.length;
+              while ((current2 -= 1) >= 0) {
+                const child = candidate[current2];
+                if (child && isNode(child)) {
+                  worklist.push(child);
                 }
-              } else if (isNode(candidate)) {
-                worklist.push(new TxtElement(candidate));
               }
+            } else if (isNode(candidate)) {
+              worklist.push(candidate);
             }
           }
         }
@@ -1977,6 +2245,7 @@ var require_textlint_core_task = __commonJS({
     var promise_event_emitter_js_1 = require_promise_event_emitter();
     var source_location_js_1 = require_source_location();
     var timing_js_1 = __importDefault(require_timing());
+    var profiler_js_1 = require_profiler();
     var invariant_js_1 = require_invariant();
     var MessageType_js_1 = __importDefault(require_MessageType());
     var utils_1 = require_src2();
@@ -2066,23 +2335,36 @@ var require_textlint_core_task = __commonJS({
         this.emit(_TextLintCoreTask.events.start);
         const promiseQueue = [];
         const ruleTypeEmitter = this.ruleTypeEmitter;
+        const exitTypes = /* @__PURE__ */ new Map();
+        const parentDescriptor = { value: void 0 };
+        const profiling = profiler_js_1.profiler.enabled;
+        const traverseStart = profiling ? performance.now() : 0;
+        const listenerTimeStart = profiling ? profiler_js_1.profiler.listenerTime : 0;
         traverseController.traverse(sourceCode.ast, {
           enter(node, parent) {
-            const type = node.type;
-            Object.defineProperty(node, "parent", { value: parent });
-            if (ruleTypeEmitter.listenerCount(type) > 0) {
-              const promise = ruleTypeEmitter.emit(type, node);
+            parentDescriptor.value = parent;
+            Object.defineProperty(node, "parent", parentDescriptor);
+            const promise = ruleTypeEmitter.emit(node.type, node);
+            if (promise !== void 0) {
               promiseQueue.push(promise);
             }
           },
           leave(node) {
-            const type = `${node.type}:exit`;
-            if (ruleTypeEmitter.listenerCount(type) > 0) {
-              const promise = ruleTypeEmitter.emit(type, node);
+            let type = exitTypes.get(node.type);
+            if (type === void 0) {
+              type = `${node.type}:exit`;
+              exitTypes.set(node.type, type);
+            }
+            const promise = ruleTypeEmitter.emit(type, node);
+            if (promise !== void 0) {
               promiseQueue.push(promise);
             }
           }
         });
+        if (profiling) {
+          const listenerTime = profiler_js_1.profiler.listenerTime - listenerTimeStart;
+          profiler_js_1.profiler.record("traverse", void 0, Math.max(0, performance.now() - traverseStart - listenerTime), sourceCode.filePath);
+        }
         Promise.all(promiseQueue).then(() => {
           this.emit(_TextLintCoreTask.events.complete);
         }).catch((error2) => {
@@ -2125,8 +2407,13 @@ var require_textlint_core_task = __commonJS({
       tryToAddListenRule(ruleCreator, ruleContext, ruleOptions) {
         const ruleObject = ruleContext instanceof TextlintRuleContextImpl_js_1.TextlintRuleContextImpl ? this.tryToGetRuleObject(ruleCreator, ruleContext, ruleOptions) : this.tryToGetFilterRuleObject(ruleCreator, ruleContext, ruleOptions);
         const types = Object.keys(ruleObject);
+        const profileType = ruleContext instanceof TextlintRuleContextImpl_js_1.TextlintRuleContextImpl ? "rule" : "filter-rule";
         types.forEach((nodeType) => {
-          this.ruleTypeEmitter.on(nodeType, timing_js_1.default.enabled ? timing_js_1.default.time(ruleContext.id, ruleObject[nodeType]) : ruleObject[nodeType]);
+          let listener = timing_js_1.default.enabled ? timing_js_1.default.time(ruleContext.id, ruleObject[nodeType]) : ruleObject[nodeType];
+          if (profiler_js_1.profiler.enabled) {
+            listener = profiler_js_1.profiler.wrapListener(profileType, ruleContext.id, ruleContext.getFilePath(), listener);
+          }
+          this.ruleTypeEmitter.on(nodeType, listener);
         });
       }
     };
@@ -2339,74 +2626,74 @@ var require_task_runner = __commonJS({
   }
 });
 
-// node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js
+// node_modules/@textlint/kernel/node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js
 var require_ASTNodeTypes = __commonJS({
-  "node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js"(exports) {
+  "node_modules/@textlint/kernel/node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ASTNodeTypes = void 0;
-    var ASTNodeTypes;
-    (function(ASTNodeTypes2) {
-      ASTNodeTypes2["Document"] = "Document";
-      ASTNodeTypes2["DocumentExit"] = "Document:exit";
-      ASTNodeTypes2["Paragraph"] = "Paragraph";
-      ASTNodeTypes2["ParagraphExit"] = "Paragraph:exit";
-      ASTNodeTypes2["BlockQuote"] = "BlockQuote";
-      ASTNodeTypes2["BlockQuoteExit"] = "BlockQuote:exit";
-      ASTNodeTypes2["ListItem"] = "ListItem";
-      ASTNodeTypes2["ListItemExit"] = "ListItem:exit";
-      ASTNodeTypes2["List"] = "List";
-      ASTNodeTypes2["ListExit"] = "List:exit";
-      ASTNodeTypes2["Header"] = "Header";
-      ASTNodeTypes2["HeaderExit"] = "Header:exit";
-      ASTNodeTypes2["CodeBlock"] = "CodeBlock";
-      ASTNodeTypes2["CodeBlockExit"] = "CodeBlock:exit";
-      ASTNodeTypes2["HtmlBlock"] = "HtmlBlock";
-      ASTNodeTypes2["HtmlBlockExit"] = "HtmlBlock:exit";
-      ASTNodeTypes2["HorizontalRule"] = "HorizontalRule";
-      ASTNodeTypes2["HorizontalRuleExit"] = "HorizontalRule:exit";
-      ASTNodeTypes2["Comment"] = "Comment";
-      ASTNodeTypes2["CommentExit"] = "Comment:exit";
-      ASTNodeTypes2["ReferenceDef"] = "ReferenceDef";
-      ASTNodeTypes2["ReferenceDefExit"] = "ReferenceDef:exit";
-      ASTNodeTypes2["Str"] = "Str";
-      ASTNodeTypes2["StrExit"] = "Str:exit";
-      ASTNodeTypes2["Break"] = "Break";
-      ASTNodeTypes2["BreakExit"] = "Break:exit";
-      ASTNodeTypes2["Emphasis"] = "Emphasis";
-      ASTNodeTypes2["EmphasisExit"] = "Emphasis:exit";
-      ASTNodeTypes2["Strong"] = "Strong";
-      ASTNodeTypes2["StrongExit"] = "Strong:exit";
-      ASTNodeTypes2["Html"] = "Html";
-      ASTNodeTypes2["HtmlExit"] = "Html:exit";
-      ASTNodeTypes2["Link"] = "Link";
-      ASTNodeTypes2["LinkExit"] = "Link:exit";
-      ASTNodeTypes2["LinkReference"] = "LinkReference";
-      ASTNodeTypes2["LinkReferenceExit"] = "LinkReference:exit";
-      ASTNodeTypes2["Image"] = "Image";
-      ASTNodeTypes2["ImageExit"] = "Image:exit";
-      ASTNodeTypes2["ImageReference"] = "ImageReference";
-      ASTNodeTypes2["ImageReferenceExit"] = "ImageReference:exit";
-      ASTNodeTypes2["Definition"] = "Definition";
-      ASTNodeTypes2["DefinitionExit"] = "Definition:exit";
-      ASTNodeTypes2["Code"] = "Code";
-      ASTNodeTypes2["CodeExit"] = "Code:exit";
-      ASTNodeTypes2["Delete"] = "Delete";
-      ASTNodeTypes2["DeleteExit"] = "Delete:exit";
-      ASTNodeTypes2["Table"] = "Table";
-      ASTNodeTypes2["TableExit"] = "Table:exit";
-      ASTNodeTypes2["TableRow"] = "TableRow";
-      ASTNodeTypes2["TableRowExit"] = "TableRow:exit";
-      ASTNodeTypes2["TableCell"] = "TableCell";
-      ASTNodeTypes2["TableCellExit"] = "TableCell:exit";
-    })(ASTNodeTypes || (exports.ASTNodeTypes = ASTNodeTypes = {}));
+    var ASTNodeTypes2;
+    (function(ASTNodeTypes3) {
+      ASTNodeTypes3["Document"] = "Document";
+      ASTNodeTypes3["DocumentExit"] = "Document:exit";
+      ASTNodeTypes3["Paragraph"] = "Paragraph";
+      ASTNodeTypes3["ParagraphExit"] = "Paragraph:exit";
+      ASTNodeTypes3["BlockQuote"] = "BlockQuote";
+      ASTNodeTypes3["BlockQuoteExit"] = "BlockQuote:exit";
+      ASTNodeTypes3["ListItem"] = "ListItem";
+      ASTNodeTypes3["ListItemExit"] = "ListItem:exit";
+      ASTNodeTypes3["List"] = "List";
+      ASTNodeTypes3["ListExit"] = "List:exit";
+      ASTNodeTypes3["Header"] = "Header";
+      ASTNodeTypes3["HeaderExit"] = "Header:exit";
+      ASTNodeTypes3["CodeBlock"] = "CodeBlock";
+      ASTNodeTypes3["CodeBlockExit"] = "CodeBlock:exit";
+      ASTNodeTypes3["HtmlBlock"] = "HtmlBlock";
+      ASTNodeTypes3["HtmlBlockExit"] = "HtmlBlock:exit";
+      ASTNodeTypes3["HorizontalRule"] = "HorizontalRule";
+      ASTNodeTypes3["HorizontalRuleExit"] = "HorizontalRule:exit";
+      ASTNodeTypes3["Comment"] = "Comment";
+      ASTNodeTypes3["CommentExit"] = "Comment:exit";
+      ASTNodeTypes3["ReferenceDef"] = "ReferenceDef";
+      ASTNodeTypes3["ReferenceDefExit"] = "ReferenceDef:exit";
+      ASTNodeTypes3["Str"] = "Str";
+      ASTNodeTypes3["StrExit"] = "Str:exit";
+      ASTNodeTypes3["Break"] = "Break";
+      ASTNodeTypes3["BreakExit"] = "Break:exit";
+      ASTNodeTypes3["Emphasis"] = "Emphasis";
+      ASTNodeTypes3["EmphasisExit"] = "Emphasis:exit";
+      ASTNodeTypes3["Strong"] = "Strong";
+      ASTNodeTypes3["StrongExit"] = "Strong:exit";
+      ASTNodeTypes3["Html"] = "Html";
+      ASTNodeTypes3["HtmlExit"] = "Html:exit";
+      ASTNodeTypes3["Link"] = "Link";
+      ASTNodeTypes3["LinkExit"] = "Link:exit";
+      ASTNodeTypes3["LinkReference"] = "LinkReference";
+      ASTNodeTypes3["LinkReferenceExit"] = "LinkReference:exit";
+      ASTNodeTypes3["Image"] = "Image";
+      ASTNodeTypes3["ImageExit"] = "Image:exit";
+      ASTNodeTypes3["ImageReference"] = "ImageReference";
+      ASTNodeTypes3["ImageReferenceExit"] = "ImageReference:exit";
+      ASTNodeTypes3["Definition"] = "Definition";
+      ASTNodeTypes3["DefinitionExit"] = "Definition:exit";
+      ASTNodeTypes3["Code"] = "Code";
+      ASTNodeTypes3["CodeExit"] = "Code:exit";
+      ASTNodeTypes3["Delete"] = "Delete";
+      ASTNodeTypes3["DeleteExit"] = "Delete:exit";
+      ASTNodeTypes3["Table"] = "Table";
+      ASTNodeTypes3["TableExit"] = "Table:exit";
+      ASTNodeTypes3["TableRow"] = "TableRow";
+      ASTNodeTypes3["TableRowExit"] = "TableRow:exit";
+      ASTNodeTypes3["TableCell"] = "TableCell";
+      ASTNodeTypes3["TableCellExit"] = "TableCell:exit";
+    })(ASTNodeTypes2 || (exports.ASTNodeTypes = ASTNodeTypes2 = {}));
   }
 });
 
-// node_modules/@textlint/ast-node-types/lib/src/index.js
+// node_modules/@textlint/kernel/node_modules/@textlint/ast-node-types/lib/src/index.js
 var require_src5 = __commonJS({
-  "node_modules/@textlint/ast-node-types/lib/src/index.js"(exports) {
+  "node_modules/@textlint/kernel/node_modules/@textlint/ast-node-types/lib/src/index.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -2418,133 +2705,79 @@ var require_src5 = __commonJS({
   }
 });
 
-// node_modules/boundary/lib/index.js
-var require_lib = __commonJS({
-  "node_modules/boundary/lib/index.js"(exports) {
+// node_modules/@textlint/kernel/lib/src/context/source-line-table.js
+var require_source_line_table = __commonJS({
+  "node_modules/@textlint/kernel/lib/src/context/source-line-table.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.binarySearch = exports.upperBound = exports.lowerBound = exports.compare = void 0;
-    function compare(v12, v23) {
-      return v12 < v23;
-    }
-    exports.compare = compare;
-    function upperBound(array2, value, comp = compare) {
-      let len = array2.length;
-      let i = 0;
-      while (len) {
-        let diff = len >>> 1;
-        let cursor3 = i + diff;
-        if (comp(value, array2[cursor3])) {
-          len = diff;
-        } else {
-          i = cursor3 + 1;
-          len -= diff + 1;
+    exports.SourceLineTable = void 0;
+    var createLineStarts = (text5) => {
+      const lineStarts = [0];
+      if (text5.indexOf("\r") === -1) {
+        for (let index = text5.indexOf("\n"); index !== -1; index = text5.indexOf("\n", index + 1)) {
+          lineStarts.push(index + 1);
+        }
+        return lineStarts;
+      }
+      const length = text5.length;
+      for (let index = 0; index < length; index++) {
+        const code19 = text5.charCodeAt(index);
+        if (code19 === 10) {
+          lineStarts.push(index + 1);
+        } else if (code19 === 13) {
+          if (text5.charCodeAt(index + 1) === 10) {
+            index++;
+          }
+          lineStarts.push(index + 1);
         }
       }
-      return i;
-    }
-    exports.upperBound = upperBound;
-    function lowerBound(array2, value, comp = compare) {
-      let len = array2.length;
-      let i = 0;
-      while (len) {
-        let diff = len >>> 1;
-        let cursor3 = i + diff;
-        if (comp(array2[cursor3], value)) {
-          i = cursor3 + 1;
-          len -= diff + 1;
-        } else {
-          len = diff;
-        }
-      }
-      return i;
-    }
-    exports.lowerBound = lowerBound;
-    function binarySearch(array2, value, comp = compare) {
-      let cursor3 = lowerBound(array2, value, comp);
-      return cursor3 !== array2.length && !comp(value, array2[cursor3]);
-    }
-    exports.binarySearch = binarySearch;
-  }
-});
-
-// node_modules/structured-source/lib/structured-source.js
-var require_structured_source = __commonJS({
-  "node_modules/structured-source/lib/structured-source.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    exports.StructuredSource = void 0;
-    var boundary_1 = require_lib();
-    var StructuredSource = class {
-      /**
-       * @constructs StructuredSource
-       * @param {string} source - source code text.
-       */
-      constructor(source3) {
-        this.indice = [0];
-        let regexp = /[\r\n\u2028\u2029]/g;
-        const length = source3.length;
-        regexp.lastIndex = 0;
-        while (true) {
-          let result = regexp.exec(source3);
-          if (!result) {
-            break;
-          }
-          let index = result.index;
-          if (source3.charCodeAt(index) === 13 && source3.charCodeAt(index + 1) === 10) {
-            index += 1;
-          }
-          let nextIndex = index + 1;
-          if (length < nextIndex) {
-            break;
-          }
-          this.indice.push(nextIndex);
-          regexp.lastIndex = nextIndex;
-        }
-      }
-      get line() {
-        return this.indice.length;
+      return lineStarts;
+    };
+    var SourceLineTable = class {
+      constructor(text5) {
+        this.text = text5;
       }
       /**
-       * @param {SourceLocation} loc - location indicator.
-       * @return {[ number, number ]} range.
+       * Return the table of lines. It is created at the first call and reused after that.
        */
+      getLineStarts() {
+        if (this.lineStarts === void 0) {
+          this.lineStarts = createLineStarts(this.text);
+        }
+        return this.lineStarts;
+      }
       locationToRange(loc) {
         return [this.positionToIndex(loc.start), this.positionToIndex(loc.end)];
       }
-      /**
-       * @param {[ number, number ]} range - pair of indice.
-       * @return {SourceLocation} location.
-       */
       rangeToLocation(range2) {
         return {
           start: this.indexToPosition(range2[0]),
           end: this.indexToPosition(range2[1])
         };
       }
-      /**
-       * @param {SourcePosition} pos - position indicator.
-       * @return {number} index.
-       */
-      positionToIndex(pos3) {
-        let start = this.indice[pos3.line - 1];
-        return start + pos3.column;
+      positionToIndex(position) {
+        return this.getLineStarts()[position.line - 1] + position.column;
       }
-      /**
-       * @param {number} index - index to the source code.
-       * @return {SourcePosition} position.
-       */
       indexToPosition(index) {
-        const startLine = (0, boundary_1.upperBound)(this.indice, index);
+        const lineStarts = this.getLineStarts();
+        let low = 0;
+        let high = lineStarts.length - 1;
+        while (low < high) {
+          const middle = low + high + 1 >> 1;
+          if (lineStarts[middle] <= index) {
+            low = middle;
+          } else {
+            high = middle - 1;
+          }
+        }
         return {
-          line: startLine,
-          column: index - this.indice[startLine - 1]
+          line: low + 1,
+          column: index - lineStarts[low]
         };
       }
     };
-    exports.StructuredSource = StructuredSource;
+    exports.SourceLineTable = SourceLineTable;
   }
 });
 
@@ -2556,7 +2789,7 @@ var require_TextlintSourceCodeImpl = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TextlintSourceCodeImpl = void 0;
     var ast_node_types_1 = require_src5();
-    var structured_source_1 = require_structured_source();
+    var source_line_table_js_1 = require_source_line_table();
     var invariant_js_1 = require_invariant();
     function validate2(ast) {
       if (!ast.loc) {
@@ -2578,7 +2811,7 @@ var require_TextlintSourceCodeImpl = __commonJS({
         (0, invariant_js_1.invariant)(ext2 || filePath, "should be set either of fileExt or filePath.");
         this.hasBOM = text5.charCodeAt(0) === 65279;
         this.text = this.hasBOM ? text5.slice(1) : text5;
-        this._structuredSource = new structured_source_1.StructuredSource(this.text);
+        this._lineTable = new source_line_table_js_1.SourceLineTable(this.text);
         this.ast = ast;
         this.filePath = filePath;
         this.ext = ext2;
@@ -2613,7 +2846,7 @@ var require_TextlintSourceCodeImpl = __commonJS({
           return currentText;
         }
       }
-      // StructuredSource wrapper
+      // Conversion between an index and a position
       // line is 1-based
       // column is 1-based
       /**
@@ -2621,41 +2854,27 @@ var require_TextlintSourceCodeImpl = __commonJS({
        * @return {[ number, number ]} range.
        */
       locationToRange(loc) {
-        return this._structuredSource.locationToRange(loc);
+        return this._lineTable.locationToRange(loc);
       }
       /**
        * @param {[ number, number ]} range - pair of indice.
        * @return {TextlintSourceCodeLocation} location.
        */
       rangeToLocation(range2) {
-        const rangeToLocation = this._structuredSource.rangeToLocation([range2[0], range2[1]]);
-        return {
-          start: {
-            line: rangeToLocation.start.line,
-            column: rangeToLocation.start.column
-          },
-          end: {
-            line: rangeToLocation.end.line,
-            column: rangeToLocation.end.column
-          }
-        };
+        return this._lineTable.rangeToLocation(range2);
       }
       /**
        * @param pos - position indicator.
        * @return {number} index.
        */
       positionToIndex(pos3) {
-        return this._structuredSource.positionToIndex(pos3);
+        return this._lineTable.positionToIndex(pos3);
       }
       /**
        * @param index - index to the source code.
        */
       indexToPosition(index) {
-        const indexToPosition2 = this._structuredSource.indexToPosition(index);
-        return {
-          line: indexToPosition2.line,
-          column: indexToPosition2.column
-        };
+        return this._lineTable.indexToPosition(index);
       }
     };
     exports.TextlintSourceCodeImpl = TextlintSourceCodeImpl;
@@ -2856,15 +3075,18 @@ var require_fixer_processor = __commonJS({
     var source_code_fixer_1 = require_src6();
     var invariant_js_1 = require_invariant();
     var parse_by_plugin_js_1 = require_parse_by_plugin();
+    var profiler_js_1 = require_profiler();
     var debug = (0, debug_1.default)("textlint:fixer-processor");
     var FixerProcessor = class {
       /**
        * @param {Processor} processor
        * @param {MessageProcessManager} messageProcessManager
+       * @param {string} [pluginId] the id of the plugin of the processor, for the profiler
        */
-      constructor(processor, messageProcessManager) {
+      constructor(processor, messageProcessManager, pluginId) {
         this.processor = processor;
         this.messageProcessManager = messageProcessManager;
+        this.pluginId = pluginId;
       }
       /**
        * Run fixer process
@@ -2884,11 +3106,12 @@ var require_fixer_processor = __commonJS({
         const originalMessages = [];
         let sourceText = sourceCode.text;
         for (const ruleDescriptor of ruleDescriptors.fixableDescriptors) {
-          const parseResult = await (0, parse_by_plugin_js_1.parseByPlugin)({
+          const parse12 = () => (0, parse_by_plugin_js_1.parseByPlugin)({
             preProcess,
             sourceText,
             filePath: sourceCode.filePath
           });
+          const parseResult = profiler_js_1.profiler.enabled ? await profiler_js_1.profiler.measureAsync("parse", this.pluginId, parse12, sourceCode.filePath) : await parse12();
           if (parseResult instanceof Error) {
             throw parseResult;
           }
@@ -2906,14 +3129,17 @@ var require_fixer_processor = __commonJS({
             configBaseDir
           });
           const messages2 = await task_runner_js_1.default.process(task);
-          const result = await postProcess2(messages2, sourceCode.filePath);
-          const filteredResult = {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            messages: this.messageProcessManager.process(result.messages),
-            filePath: result.filePath ? result.filePath : `<Unknown{sourceCode.ext}>`
+          const processMessages = async () => {
+            const result = await postProcess2(messages2, sourceCode.filePath);
+            return {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              messages: this.messageProcessManager.process(result.messages),
+              filePath: result.filePath ? result.filePath : `<Unknown{sourceCode.ext}>`
+            };
           };
+          const filteredResult = profiler_js_1.profiler.enabled ? await profiler_js_1.profiler.measureAsync("post-process", void 0, processMessages, sourceCode.filePath) : await processMessages();
           resultFilePath = filteredResult.filePath;
-          const applied = (0, source_code_fixer_1.applyFixesToSourceCode)(newSourceCode, filteredResult.messages);
+          const applied = profiler_js_1.profiler.enabled ? profiler_js_1.profiler.measure("apply-fixes", void 0, () => (0, source_code_fixer_1.applyFixesToSourceCode)(newSourceCode, filteredResult.messages), sourceCode.filePath) : (0, source_code_fixer_1.applyFixesToSourceCode)(newSourceCode, filteredResult.messages);
           Array.prototype.push.apply(applyingMessages, applied.applyingMessages);
           Array.prototype.push.apply(remainingMessages, applied.remainingMessages);
           Array.prototype.push.apply(originalMessages, applied.messages);
@@ -3007,6 +3233,7 @@ var require_linter_processor = __commonJS({
     var linter_task_js_1 = __importDefault(require_linter_task());
     var task_runner_js_1 = __importDefault(require_task_runner());
     var invariant_js_1 = require_invariant();
+    var profiler_js_1 = require_profiler();
     var LinterProcessor = class {
       /**
        * @param {Processor} processor
@@ -3030,8 +3257,12 @@ var require_linter_processor = __commonJS({
           configBaseDir
         });
         const messages2 = await task_runner_js_1.default.process(task);
-        const result = await postProcess2(messages2, sourceCode.filePath);
-        result.messages = this.messageProcessManager.process(result.messages);
+        const processMessages = async () => {
+          const result2 = await postProcess2(messages2, sourceCode.filePath);
+          result2.messages = this.messageProcessManager.process(result2.messages);
+          return result2;
+        };
+        const result = profiler_js_1.profiler.enabled ? await profiler_js_1.profiler.measureAsync("post-process", void 0, processMessages, sourceCode.filePath) : await processMessages();
         if (result.filePath == null) {
           result.filePath = `<Unknown{sourceCode.ext}>`;
         }
@@ -4196,6 +4427,7 @@ var require_unist_test = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.isUnist = isUnist;
     exports.test = test;
+    exports.testNode = testNode;
     var assert4 = __importStar(__require("node:assert"));
     function isUnist(node) {
       try {
@@ -4206,15 +4438,27 @@ var require_unist_test = __commonJS({
       return true;
     }
     function test(node) {
-      assert4.strictEqual(typeof node, "object");
-      assert4.strictEqual(typeof node.type, "string");
-      assert4.ok(node.type.length >= 1);
       assert4.doesNotThrow(function() {
         JSON.parse(JSON.stringify(node));
       });
+      const stack3 = [node];
+      while (stack3.length > 0) {
+        const current = stack3.pop();
+        testNode(current);
+        const children = current.children;
+        if (children !== null && children !== void 0) {
+          for (let i = children.length - 1; i >= 0; i--) {
+            stack3.push(children[i]);
+          }
+        }
+      }
+    }
+    function testNode(node) {
+      assert4.strictEqual(typeof node, "object");
+      assert4.strictEqual(typeof node.type, "string");
+      assert4.ok(node.type.length >= 1);
       if (node.children !== null && node.children !== void 0) {
         assert4.ok(Array.isArray(node.children));
-        node.children.forEach(test);
       }
       if (node.value !== null && node.value !== void 0) {
         assert4.strictEqual(typeof node.value, "string");
@@ -4223,7 +4467,7 @@ var require_unist_test = __commonJS({
       if (position !== null && position !== void 0) {
         assert4.strictEqual(typeof position, "object");
         const start = position.start;
-        const indent4 = position.indent;
+        const indent5 = position.indent;
         const end = position.end;
         if (start !== null && start !== void 0) {
           assert4.strictEqual(typeof start, "object");
@@ -4255,9 +4499,9 @@ var require_unist_test = __commonJS({
             assert4.ok(end.offset >= 0);
           }
         }
-        if (indent4 !== null && indent4 !== void 0) {
-          assert4.ok(Array.isArray(indent4));
-          indent4.forEach(function(indentation) {
+        if (indent5 !== null && indent5 !== void 0) {
+          assert4.ok(Array.isArray(indent5));
+          indent5.forEach(function(indentation) {
             assert4.strictEqual(typeof indentation, "number");
             assert4.ok(indentation >= 0);
           });
@@ -4323,6 +4567,14 @@ var require_src7 = __commonJS({
       return `${message}
 ${JSON.stringify(node, null, 4)}`;
     };
+    var check2 = (condition, node, message) => {
+      if (!condition) {
+        assert4.fail(createMessage({ node, message }));
+      }
+    };
+    var isNil = (value) => {
+      return value === null || value === void 0;
+    };
     function isTxtAST(node) {
       try {
         test(node);
@@ -4333,110 +4585,142 @@ ${JSON.stringify(node, null, 4)}`;
       return true;
     }
     function test(node) {
-      (0, unist_test_js_1.test)(node);
-      assert4.strictEqual(typeof node, "object", createMessage({
-        message: `invalid node: node should be object`,
-        node
-      }));
-      assert4.strictEqual(typeof node.type, "string", createMessage({
-        message: `invalid type: type should be string`,
-        node
-      }));
-      assert4.ok(node.type.length >= 1, createMessage({
-        message: `invalid type: type is empty string`,
-        node
-      }));
-      assert4.doesNotThrow(function() {
+      check2(typeof node === "object" && node !== null, node, `invalid node: node should be object`);
+      try {
         JSON.parse(JSON.stringify(node));
-      }, createMessage({
-        message: `invalid node: node should be serializable`,
-        node
-      }));
-      if (node.children !== null && node.children !== void 0) {
-        assert4.ok(Array.isArray(node.children), createMessage({
-          message: `invalid children: children should be an array`,
-          node
-        }));
-        node.children.forEach(test);
+      } catch (_a6) {
+        assert4.fail(`invalid node: node should be serializable. type: ${String(node.type)}`);
       }
-      if (node.value !== null && node.value !== void 0) {
-        assert4.strictEqual(typeof node.value, "string", createMessage({
-          message: `invalid value: value should be string`,
-          node
-        }));
+      const stack3 = [node];
+      while (stack3.length > 0) {
+        const current = stack3.pop();
+        testNode(current);
+        const children = current.children;
+        if (!isNil(children)) {
+          for (let i = children.length - 1; i >= 0; i--) {
+            stack3.push(children[i]);
+          }
+        }
       }
-      assert4.ok(node.raw !== null && node.raw !== void 0, createMessage({
-        message: `invalid raw: raw is undefined`,
-        node
-      }));
-      assert4.strictEqual(typeof node.raw, "string", createMessage({
-        message: `invalid raw: raw is not string`,
-        node
-      }));
+      testPositions(node);
+    }
+    function testPosition(position) {
+      assert4.strictEqual(typeof position, "object");
+      if (!isNil(position.line)) {
+        assert4.strictEqual(typeof position.line, "number");
+        assert4.ok(position.line >= 0);
+      }
+      if (!isNil(position.column)) {
+        assert4.strictEqual(typeof position.column, "number");
+        assert4.ok(position.column >= 0);
+      }
+      if (!isNil(position.offset)) {
+        assert4.strictEqual(typeof position.offset, "number");
+        assert4.ok(position.offset >= 0);
+      }
+    }
+    function testNode(node) {
+      check2(typeof node === "object" && node !== null, node, `invalid node: node should be object`);
+      (0, unist_test_js_1.testNode)(node);
+      check2(typeof node.type === "string", node, `invalid type: type should be string`);
+      check2(node.type.length >= 1, node, `invalid type: type is empty string`);
+      if (!isNil(node.children)) {
+        check2(Array.isArray(node.children), node, `invalid children: children should be an array`);
+      }
+      if (!isNil(node.value)) {
+        check2(typeof node.value === "string", node, `invalid value: value should be string`);
+      }
+      check2(!isNil(node.raw), node, `invalid raw: raw is undefined`);
+      check2(typeof node.raw === "string", node, `invalid raw: raw is not string`);
       const loc = node.loc;
-      assert4.ok(loc !== null && loc !== void 0, createMessage({
-        message: `invalid loc: node.loc is undefined`,
-        node
-      }));
-      assert4.strictEqual(typeof loc, "object", createMessage({
-        message: `invalid loc: node.loc should be object. it should have { start, end } property`,
-        node
-      }));
+      check2(!isNil(loc), node, `invalid loc: node.loc is undefined`);
+      check2(typeof loc === "object", node, `invalid loc: node.loc should be object. it should have { start, end } property`);
       const start = loc.start;
       const end = loc.end;
-      if (start !== null && start !== void 0) {
-        assert4.strictEqual(typeof start, "object");
-        if (start.line !== null && start.line !== void 0) {
-          assert4.strictEqual(typeof start.line, "number");
-          assert4.ok(start.line >= 0);
-        }
-        if (start.column !== null && start.column !== void 0) {
-          assert4.strictEqual(typeof start.column, "number");
-          assert4.ok(start.column >= 0);
-        }
-        if (start.offset !== null && start.offset !== void 0) {
-          assert4.strictEqual(typeof start.offset, "number");
-          assert4.ok(start.offset >= 0);
-        }
+      if (!isNil(start)) {
+        testPosition(start);
       }
-      if (end !== null && end !== void 0) {
-        assert4.strictEqual(typeof end, "object");
-        if (end.line !== null && end.line !== void 0) {
-          assert4.strictEqual(typeof end.line, "number");
-          assert4.ok(end.line >= 0);
-        }
-        if (end.column !== null && end.column !== void 0) {
-          assert4.strictEqual(typeof end.column, "number");
-          assert4.ok(end.column >= 0);
-        }
-        if (end.offset !== null && end.offset !== void 0) {
-          assert4.strictEqual(typeof end.offset, "number");
-          assert4.ok(end.offset >= 0);
-        }
+      if (!isNil(end)) {
+        testPosition(end);
       }
       const range2 = node.range;
-      assert4.ok(range2 !== null && range2 !== void 0, createMessage({
-        message: `invalid range: range should be an array`,
-        node
-      }));
-      assert4.ok(Array.isArray(range2), createMessage({
-        message: `invalid range: range should be an array`,
-        node
-      }));
-      range2.forEach(function(index) {
-        assert4.strictEqual(typeof index, "number", createMessage({
-          message: `invalid index: index should be number`,
-          node
-        }));
-        assert4.ok(index >= 0, createMessage({
-          message: `invalid index: index >= 0`,
-          node
-        }));
-      });
-      assert4.ok(range2[0] <= range2[1], createMessage({
-        message: `invalid range: range[0] should be less than range[1]`,
-        node
-      }));
+      check2(!isNil(range2), node, `invalid range: range should be an array`);
+      check2(Array.isArray(range2), node, `invalid range: range should be an array`);
+      for (const index of range2) {
+        check2(typeof index === "number", node, `invalid index: index should be number`);
+        check2(index >= 0, node, `invalid index: index >= 0`);
+      }
+      check2(range2[0] <= range2[1], node, `invalid range: range[0] should be less than range[1]`);
+    }
+    var lineStartsOf = (text5) => {
+      const starts = [0];
+      for (let i = 0; i < text5.length; i++) {
+        const c8 = text5.charCodeAt(i);
+        if (c8 === 10 || c8 === 13) {
+          if (c8 === 13 && text5.charCodeAt(i + 1) === 10) {
+            i++;
+          }
+          starts.push(i + 1);
+        }
+      }
+      return starts;
+    };
+    var positionOf = (starts, offset, origin) => {
+      let lo7 = 0;
+      let hi13 = starts.length - 1;
+      while (lo7 < hi13) {
+        const mid = lo7 + hi13 + 1 >> 1;
+        if (starts[mid] <= offset) {
+          lo7 = mid;
+        } else {
+          hi13 = mid - 1;
+        }
+      }
+      return {
+        line: origin.line + lo7,
+        column: lo7 === 0 ? origin.column + offset : offset - starts[lo7]
+      };
+    };
+    var isPosition = (position) => {
+      return !isNil(position) && typeof position.line === "number" && typeof position.column === "number";
+    };
+    function testPositions(root3) {
+      const text5 = root3.raw;
+      const base2 = root3.range[0];
+      check2(text5.length === root3.range[1] - root3.range[0], root3, `invalid raw: the length of raw should be the length of range`);
+      const origin = root3.loc.start;
+      const starts = lineStartsOf(text5);
+      const testLocOf = (node, name) => {
+        const actual = node.loc[name];
+        if (!isPosition(origin) || !isPosition(actual)) {
+          return;
+        }
+        const offset = node.range[name === "start" ? 0 : 1] - base2;
+        const expected = positionOf(starts, offset, origin);
+        check2(actual.line === expected.line && actual.column === expected.column, node, `invalid loc: loc.${name} should be the position of range[${name === "start" ? 0 : 1}]. Expected ${JSON.stringify(expected)}`);
+      };
+      testLocOf(root3, "start");
+      testLocOf(root3, "end");
+      const stack3 = [root3];
+      while (stack3.length > 0) {
+        const parent = stack3.pop();
+        const children = parent.children;
+        if (isNil(children)) {
+          continue;
+        }
+        let previousEnd = parent.range[0];
+        for (const child of children) {
+          check2(child.range[0] >= parent.range[0] && child.range[1] <= parent.range[1], child, `invalid range: range should be inside of the range of the parent [${parent.range[0]}, ${parent.range[1]}]`);
+          check2(child.range[0] >= previousEnd, child, `invalid range: range should not overlap with the previous sibling that ends at ${previousEnd}`);
+          previousEnd = child.range[1];
+          check2(child.raw === text5.slice(child.range[0] - base2, child.range[1] - base2), child, `invalid raw: raw should be the text of range`);
+          testLocOf(child, "start");
+          testLocOf(child, "end");
+        }
+        for (let i = children.length - 1; i >= 0; i--) {
+          stack3.push(children[i]);
+        }
+      }
     }
   }
 });
@@ -4505,6 +4789,7 @@ var require_textlint_kernel = __commonJS({
     var debug_1 = __importDefault(require_src3());
     var parse_by_plugin_js_1 = require_parse_by_plugin();
     var createDummyTextLintResult_js_1 = require_createDummyTextLintResult();
+    var profiler_js_1 = require_profiler();
     var debug = (0, debug_1.default)("textlint:kernel");
     function addingAtFileNameToError(fileName, message) {
       if (!fileName) {
@@ -4584,11 +4869,12 @@ at ${fileName}`;
         const processor = plugin.processor;
         const { preProcess, postProcess: postProcess2 } = processor.processor(ext2);
         (0, invariant_js_1.invariant)(typeof preProcess === "function" && typeof postProcess2 === "function", `${plugin.id} processor should implements {preProcess, postProcess}`);
-        const preProcessResult = await (0, parse_by_plugin_js_1.parseByPlugin)({
+        const parse12 = () => (0, parse_by_plugin_js_1.parseByPlugin)({
           preProcess,
           sourceText: text5,
           filePath
         });
+        const preProcessResult = profiler_js_1.profiler.enabled ? await profiler_js_1.profiler.measureAsync("parse", plugin.id, parse12, filePath) : await parse12();
         if (preProcessResult instanceof Error) {
           return (0, createDummyTextLintResult_js_1.createDummyTextLintResult)(`Failed to parse text by plugin: ${plugin.id}
 
@@ -4647,7 +4933,8 @@ See https://textlint.org/docs/plugin.html`);
         const processor = plugin.processor;
         const { preProcess, postProcess: postProcess2 } = processor.processor(ext2);
         (0, invariant_js_1.invariant)(typeof preProcess === "function" && typeof postProcess2 === "function", `${plugin.id} processor should implements {preProcess, postProcess}`);
-        const preProcessResult = await Promise.resolve(preProcess(text5, filePath));
+        const parse12 = () => Promise.resolve(preProcess(text5, filePath));
+        const preProcessResult = profiler_js_1.profiler.enabled ? await profiler_js_1.profiler.measureAsync("parse", plugin.id, parse12, filePath) : await parse12();
         const isParsedObject = (0, isPluginParsedObject_js_1.isPluginParsedObject)(preProcessResult);
         const textForAST = isParsedObject ? preProcessResult.text : text5;
         const ast = isParsedObject ? preProcessResult.ast : preProcessResult;
@@ -4667,7 +4954,7 @@ See https://textlint.org/docs/plugin.html`);
           filePath
         });
         debug("process file %s", filePath);
-        const fixerProcessor = new fixer_processor_js_1.default(processor, this.messageProcessManager);
+        const fixerProcessor = new fixer_processor_js_1.default(processor, this.messageProcessManager, plugin.id);
         return await fixerProcessor.process({
           config: this.config,
           ruleDescriptors: descriptor.rule,
@@ -4690,7 +4977,7 @@ var require_src8 = __commonJS({
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.TextlintRuleSeverityLevelKeys = exports.TextlintPluginDescriptor = exports.TextlintPluginDescriptors = exports.TextlintFilterRuleDescriptor = exports.TextlintFilterRuleDescriptors = exports.TextlintFixableRuleDescriptor = exports.TextlintLintableRuleDescriptor = exports.TextlintRuleDescriptors = exports.TextlintKernelDescriptor = exports.TextlintKernel = void 0;
+    exports.TextlintProfiler = exports.profiler = exports.TextlintRuleSeverityLevelKeys = exports.TextlintPluginDescriptor = exports.TextlintPluginDescriptors = exports.TextlintFilterRuleDescriptor = exports.TextlintFilterRuleDescriptors = exports.TextlintFixableRuleDescriptor = exports.TextlintLintableRuleDescriptor = exports.TextlintRuleDescriptors = exports.TextlintKernelDescriptor = exports.TextlintKernel = void 0;
     var textlint_kernel_js_1 = require_textlint_kernel();
     Object.defineProperty(exports, "TextlintKernel", { enumerable: true, get: function() {
       return textlint_kernel_js_1.TextlintKernel;
@@ -4723,6 +5010,13 @@ var require_src8 = __commonJS({
     var TextlintRuleSeverityLevelKeys_js_1 = require_TextlintRuleSeverityLevelKeys();
     Object.defineProperty(exports, "TextlintRuleSeverityLevelKeys", { enumerable: true, get: function() {
       return TextlintRuleSeverityLevelKeys_js_1.TextlintRuleSeverityLevelKeys;
+    } });
+    var profiler_js_1 = require_profiler();
+    Object.defineProperty(exports, "profiler", { enumerable: true, get: function() {
+      return profiler_js_1.profiler;
+    } });
+    Object.defineProperty(exports, "TextlintProfiler", { enumerable: true, get: function() {
+      return profiler_js_1.TextlintProfiler;
     } });
   }
 });
@@ -9117,8 +9411,8 @@ var require_to_regex_range = __commonJS({
     function contains(arr, key3, val) {
       return arr.some((ele) => ele[key3] === val);
     }
-    function countNines(min, len) {
-      return Number(String(min).slice(0, -len) + "9".repeat(len));
+    function countNines(min, len2) {
+      return Number(String(min).slice(0, -len2) + "9".repeat(len2));
     }
     function countZeros(integer, zeros) {
       return integer - integer % Math.pow(10, zeros);
@@ -9416,7 +9710,7 @@ var require_expand = __commonJS({
     var fill2 = require_fill_range();
     var stringify4 = require_stringify();
     var utils2 = require_utils();
-    var append = (queue = "", stash = "", enclose = false) => {
+    var append2 = (queue = "", stash = "", enclose = false) => {
       const result = [];
       queue = [].concat(queue);
       stash = [].concat(stash);
@@ -9427,12 +9721,12 @@ var require_expand = __commonJS({
       for (const item of queue) {
         if (Array.isArray(item)) {
           for (const value of item) {
-            result.push(append(value, stash, enclose));
+            result.push(append2(value, stash, enclose));
           }
         } else {
           for (let ele of stash) {
             if (enclose === true && typeof ele === "string") ele = `{${ele}}`;
-            result.push(Array.isArray(ele) ? append(item, ele, enclose) : item + ele);
+            result.push(Array.isArray(ele) ? append2(item, ele, enclose) : item + ele);
           }
         }
       }
@@ -9449,11 +9743,11 @@ var require_expand = __commonJS({
           q10 = p7.queue;
         }
         if (node.invalid || node.dollar) {
-          q10.push(append(q10.pop(), stringify4(node, options7)));
+          q10.push(append2(q10.pop(), stringify4(node, options7)));
           return;
         }
         if (node.type === "brace" && node.invalid !== true && node.nodes.length === 2) {
-          q10.push(append(q10.pop(), ["{}"]));
+          q10.push(append2(q10.pop(), ["{}"]));
           return;
         }
         if (node.nodes && node.ranges > 0) {
@@ -9465,7 +9759,7 @@ var require_expand = __commonJS({
           if (range2.length === 0) {
             range2 = stringify4(node, options7);
           }
-          q10.push(append(q10.pop(), range2));
+          q10.push(append2(q10.pop(), range2));
           node.nodes = [];
           return;
         }
@@ -9484,11 +9778,11 @@ var require_expand = __commonJS({
             continue;
           }
           if (child.type === "close") {
-            q10.push(append(q10.pop(), queue, enclose));
+            q10.push(append2(q10.pop(), queue, enclose));
             continue;
           }
           if (child.value && child.type !== "open") {
-            queue.push(append(queue.pop(), child.value));
+            queue.push(append2(queue.pop(), child.value));
             continue;
           }
           if (child.nodes) {
@@ -9640,7 +9934,7 @@ var require_parse = __commonJS({
       CHAR_NO_BREAK_SPACE,
       CHAR_ZERO_WIDTH_NOBREAK_SPACE
     } = require_constants();
-    var parse11 = (input, options7 = {}) => {
+    var parse12 = (input, options7 = {}) => {
       if (typeof input !== "string") {
         throw new TypeError("Expected a string");
       }
@@ -9656,7 +9950,7 @@ var require_parse = __commonJS({
       let brackets = 0;
       const length = input.length;
       let index = 0;
-      let depth = 0;
+      let depth2 = 0;
       let value;
       const advance = () => input[index++];
       const push4 = (node) => {
@@ -9748,14 +10042,14 @@ var require_parse = __commonJS({
           continue;
         }
         if (value === CHAR_LEFT_CURLY_BRACE) {
-          depth++;
+          depth2++;
           const dollar = prev.value && prev.value.slice(-1) === "$" || block2.dollar === true;
           const brace = {
             type: "brace",
             open: true,
             close: false,
             dollar,
-            depth,
+            depth: depth2,
             commas: 0,
             ranges: 0,
             nodes: []
@@ -9774,11 +10068,11 @@ var require_parse = __commonJS({
           block2 = stack3.pop();
           block2.close = true;
           push4({ type, value });
-          depth--;
+          depth2--;
           block2 = stack3[stack3.length - 1];
           continue;
         }
-        if (value === CHAR_COMMA && depth > 0) {
+        if (value === CHAR_COMMA && depth2 > 0) {
           if (block2.ranges > 0) {
             block2.ranges = 0;
             const open = block2.nodes.shift();
@@ -9788,9 +10082,9 @@ var require_parse = __commonJS({
           block2.commas++;
           continue;
         }
-        if (value === CHAR_DOT && depth > 0 && block2.commas === 0) {
+        if (value === CHAR_DOT && depth2 > 0 && block2.commas === 0) {
           const siblings = block2.nodes;
-          if (depth === 0 || siblings.length === 0) {
+          if (depth2 === 0 || siblings.length === 0) {
             push4({ type: "text", value });
             continue;
           }
@@ -9840,7 +10134,7 @@ var require_parse = __commonJS({
       push4({ type: "eos" });
       return ast;
     };
-    module.exports = parse11;
+    module.exports = parse12;
   }
 });
 
@@ -9852,7 +10146,7 @@ var require_braces = __commonJS({
     var stringify4 = require_stringify();
     var compile2 = require_compile();
     var expand2 = require_expand();
-    var parse11 = require_parse();
+    var parse12 = require_parse();
     var braces = (input, options7 = {}) => {
       let output = [];
       if (Array.isArray(input)) {
@@ -9872,7 +10166,7 @@ var require_braces = __commonJS({
       }
       return output;
     };
-    braces.parse = (input, options7 = {}) => parse11(input, options7);
+    braces.parse = (input, options7 = {}) => parse12(input, options7);
     braces.stringify = (input, options7 = {}) => {
       if (typeof input === "string") {
         return stringify4(braces.parse(input, options7), options7);
@@ -10162,8 +10456,8 @@ var require_utils2 = __commonJS({
     };
     exports.wrapOutput = (input, state = {}, options7 = {}) => {
       const prepend = options7.contains ? "" : "^";
-      const append = options7.contains ? "" : "$";
-      let output = `${prepend}(?:${input})${append}`;
+      const append2 = options7.contains ? "" : "$";
+      let output = `${prepend}(?:${input})${append2}`;
       if (state.negated === true) {
         output = `(?:^(?!${output}).*$)`;
       }
@@ -10213,7 +10507,7 @@ var require_scan = __commonJS({
     var isPathSeparator = (code19) => {
       return code19 === CHAR_FORWARD_SLASH || code19 === CHAR_BACKWARD_SLASH;
     };
-    var depth = (token3) => {
+    var depth2 = (token3) => {
       if (token3.isPrefix !== true) {
         token3.depth = token3.isGlobstar ? Infinity : 1;
       }
@@ -10477,7 +10771,7 @@ var require_scan = __commonJS({
             } else {
               tokens[idx].value = value;
             }
-            depth(tokens[idx]);
+            depth2(tokens[idx]);
             state.maxDepth += tokens[idx].depth;
           }
           if (idx !== 0 || value !== "") {
@@ -10490,7 +10784,7 @@ var require_scan = __commonJS({
           parts.push(value);
           if (opts2.tokens) {
             tokens[tokens.length - 1].value = value;
-            depth(tokens[tokens.length - 1]);
+            depth2(tokens[tokens.length - 1]);
             state.maxDepth += tokens[tokens.length - 1].depth;
           }
         }
@@ -10708,15 +11002,15 @@ var require_parse2 = __commonJS({
       return `${source3}*`;
     };
     var repeatedExtglobRecursion = (pattern2) => {
-      let depth = 0;
+      let depth2 = 0;
       let value = pattern2.trim();
       let match2 = parseRepeatedExtglob(value);
       while (match2) {
-        depth++;
+        depth2++;
         value = match2.body.trim();
         match2 = parseRepeatedExtglob(value);
       }
-      return depth;
+      return depth2;
     };
     var analyzeRepeatedExtglob = (body, options7) => {
       if (options7.maxExtglobRecursion === false) {
@@ -10740,16 +11034,16 @@ var require_parse2 = __commonJS({
       }
       return { risky: false };
     };
-    var parse11 = (input, options7) => {
+    var parse12 = (input, options7) => {
       if (typeof input !== "string") {
         throw new TypeError("Expected a string");
       }
       input = REPLACEMENTS[input] || input;
       const opts2 = { ...options7 };
       const max = typeof opts2.maxLength === "number" ? Math.min(MAX_LENGTH, opts2.maxLength) : MAX_LENGTH;
-      let len = input.length;
-      if (len > max) {
-        throw new SyntaxError(`Input length: ${len}, exceeds maximum allowed length: ${max}`);
+      let len2 = input.length;
+      if (len2 > max) {
+        throw new SyntaxError(`Input length: ${len2}, exceeds maximum allowed length: ${max}`);
       }
       const bos = { type: "bos", value: "", output: opts2.prepend || "" };
       const tokens = [bos];
@@ -10801,13 +11095,13 @@ var require_parse2 = __commonJS({
         tokens
       };
       input = utils2.removePrefix(input, state);
-      len = input.length;
+      len2 = input.length;
       const extglobs = [];
       const braces = [];
       const stack3 = [];
       let prev = bos;
       let value;
-      const eos = () => state.index === len - 1;
+      const eos = () => state.index === len2 - 1;
       const peek3 = state.peek = (n4 = 1) => input[state.index + n4];
       const advance = state.advance = () => input[++state.index] || "";
       const remaining = () => input.slice(state.index + 1);
@@ -10815,7 +11109,7 @@ var require_parse2 = __commonJS({
         state.consumed += value2;
         state.index += num;
       };
-      const append = (token3) => {
+      const append2 = (token3) => {
         state.output += token3.output != null ? token3.output : token3.value;
         consume(token3.value);
       };
@@ -10856,7 +11150,7 @@ var require_parse2 = __commonJS({
         if (extglobs.length && tok.type !== "paren") {
           extglobs[extglobs.length - 1].inner += tok.value;
         }
-        if (tok.value || tok.output) append(tok);
+        if (tok.value || tok.output) append2(tok);
         if (prev && prev.type === "text" && tok.type === "text") {
           prev.value += tok.value;
           prev.output = (prev.output || "") + tok.value;
@@ -10911,7 +11205,7 @@ var require_parse2 = __commonJS({
             output = token3.close = `)$))${extglobStar}`;
           }
           if (token3.inner.includes("*") && (rest = remaining()) && /^\.[^\\/.]+$/.test(rest)) {
-            const expression = parse11(rest, { ...options7, fastpaths: false }).output;
+            const expression = parse12(rest, { ...options7, fastpaths: false }).output;
             output = token3.close = `)${expression})${extglobStar})`;
           }
           if (token3.prev.type === "bos") {
@@ -11033,13 +11327,13 @@ var require_parse2 = __commonJS({
             value = "^";
           }
           prev.value += value;
-          append({ value });
+          append2({ value });
           continue;
         }
         if (state.quotes === 1 && value !== '"') {
           value = utils2.escapeRegex(value);
           prev.value += value;
-          append({ value });
+          append2({ value });
           continue;
         }
         if (value === '"') {
@@ -11097,7 +11391,7 @@ var require_parse2 = __commonJS({
             value = `/${value}`;
           }
           prev.value += value;
-          append({ value });
+          append2({ value });
           if (opts2.literalBrackets === false || utils2.hasRegexChars(prevValue)) {
             continue;
           }
@@ -11436,12 +11730,12 @@ var require_parse2 = __commonJS({
       }
       return state;
     };
-    parse11.fastpaths = (input, options7) => {
+    parse12.fastpaths = (input, options7) => {
       const opts2 = { ...options7 };
       const max = typeof opts2.maxLength === "number" ? Math.min(MAX_LENGTH, opts2.maxLength) : MAX_LENGTH;
-      const len = input.length;
-      if (len > max) {
-        throw new SyntaxError(`Input length: ${len}, exceeds maximum allowed length: ${max}`);
+      const len2 = input.length;
+      if (len2 > max) {
+        throw new SyntaxError(`Input length: ${len2}, exceeds maximum allowed length: ${max}`);
       }
       input = REPLACEMENTS[input] || input;
       const win32 = utils2.isWindows(options7);
@@ -11502,7 +11796,7 @@ var require_parse2 = __commonJS({
       }
       return source3;
     };
-    module.exports = parse11;
+    module.exports = parse12;
   }
 });
 
@@ -11513,7 +11807,7 @@ var require_picomatch = __commonJS({
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     var path20 = __require("path");
     var scan = require_scan();
-    var parse11 = require_parse2();
+    var parse12 = require_parse2();
     var utils2 = require_utils2();
     var constants = require_constants2();
     var isObject3 = (val) => val && typeof val === "object" && !Array.isArray(val);
@@ -11601,7 +11895,7 @@ var require_picomatch = __commonJS({
     picomatch.isMatch = (str, patterns, options7) => picomatch(patterns, options7)(str);
     picomatch.parse = (pattern2, options7) => {
       if (Array.isArray(pattern2)) return pattern2.map((p7) => picomatch.parse(p7, options7));
-      return parse11(pattern2, { ...options7, fastpaths: false });
+      return parse12(pattern2, { ...options7, fastpaths: false });
     };
     picomatch.scan = (input, options7) => scan(input, options7);
     picomatch.compileRe = (state, options7, returnOutput = false, returnState = false) => {
@@ -11610,8 +11904,8 @@ var require_picomatch = __commonJS({
       }
       const opts2 = options7 || {};
       const prepend = opts2.contains ? "" : "^";
-      const append = opts2.contains ? "" : "$";
-      let source3 = `${prepend}(?:${state.output})${append}`;
+      const append2 = opts2.contains ? "" : "$";
+      let source3 = `${prepend}(?:${state.output})${append2}`;
       if (state && state.negated === true) {
         source3 = `^(?!${source3}).*$`;
       }
@@ -11627,10 +11921,10 @@ var require_picomatch = __commonJS({
       }
       let parsed = { negated: false, fastpaths: true };
       if (options7.fastpaths !== false && (input[0] === "." || input[0] === "*")) {
-        parsed.output = parse11.fastpaths(input, options7);
+        parsed.output = parse12.fastpaths(input, options7);
       }
       if (!parsed.output) {
-        parsed = parse11(input, options7);
+        parsed = parse12(input, options7);
       }
       return picomatch.compileRe(parsed, options7, returnOutput, returnState);
     };
@@ -12014,7 +12308,7 @@ var require_merge2 = __commonJS({
       }
       const mergedStream = PassThrough(options7);
       function addStream() {
-        for (let i = 0, len = arguments.length; i < len; i++) {
+        for (let i = 0, len2 = arguments.length; i < len2; i++) {
           streamsQueue.push(pauseStreams(arguments[i], options7));
         }
         mergeStream();
@@ -12096,7 +12390,7 @@ var require_merge2 = __commonJS({
         }
         streams.pause();
       } else {
-        for (let i = 0, len = streams.length; i < len; i++) {
+        for (let i = 0, len2 = streams.length; i < len2; i++) {
           streams[i] = pauseStreams(streams[i], options7);
         }
       }
@@ -14791,18 +15085,18 @@ var require_ignore = __commonJS({
           tokens.push({ single: source3.slice(index, index + 2) });
           index += 2;
         } else if (char === "(") {
-          let depth = 0;
+          let depth2 = 0;
           let end = index;
           do {
             if (source3[end] === ESCAPE) {
               end++;
             } else if (source3[end] === "(") {
-              depth++;
+              depth2++;
             } else if (source3[end] === ")") {
-              depth--;
+              depth2--;
             }
             end++;
-          } while (end < length && depth > 0);
+          } while (end < length && depth2 > 0);
           if ("*+?".indexOf(source3[end]) >= 0) {
             end++;
           }
@@ -15962,12 +16256,12 @@ var init_ignore = __esm({
       }
     };
     getExcludesFileFromGitConfigSync = (filePath, readFileSync3, gitDirectory, options7 = {}) => {
-      const { suppressErrors, includeStack = /* @__PURE__ */ new Set(), depth = 0 } = options7;
+      const { suppressErrors, includeStack = /* @__PURE__ */ new Set(), depth: depth2 = 0 } = options7;
       const normalizedPath = path4.resolve(filePath);
       if (includeStack.has(normalizedPath)) {
         return void 0;
       }
-      if (depth >= MAX_INCLUDE_DEPTH) {
+      if (depth2 >= MAX_INCLUDE_DEPTH) {
         return void 0;
       }
       includeStack.add(normalizedPath);
@@ -15978,7 +16272,7 @@ var init_ignore = __esm({
       }
       let { excludesFile, includePaths } = parseGitConfigForExcludesFile(content3, normalizedPath, gitDirectory);
       for (const includePath of includePaths) {
-        const includedExcludesFile = getExcludesFileFromGitConfigSync(includePath, readFileSync3, gitDirectory, { suppressErrors, includeStack, depth: depth + 1 });
+        const includedExcludesFile = getExcludesFileFromGitConfigSync(includePath, readFileSync3, gitDirectory, { suppressErrors, includeStack, depth: depth2 + 1 });
         if (includedExcludesFile !== void 0) {
           excludesFile = includedExcludesFile;
         }
@@ -15987,12 +16281,12 @@ var init_ignore = __esm({
       return excludesFile;
     };
     getExcludesFileFromGitConfigAsync = async (filePath, readFile4, gitDirectory, options7 = {}) => {
-      const { suppressErrors, includeStack = /* @__PURE__ */ new Set(), depth = 0 } = options7;
+      const { suppressErrors, includeStack = /* @__PURE__ */ new Set(), depth: depth2 = 0 } = options7;
       const normalizedPath = path4.resolve(filePath);
       if (includeStack.has(normalizedPath)) {
         return void 0;
       }
-      if (depth >= MAX_INCLUDE_DEPTH) {
+      if (depth2 >= MAX_INCLUDE_DEPTH) {
         return void 0;
       }
       includeStack.add(normalizedPath);
@@ -16008,7 +16302,7 @@ var init_ignore = __esm({
       }
       let { excludesFile, includePaths } = parseGitConfigForExcludesFile(content3, normalizedPath, gitDirectory);
       for (const includePath of includePaths) {
-        const includedExcludesFile = await getExcludesFileFromGitConfigAsync(includePath, readFile4, gitDirectory, { suppressErrors, includeStack, depth: depth + 1 });
+        const includedExcludesFile = await getExcludesFileFromGitConfigAsync(includePath, readFile4, gitDirectory, { suppressErrors, includeStack, depth: depth2 + 1 });
         if (includedExcludesFile !== void 0) {
           excludesFile = includedExcludesFile;
         }
@@ -16758,10 +17052,10 @@ var require_jsonpointer = __commonJS({
     function setter(obj, pointer, value) {
       var part;
       var hasNextPart;
-      for (var p7 = 1, len = pointer.length; p7 < len; ) {
+      for (var p7 = 1, len2 = pointer.length; p7 < len2; ) {
         if (pointer[p7] === "constructor" || pointer[p7] === "prototype" || pointer[p7] === "__proto__") return obj;
         part = untilde(pointer[p7++]);
-        hasNextPart = len > p7;
+        hasNextPart = len2 > p7;
         if (typeof obj[part] === "undefined") {
           if (Array.isArray(obj) && part === "-") {
             part = obj.length;
@@ -16797,11 +17091,11 @@ var require_jsonpointer = __commonJS({
     function get(obj, pointer) {
       if (typeof obj !== "object") throw new Error("Invalid input object.");
       pointer = compilePointer(pointer);
-      var len = pointer.length;
-      if (len === 1) return obj;
-      for (var p7 = 1; p7 < len; ) {
+      var len2 = pointer.length;
+      if (len2 === 1) return obj;
+      for (var p7 = 1; p7 < len2; ) {
         obj = obj[untilde(pointer[p7++])];
-        if (len === p7) return obj;
+        if (len2 === p7) return obj;
         if (typeof obj !== "object" || obj === null) return void 0;
       }
     }
@@ -17592,9 +17886,9 @@ var init_build = __esm({
       * Bypasses the expensive Symbol.iterator overhead of Array.from()
       */
       static toArray(typedArray) {
-        const len = typedArray.length;
-        const res = new Array(len);
-        for (let i = 0; i < len; i++) res[i] = typedArray[i];
+        const len2 = typedArray.length;
+        const res = new Array(len2);
+        for (let i = 0; i < len2; i++) res[i] = typedArray[i];
         return res;
       }
       static stringToUtf8ByteArray(str) {
@@ -18501,17 +18795,17 @@ var init_build = __esm({
           if ((this.arg & RE2Flags.FOLD_CASE) !== 0) return Unicode.equalsIgnoreCase(r02, r8);
           return r8 === r02;
         }
-        const len = this.runes.length;
-        if (len === 0) return false;
-        if (len === 2 || len === 4 || len === 6 || len === 8) {
-          for (let j10 = 0; j10 < len; j10 += 2) {
+        const len2 = this.runes.length;
+        if (len2 === 0) return false;
+        if (len2 === 2 || len2 === 4 || len2 === 6 || len2 === 8) {
+          for (let j10 = 0; j10 < len2; j10 += 2) {
             if (r8 < this.runes[j10]) return false;
             if (r8 <= this.runes[j10 + 1]) return true;
           }
           return false;
         }
         let base2 = 0;
-        let n4 = len >> 1;
+        let n4 = len2 >> 1;
         while (n4 > 1) {
           const half = n4 >> 1;
           base2 += this.runes[base2 + half << 1] <= r8 ? half : 0;
@@ -18527,17 +18821,17 @@ var init_build = __esm({
           if ((this.arg & RE2Flags.FOLD_CASE) !== 0) return Unicode.equalsIgnoreCase(r02, r8) ? 0 : -1;
           return r8 === r02 ? 0 : -1;
         }
-        const len = this.runes.length;
-        if (len === 0) return -1;
-        if (len === 2 || len === 4 || len === 6 || len === 8) {
-          for (let j10 = 0; j10 < len; j10 += 2) {
+        const len2 = this.runes.length;
+        if (len2 === 0) return -1;
+        if (len2 === 2 || len2 === 4 || len2 === 6 || len2 === 8) {
+          for (let j10 = 0; j10 < len2; j10 += 2) {
             if (r8 < this.runes[j10]) return -1;
             if (r8 <= this.runes[j10 + 1]) return Math.floor(j10 / 2);
           }
           return -1;
         }
         let base2 = 0;
-        let n4 = len >> 1;
+        let n4 = len2 >> 1;
         while (n4 > 1) {
           const half = n4 >> 1;
           base2 += this.runes[base2 + half << 1] <= r8 ? half : 0;
@@ -19148,10 +19442,10 @@ var init_build = __esm({
         const cost = DFA2.TABLE_OVERHEAD + DFA2.ELEMENT_SIZE * size;
         if (this.memBudget < cost) return null;
         this.memBudget -= cost;
-        const table2 = new Array(size).fill(null);
-        if (anchor === RE2Flags.UNANCHORED) state.next = table2;
-        else state.nextAnchored = table2;
-        return table2;
+        const table3 = new Array(size).fill(null);
+        if (anchor === RE2Flags.UNANCHORED) state.next = table3;
+        else state.nextAnchored = table3;
+        return table3;
       }
       clearCache() {
         this.stateCache.clear();
@@ -19164,13 +19458,13 @@ var init_build = __esm({
         return this.getState(current.nfaStates, current.flag, current.matchIDs);
       }
       step(state, cls, rune, anchor) {
-        let table2 = anchor === RE2Flags.UNANCHORED ? state.next : state.nextAnchored;
-        if (table2 !== null) {
-          const cached = table2[cls];
+        let table3 = anchor === RE2Flags.UNANCHORED ? state.next : state.nextAnchored;
+        if (table3 !== null) {
+          const cached = table3[cls];
           if (cached !== null) return cached;
         } else {
-          table2 = this.allocTable(state, anchor);
-          if (table2 === null) return null;
+          table3 = this.allocTable(state, anchor);
+          if (table3 === null) return null;
         }
         const needflag = state.flag >>> DFA2.FLAG_NEED_SHIFT;
         const oldbeforeflag = state.flag & DFA2.FLAG_EMPTY_MASK;
@@ -19206,7 +19500,7 @@ var init_build = __esm({
         if (isword) flag |= DFA2.FLAG_LAST_WORD;
         const nextState = this.makeState(nextPCs, flag, ids);
         if (nextState === null) return null;
-        table2[cls] = nextState;
+        table3[cls] = nextState;
         return nextState;
       }
       start(input, pos3) {
@@ -20167,7 +20461,7 @@ var init_build = __esm({
         const edges = /* @__PURE__ */ new Map();
         const parent = [0];
         const unit = [0];
-        const depth = [0];
+        const depth2 = [0];
         const terminal = [0];
         for (const word of words) {
           let node = 0;
@@ -20179,7 +20473,7 @@ var init_build = __esm({
               edges.set(key3, child);
               parent.push(node);
               unit.push(word[i]);
-              depth.push(depth[node] + 1);
+              depth2.push(depth2[node] + 1);
               terminal.push(0);
             }
             node = child;
@@ -20200,7 +20494,7 @@ var init_build = __esm({
         this.childNode = children;
         const byDepth = new Int32Array(numNodes);
         for (let n4 = 0; n4 < numNodes; n4++) byDepth[n4] = n4;
-        byDepth.sort((a4, b8) => depth[a4] - depth[b8]);
+        byDepth.sort((a4, b8) => depth2[a4] - depth2[b8]);
         const fail = new Int32Array(numNodes);
         const match2 = Uint8Array.from(terminal);
         for (let k10 = 1; k10 < numNodes; k10++) {
@@ -20546,10 +20840,10 @@ var init_build = __esm({
       toString() {
         let out = "";
         for (let pc3 = 0; pc3 < this.inst.length; pc3++) {
-          const len = out.length;
+          const len2 = out.length;
           out += pc3;
           if (pc3 === this.start) out += "*";
-          out += "        ".substring(out.length - len);
+          out += "        ".substring(out.length - len2);
           out += this.inst[pc3];
           out += "\n";
         }
@@ -21122,9 +21416,9 @@ var init_build = __esm({
       ["[:^xdigit:]", new CharGroup(-1, code17)]
     ]);
     CharClass = class CharClass2 {
-      static charClassToString(r8, len) {
+      static charClassToString(r8, len2) {
         let result = "[";
-        for (let i = 0; i < len; i += 2) {
+        for (let i = 0; i < len2; i += 2) {
           if (i > 0) result += " ";
           const lo7 = r8[i];
           const hi13 = r8[i + 1];
@@ -21134,12 +21428,12 @@ var init_build = __esm({
         result += "]";
         return result;
       }
-      static sortRanges(array2, len) {
-        const n4 = len >> 1;
+      static sortRanges(array2, len2) {
+        const n4 = len2 >> 1;
         const order = new Array(n4);
         for (let i = 0; i < n4; i++) order[i] = i;
         order.sort((a4, b8) => array2[2 * a4] - array2[2 * b8] || array2[2 * b8 + 1] - array2[2 * a4 + 1]);
-        const sorted = array2.slice(0, len);
+        const sorted = array2.slice(0, len2);
         for (let i = 0; i < n4; i++) {
           array2[2 * i] = sorted[2 * order[i]];
           array2[2 * i + 1] = sorted[2 * order[i] + 1];
@@ -21236,11 +21530,11 @@ var init_build = __esm({
         if (nextLo <= Unicode.MAX_RUNE) this.appendRange(nextLo, Unicode.MAX_RUNE);
         return this;
       }
-      appendTable(table2) {
-        for (let i = 0; i < table2.length; ++i) {
-          const lo7 = table2.getLo(i);
-          const hi13 = table2.getHi(i);
-          const stride = table2.getStride(i);
+      appendTable(table3) {
+        for (let i = 0; i < table3.length; ++i) {
+          const lo7 = table3.getLo(i);
+          const hi13 = table3.getHi(i);
+          const stride = table3.getStride(i);
           if (stride === 1) {
             this.appendRange(lo7, hi13);
             continue;
@@ -21249,12 +21543,12 @@ var init_build = __esm({
         }
         return this;
       }
-      appendNegatedTable(table2) {
+      appendNegatedTable(table3) {
         let nextLo = 0;
-        for (let i = 0; i < table2.length; ++i) {
-          const lo7 = table2.getLo(i);
-          const hi13 = table2.getHi(i);
-          const stride = table2.getStride(i);
+        for (let i = 0; i < table3.length; ++i) {
+          const lo7 = table3.getLo(i);
+          const hi13 = table3.getHi(i);
+          const stride = table3.getStride(i);
           if (stride === 1) {
             if (nextLo <= lo7 - 1) this.appendRange(nextLo, lo7 - 1);
             nextLo = hi13 + 1;
@@ -21268,8 +21562,8 @@ var init_build = __esm({
         if (nextLo <= Unicode.MAX_RUNE) this.appendRange(nextLo, Unicode.MAX_RUNE);
         return this;
       }
-      appendTableWithSign(table2, sign3) {
-        return sign3 < 0 ? this.appendNegatedTable(table2) : this.appendTable(table2);
+      appendTableWithSign(table3, sign3) {
+        return sign3 < 0 ? this.appendNegatedTable(table3) : this.appendTable(table3);
       }
       negateClass() {
         let nextLo = 0;
@@ -21501,24 +21795,24 @@ var init_build = __esm({
         }
         return false;
       }
-      static mergeCharClass(dst, src) {
+      static mergeCharClass(dst, src2) {
         switch (dst.op) {
           case Regexp.Op.ANY_CHAR:
             break;
           case Regexp.Op.ANY_CHAR_NOT_NL:
-            if (Parser2.matchRune(src, Codepoint.CODES["\n"])) dst.op = Regexp.Op.ANY_CHAR;
+            if (Parser2.matchRune(src2, Codepoint.CODES["\n"])) dst.op = Regexp.Op.ANY_CHAR;
             break;
           case Regexp.Op.CHAR_CLASS: {
             const cc3 = new CharClass(Array.isArray(dst.runes) ? dst.runes : Array.from(dst.runes));
-            if (src.op === Regexp.Op.LITERAL) cc3.appendLiteral(src.runes[0], src.flags);
-            else cc3.appendClass(src.runes);
+            if (src2.op === Regexp.Op.LITERAL) cc3.appendLiteral(src2.runes[0], src2.flags);
+            else cc3.appendClass(src2.runes);
             dst.runes = cc3.toGrowableArray();
             break;
           }
           case Regexp.Op.LITERAL:
-            if (src.runes[0] === dst.runes[0] && src.flags === dst.flags) break;
+            if (src2.runes[0] === dst.runes[0] && src2.flags === dst.flags) break;
             dst.op = Regexp.Op.CHAR_CLASS;
-            dst.runes = new CharClass().appendLiteral(dst.runes[0], dst.flags).appendLiteral(src.runes[0], src.flags).toGrowableArray();
+            dst.runes = new CharClass().appendLiteral(dst.runes[0], dst.flags).appendLiteral(src2.runes[0], src2.flags).toGrowableArray();
         }
       }
       static parseEscape(t42) {
@@ -21832,9 +22126,9 @@ var init_build = __esm({
       }
       collapse(subs, op3) {
         if (subs.length === 1) return subs[0];
-        let len = 0;
-        for (let sub of subs) len += sub.op === op3 ? sub.subs.length : 1;
-        let newsubs = new Array(len).fill(null);
+        let len2 = 0;
+        for (let sub of subs) len2 += sub.op === op3 ? sub.subs.length : 1;
+        let newsubs = new Array(len2).fill(null);
         let i = 0;
         for (let sub of subs) if (sub.op === op3) {
           for (let j10 = 0; j10 < sub.subs.length; j10++) newsubs[i++] = sub.subs[j10];
@@ -22588,9 +22882,9 @@ var init_build = __esm({
         let m5 = this.get();
         if (!m5) m5 = Machine.fromRE2(this);
         m5.init(ncap);
-        const cap = m5.match(input, pos3, anchor, lbState) ? m5.submatches() : null;
+        const cap2 = m5.match(input, pos3, anchor, lbState) ? m5.submatches() : null;
         this.put(m5);
-        return cap;
+        return cap2;
       }
       match(s) {
         return this.executeEngine(MachineInput.fromUTF16(s), 0, RE2Flags.UNANCHORED, 0) !== null;
@@ -22636,16 +22930,16 @@ var init_build = __esm({
       * {@code repl}. No support is provided for expressions (e.g. {@code \1} or {@code $1}) in the
       * replacement string.
       */
-      replaceAll(src, repl) {
-        return this.replaceAllFunc(src, () => repl, 2 * src.length + 1);
+      replaceAll(src2, repl) {
+        return this.replaceAllFunc(src2, () => repl, 2 * src2.length + 1);
       }
       /**
       * Returns a copy of {@code src} in which only the first match for this regexp has been replaced
       * by {@code repl}. No support is provided for expressions (e.g. {@code \1} or {@code $1}) in the
       * replacement string.
       */
-      replaceFirst(src, repl) {
-        return this.replaceAllFunc(src, () => repl, 1);
+      replaceFirst(src2, repl) {
+        return this.replaceAllFunc(src2, () => repl, 1);
       }
       /**
       * Returns a copy of {@code src} in which at most {@code maxReplaces} matches for this regexp have
@@ -22653,19 +22947,19 @@ var init_build = __esm({
       * matched string). No support is provided for expressions (e.g. {@code \1} or {@code $1}) in the
       * replacement string.
       */
-      replaceAllFunc(src, replFunc, maxReplaces) {
+      replaceAllFunc(src2, replFunc, maxReplaces) {
         let lastMatchEnd = 0;
         let searchPos = 0;
         let out = "";
-        const input = MachineInput.fromUTF16(src);
+        const input = MachineInput.fromUTF16(src2);
         const lbState = this.createLookbehindState();
         let numReplaces = 0;
-        while (searchPos <= src.length) {
+        while (searchPos <= src2.length) {
           const a4 = this.executeEngine(input, searchPos, RE2Flags.UNANCHORED, 2, lbState);
           if (a4 === null || a4.length === 0) break;
-          out += src.substring(lastMatchEnd, a4[0]);
+          out += src2.substring(lastMatchEnd, a4[0]);
           if (a4[1] > lastMatchEnd || a4[0] === 0) {
-            out += replFunc(src.substring(a4[0], a4[1]));
+            out += replFunc(src2.substring(a4[0], a4[1]));
             numReplaces++;
           }
           lastMatchEnd = a4[1];
@@ -22675,7 +22969,7 @@ var init_build = __esm({
           else searchPos = a4[1];
           if (numReplaces >= maxReplaces) break;
         }
-        out += src.substring(lastMatchEnd);
+        out += src2.substring(lastMatchEnd);
         return out;
       }
       pad(a4) {
@@ -23881,7 +24175,7 @@ var require_helpers = __commonJS({
         referenceData.push(referenceDatum);
         dictionary.set(reference2, referenceData);
       };
-      const definitions = /* @__PURE__ */ new Map();
+      const definitions2 = /* @__PURE__ */ new Map();
       const definitionLineIndices = [];
       const duplicateDefinitions = [];
       const filteredTokens = micromark.filterByTypes(
@@ -23916,12 +24210,12 @@ var require_helpers = __commonJS({
             labelPrefix = "^";
           case "definitionLabelString": {
             const reference2 = normalizeLinkLabelText3(`${labelPrefix}${token3.text}`);
-            if (definitions.has(reference2)) {
+            if (definitions2.has(reference2)) {
               duplicateDefinitions.push([reference2, token3.startLine - 1]);
             } else {
               const parent = micromark.getParentOfType(token3, ["definition"]);
               const destinationString = parent && micromark.getDescendantsByType(parent, ["definitionDestination", "definitionDestinationRaw", "definitionDestinationString"])[0]?.text;
-              definitions.set(
+              definitions2.set(
                 reference2,
                 [token3.startLine - 1, destinationString || ""]
               );
@@ -23964,7 +24258,7 @@ var require_helpers = __commonJS({
       return {
         references,
         shortcuts,
-        definitions,
+        definitions: definitions2,
         duplicateDefinitions,
         definitionLineIndices
       };
@@ -24515,9 +24809,9 @@ var init_md007 = __esm({
       "tags": ["bullet", "ul", "indentation"],
       "parser": "micromark",
       "function": function MD007(params2, onError) {
-        const indent4 = Number(params2.config.indent ?? 2);
+        const indent5 = Number(params2.config.indent ?? 2);
         const startIndented = !!params2.config.start_indented;
-        const startIndent = Number(params2.config.start_indent ?? indent4);
+        const startIndent = Number(params2.config.start_indent ?? indent5);
         const unorderedListNesting = /* @__PURE__ */ new Map();
         let lastBlockQuotePrefix = null;
         const tokens = filterByTypesCached(unorderedListTypes);
@@ -24547,7 +24841,7 @@ var init_md007 = __esm({
             const nesting = unorderedListNesting.get(parent);
             if (nesting !== void 0) {
               const baseIndent = (0, import_micromark_helpers5.getParentOfType)(token3, ["gfmFootnoteDefinition"]) ? 4 : 0;
-              const expectedIndent = baseIndent + (startIndented ? startIndent : 0) + nesting * indent4;
+              const expectedIndent = baseIndent + (startIndented ? startIndent : 0) + nesting * indent5;
               const blockQuoteAdjustment = lastBlockQuotePrefix?.endLine === startLine ? lastBlockQuotePrefix.endColumn - 1 : 0;
               const actualIndent = startColumn - 1 - blockQuoteAdjustment;
               const range2 = [1, endColumn - 1];
@@ -24874,8 +25168,8 @@ var init_md013 = __esm({
           (0, import_micromark_helpers10.addRangeToSet)(codeBlockLineNumbers, codeBlock.startLine, codeBlock.endLine);
         }
         const tableLineNumbers = /* @__PURE__ */ new Set();
-        for (const table2 of filterByTypesCached(["table"])) {
-          (0, import_micromark_helpers10.addRangeToSet)(tableLineNumbers, table2.startLine, table2.endLine);
+        for (const table3 of filterByTypesCached(["table"])) {
+          (0, import_micromark_helpers10.addRangeToSet)(tableLineNumbers, table3.startLine, table3.endLine);
         }
         const linkLineNumbers = /* @__PURE__ */ new Set();
         for (const link2 of filterByTypesCached(["autolink", "image", "link", "literalAutolink"])) {
@@ -26256,9 +26550,9 @@ var init_md042 = __esm({
       "tags": ["links"],
       "parser": "micromark",
       "function": function MD042(params2, onError) {
-        const { definitions } = getReferenceLinkImageData();
+        const { definitions: definitions2 } = getReferenceLinkImageData();
         const isReferenceDefinitionHash = (token3) => {
-          const definition2 = definitions.get((0, import_helpers36.normalizeLinkLabelText)(token3.text));
+          const definition2 = definitions2.get((0, import_helpers36.normalizeLinkLabelText)(token3.text));
           return Boolean(definition2 && definition2[1] === "#");
         };
         const links = filterByTypesCached(["link"]);
@@ -26735,9 +27029,9 @@ function factoryLabel(effects, ok2, nok, type, markerType, stringType, disallowE
       return ok2;
     }
     effects.enter(stringType);
-    return lineStart(code19);
+    return lineStart2(code19);
   }
-  function lineStart(code19) {
+  function lineStart2(code19) {
     if (code19 === 93 && !balance) {
       return atClosingBrace(code19);
     }
@@ -26767,7 +27061,7 @@ function factoryLabel(effects, ok2, nok, type, markerType, stringType, disallowE
       }
       effects.consume(code19);
       effects.exit("chunkText");
-      return lineStart;
+      return lineStart2;
     }
     effects.consume(code19);
     return code19 === 92 ? dataEscape : data;
@@ -26880,9 +27174,9 @@ function tokenizeDirectiveContainer(effects, ok2, nok) {
       return effects.check(nonLazyLine, emptyContentNonLazyLineAfter, after)(code19);
     }
     effects.enter("directiveContainerContent");
-    return lineStart(code19);
+    return lineStart2(code19);
   }
-  function lineStart(code19) {
+  function lineStart2(code19) {
     return effects.attempt({
       tokenize: tokenizeClosingFence,
       partial: true
@@ -26920,13 +27214,13 @@ function tokenizeDirectiveContainer(effects, ok2, nok) {
   }
   function emptyContentNonLazyLineAfter(code19) {
     effects.enter("directiveContainerContent");
-    return lineStart(code19);
+    return lineStart2(code19);
   }
   function nonLazyLineAfter(code19) {
     effects.consume(code19);
     const t42 = effects.exit("chunkDocument");
     self.parser.lazy[t42.start.line] = false;
-    return lineStart;
+    return lineStart2;
   }
   function lineAfter(code19) {
     const t42 = effects.exit("chunkDocument");
@@ -26981,9 +27275,9 @@ function tokenizeNonLazyLine(effects, ok2, nok) {
     effects.enter("lineEnding");
     effects.consume(code19);
     effects.exit("lineEnding");
-    return lineStart;
+    return lineStart2;
   }
-  function lineStart(code19) {
+  function lineStart2(code19) {
     return self.parser.lazy[self.now().line] ? nok(code19) : ok2(code19);
   }
 }
@@ -33781,21 +34075,21 @@ function flushCell(map3, context, range2, rowKind, rowEnd, previousCell) {
   }
   return previousCell;
 }
-function flushTableEnd(map3, context, index, table2, tableBody) {
+function flushTableEnd(map3, context, index, table3, tableBody) {
   const exits = [];
   const related = getPoint(context.events, index);
   if (tableBody) {
     tableBody.end = Object.assign({}, related);
     exits.push(["exit", tableBody, context]);
   }
-  table2.end = Object.assign({}, related);
-  exits.push(["exit", table2, context]);
+  table3.end = Object.assign({}, related);
+  exits.push(["exit", table3, context]);
   map3.add(index + 1, 0, exits);
 }
 function getPoint(events, index) {
   const event = events[index];
-  const side = event[0] === "enter" ? "start" : "end";
-  return event[1][side];
+  const side2 = event[0] === "enter" ? "start" : "end";
+  return event[1][side2];
 }
 var init_syntax4 = __esm({
   "node_modules/micromark-extension-gfm-table/lib/syntax.js"() {
@@ -33939,9 +34233,9 @@ function tokenizeNonLazyContinuation2(effects, ok2, nok) {
     effects.enter("lineEnding");
     effects.consume(code19);
     effects.exit("lineEnding");
-    return lineStart;
+    return lineStart2;
   }
-  function lineStart(code19) {
+  function lineStart2(code19) {
     return self.parser.lazy[self.now().line] ? nok(code19) : ok2(code19);
   }
 }
@@ -34185,9 +34479,9 @@ function initializeContent(effects) {
   }
   function paragraphInitial(code19) {
     effects.enter("paragraph");
-    return lineStart(code19);
+    return lineStart2(code19);
   }
-  function lineStart(code19) {
+  function lineStart2(code19) {
     const token3 = effects.enter("chunkText", {
       contentType: "text",
       previous: previous4
@@ -34208,7 +34502,7 @@ function initializeContent(effects) {
     if (markdownLineEnding(code19)) {
       effects.consume(code19);
       effects.exit("chunkText");
-      return lineStart;
+      return lineStart2;
     }
     effects.consume(code19);
     return data;
@@ -35832,8 +36126,8 @@ var init_md051 = __esm({
             (link2) => !(link2.parent?.type === "atxHeadingText" && (0, import_micromark_helpers35.isDocfxTab)(link2.parent.parent))
           );
           for (const link2 of links) {
-            const definitions = (0, import_micromark_helpers35.filterByTypes)(link2.children, [definitionType]);
-            for (const definition2 of definitions) {
+            const definitions2 = (0, import_micromark_helpers35.filterByTypes)(link2.children, [definitionType]);
+            for (const definition2 of definitions2) {
               const { endColumn, startColumn } = definition2;
               const text5 = unescapeStringTokenText(definition2);
               const textSliceOne = text5.slice(1);
@@ -35898,11 +36192,11 @@ var init_md052 = __esm({
         const { config: config2, lines } = params2;
         const shortcutSyntax = config2.shortcut_syntax || false;
         const ignoredLabels = new Set(config2.ignored_labels || ["x"]);
-        const { definitions, references, shortcuts } = getReferenceLinkImageData();
+        const { definitions: definitions2, references, shortcuts } = getReferenceLinkImageData();
         const entries = shortcutSyntax ? [...references.entries(), ...shortcuts.entries()] : references.entries();
         for (const reference2 of entries) {
           const [label5, datas] = reference2;
-          if (!definitions.has(label5) && !ignoredLabels.has(label5)) {
+          if (!definitions2.has(label5) && !ignoredLabels.has(label5)) {
             for (const data of datas) {
               const [lineIndex, index, length] = data;
               const context = lines[lineIndex].slice(index, index + length);
@@ -35937,12 +36231,12 @@ var init_md053 = __esm({
       "function": function MD053(params2, onError) {
         const ignored = new Set(params2.config.ignored_definitions || ["//"]);
         const lines = params2.lines;
-        const { references, shortcuts, definitions, duplicateDefinitions } = getReferenceLinkImageData();
+        const { references, shortcuts, definitions: definitions2, duplicateDefinitions } = getReferenceLinkImageData();
         const singleLineDefinition = (line4) => line4.replace(linkReferenceDefinitionRe, "").trim().length > 0;
         const deleteFixInfo = {
           "deleteCount": -1
         };
-        for (const definition2 of definitions.entries()) {
+        for (const definition2 of definitions2.entries()) {
           const [label5, [lineIndex]] = definition2;
           if (!ignored.has(label5) && !references.has(label5) && !shortcuts.has(label5)) {
             const line4 = lines[lineIndex];
@@ -36010,7 +36304,7 @@ var init_md054 = __esm({
         if (autolink3 && inline2 && full && collapsed && shortcut && urlInline) {
           return;
         }
-        const { definitions } = getReferenceLinkImageData();
+        const { definitions: definitions2 } = getReferenceLinkImageData();
         const links = filterByTypesCached(["autolink", "image", "link"]);
         for (const link2 of links) {
           let label5 = null;
@@ -36039,7 +36333,7 @@ var init_md054 = __esm({
               const isShortcut = (0, import_micromark_helpers36.getDescendantsByType)(link2, ["reference"]).length === 0;
               const referenceString = (0, import_micromark_helpers36.getDescendantsByType)(link2, ["reference", "referenceString"])[0]?.text;
               const isCollapsed = referenceString === void 0;
-              const definition2 = definitions.get((0, import_helpers47.normalizeLinkLabelText)(referenceString || label5));
+              const definition2 = definitions2.get((0, import_helpers47.normalizeLinkLabelText)(referenceString || label5));
               destination = definition2 && definition2[1] || "";
               isError = Boolean(
                 destination && (isShortcut ? !shortcut : isCollapsed ? !collapsed : !full)
@@ -36180,10 +36474,10 @@ var init_md056 = __esm({
         let expectedCount = 0;
         let currentTable = null;
         for (const row of rows) {
-          const table2 = (0, import_micromark_helpers38.getParentOfType)(row, ["table"]);
-          if (currentTable !== table2) {
+          const table3 = (0, import_micromark_helpers38.getParentOfType)(row, ["table"]);
+          if (currentTable !== table3) {
             expectedCount = 0;
-            currentTable = table2;
+            currentTable = table3;
           }
           const cells = row.children.filter((child) => ["tableData", "tableDelimiter", "tableHeader"].includes(child.type));
           const actualCount = cells.length;
@@ -36229,8 +36523,8 @@ var init_md058 = __esm({
         const { lines } = params2;
         const blockQuotePrefixes = filterByTypesCached(["blockQuotePrefix", "linePrefix"]);
         const tables = filterByTypesCached(["table"]);
-        for (const table2 of tables) {
-          const firstLineNumber = table2.startLine;
+        for (const table3 of tables) {
+          const firstLineNumber = table3.startLine;
           if (!(0, import_helpers50.isBlankLine)(lines[firstLineNumber - 2])) {
             (0, import_helpers50.addErrorContext)(
               onError,
@@ -36244,7 +36538,7 @@ var init_md058 = __esm({
               }
             );
           }
-          const lastLineNumber = table2.endLine;
+          const lastLineNumber = table3.endLine;
           if (!(0, import_helpers50.isBlankLine)(lines[lastLineNumber])) {
             (0, import_helpers50.addErrorContext)(
               onError,
@@ -36659,8 +36953,8 @@ var init_md060 = __esm({
         const alignedDelimiter = !!params2.config.aligned_delimiter;
         const lines = params2.lines;
         const tables = filterByTypesCached(["table"]);
-        for (const table2 of tables) {
-          const rows = (0, import_micromark_helpers41.filterByTypes)(table2.children, ["tableDelimiterRow", "tableRow"]);
+        for (const table3 of tables) {
+          const rows = (0, import_micromark_helpers41.filterByTypes)(table3.children, ["tableDelimiterRow", "tableRow"]);
           const errorsIfAligned = [];
           if (styleAlignedAllowed) {
             errorsIfAligned.push(...checkStyleAligned(lines, rows, 'Table pipe does not align with header for style "aligned"'));
@@ -37813,7 +38107,7 @@ var init_merge_options = __esm({
 
 // node_modules/jsonc-parser/lib/esm/impl/scanner.js
 function createScanner(text5, ignoreTrivia = false) {
-  const len = text5.length;
+  const len2 = text5.length;
   let pos3 = 0, value = "", tokenOffset = 0, token3 = 16, lineNumber = 0, lineStartOffset = 0, tokenLineStartOffset = 0, prevTokenLineStartOffset = 0, scanError = 0;
   function scanHexDigits(count, exact) {
     let digits = 0;
@@ -37887,7 +38181,7 @@ function createScanner(text5, ignoreTrivia = false) {
   function scanString() {
     let result = "", start = pos3;
     while (true) {
-      if (pos3 >= len) {
+      if (pos3 >= len2) {
         result += text5.substring(start, pos3);
         scanError = 2;
         break;
@@ -37901,7 +38195,7 @@ function createScanner(text5, ignoreTrivia = false) {
       if (ch3 === 92) {
         result += text5.substring(start, pos3);
         pos3++;
-        if (pos3 >= len) {
+        if (pos3 >= len2) {
           scanError = 2;
           break;
         }
@@ -37964,8 +38258,8 @@ function createScanner(text5, ignoreTrivia = false) {
     tokenOffset = pos3;
     lineStartOffset = lineNumber;
     prevTokenLineStartOffset = tokenLineStartOffset;
-    if (pos3 >= len) {
-      tokenOffset = len;
+    if (pos3 >= len2) {
+      tokenOffset = len2;
       return token3 = 17;
     }
     let code19 = text5.charCodeAt(pos3);
@@ -38018,7 +38312,7 @@ function createScanner(text5, ignoreTrivia = false) {
         const start = pos3 - 1;
         if (text5.charCodeAt(pos3 + 1) === 47) {
           pos3 += 2;
-          while (pos3 < len) {
+          while (pos3 < len2) {
             if (isLineBreak(text5.charCodeAt(pos3))) {
               break;
             }
@@ -38029,7 +38323,7 @@ function createScanner(text5, ignoreTrivia = false) {
         }
         if (text5.charCodeAt(pos3 + 1) === 42) {
           pos3 += 2;
-          const safeLength = len - 1;
+          const safeLength = len2 - 1;
           let commentClosed = false;
           while (pos3 < safeLength) {
             const ch3 = text5.charCodeAt(pos3);
@@ -38061,7 +38355,7 @@ function createScanner(text5, ignoreTrivia = false) {
       case 45:
         value += String.fromCharCode(code19);
         pos3++;
-        if (pos3 === len || !isDigit(text5.charCodeAt(pos3))) {
+        if (pos3 === len2 || !isDigit(text5.charCodeAt(pos3))) {
           return token3 = 16;
         }
       // found a minus, followed by a number so
@@ -38081,7 +38375,7 @@ function createScanner(text5, ignoreTrivia = false) {
         return token3 = 11;
       // literals and unknown symbols
       default:
-        while (pos3 < len && isUnknownContentCharacter(code19)) {
+        while (pos3 < len2 && isUnknownContentCharacter(code19)) {
           pos3++;
           code19 = text5.charCodeAt(pos3);
         }
@@ -38869,8 +39163,8 @@ function parseString(ctx) {
       if (c8 === 120 || c8 === 117 || c8 === 85) {
         let errPtr = ctx.p++ - 1;
         let value = 0;
-        let len = c8 === 120 ? 2 : c8 === 117 ? 4 : 8;
-        for (let j10 = 0; j10 < len; j10++, ctx.p++) {
+        let len2 = c8 === 120 ? 2 : c8 === 117 ? 4 : 8;
+        for (let j10 = 0; j10 < len2; j10++, ctx.p++) {
           let hex = ctx.s.charCodeAt(ctx.p);
           let digit2 = (
             /* 0-9 */
@@ -39429,8 +39723,8 @@ var init_struct = __esm({
 });
 
 // node_modules/smol-toml/dist/parse.js
-function peekTable(ctx, key3, table2, meta, type) {
-  let t42 = table2;
+function peekTable(ctx, key3, table3, meta, type) {
+  let t42 = table3;
   let m5 = meta;
   let k10;
   let hasOwn2 = false;
@@ -39888,21 +40182,21 @@ function normalizeKey(key3) {
   if (typeof key3 === "object" && Object.prototype.toString.call(key3) === "[object Object]") return "[object Object]";
   return String(key3);
 }
-function getLine2(buffer3, lineStart, lineEnd2, position, maxLineLength) {
+function getLine2(buffer3, lineStart2, lineEnd3, position, maxLineLength) {
   let head = "";
   let tail = "";
   const maxHalfLength = Math.floor(maxLineLength / 2) - 1;
-  if (position - lineStart > maxHalfLength) {
+  if (position - lineStart2 > maxHalfLength) {
     head = " ... ";
-    lineStart = position - maxHalfLength + head.length;
+    lineStart2 = position - maxHalfLength + head.length;
   }
-  if (lineEnd2 - position > maxHalfLength) {
+  if (lineEnd3 - position > maxHalfLength) {
     tail = " ...";
-    lineEnd2 = position + maxHalfLength - tail.length;
+    lineEnd3 = position + maxHalfLength - tail.length;
   }
   return {
-    str: head + buffer3.slice(lineStart, lineEnd2).replace(/\t/g, "\u2192") + tail,
-    pos: position - lineStart + head.length
+    str: head + buffer3.slice(lineStart2, lineEnd3).replace(/\t/g, "\u2192") + tail,
+    pos: position - lineStart2 + head.length
   };
 }
 function padStart(string3, max) {
@@ -40116,8 +40410,8 @@ function getDoubleQuotedValue(input, start, end) {
   }
   return result + input.slice(captureStart, end);
 }
-function getBlockValue(input, start, end, indent4, chomping, folded) {
-  const textIndent = indent4 < 0 ? 0 : indent4;
+function getBlockValue(input, start, end, indent5, chomping, folded) {
+  const textIndent = indent5 < 0 ? 0 : indent5;
   const region = input.slice(start, end).replace(/\r\n?/g, "\n");
   const lines = region === "" ? [] : (region.endsWith("\n") ? region.slice(0, -1) : region).split("\n");
   let result = "";
@@ -40127,7 +40421,7 @@ function getBlockValue(input, start, end, indent4, chomping, folded) {
   for (const line4 of lines) {
     let column3 = 0;
     while (column3 < textIndent && line4.charCodeAt(column3) === 32) column3++;
-    if (indent4 < 0 || column3 >= line4.length) {
+    if (indent5 < 0 || column3 >= line4.length) {
       emptyLines++;
       continue;
     }
@@ -40480,7 +40774,7 @@ function insertFlowPairMappingEvent(state, snapshot) {
     style: COLLECTION_STYLE.FLOW
   });
 }
-function addScalarEvent(state, valueStart, valueEnd, anchorStart, anchorEnd, tagStart, tagEnd, style, chomping = CHOMPING_MODE.CLIP, indent4 = -1, fast = false) {
+function addScalarEvent(state, valueStart, valueEnd, anchorStart, anchorEnd, tagStart, tagEnd, style, chomping = CHOMPING_MODE.CLIP, indent5 = -1, fast = false) {
   state.events.push({
     type: EVENT_ID.SCALAR,
     valueStart,
@@ -40491,7 +40785,7 @@ function addScalarEvent(state, valueStart, valueEnd, anchorStart, anchorEnd, tag
     tagEnd,
     style,
     chomping,
-    indent: indent4,
+    indent: indent5,
     fast
   });
 }
@@ -40778,7 +41072,7 @@ function readDoubleQuotedScalar(state, nodeIndent, props) {
 function readBlockScalar(state, parentIndent, props) {
   const ch3 = state.input.charCodeAt(state.position);
   let chomping = CHOMPING_MODE.CLIP;
-  let indent4 = -1;
+  let indent5 = -1;
   let detectedIndent = false;
   if (ch3 !== 124 && ch3 !== 62) return false;
   const style = ch3 === 124 ? SCALAR_STYLE.LITERAL_BLOCK : SCALAR_STYLE.FOLDED_BLOCK;
@@ -40793,7 +41087,7 @@ function readBlockScalar(state, parentIndent, props) {
     } else if (digit2 >= 0) {
       if (digit2 === 0) throwError(state, "bad explicit indentation width of a block scalar; it cannot be less than one");
       if (detectedIndent) throwError(state, "repeat of an indentation width identifier");
-      indent4 = parentIndent + digit2 - 1;
+      indent5 = parentIndent + digit2 - 1;
       detectedIndent = true;
       state.position++;
     } else break;
@@ -40806,7 +41100,7 @@ function readBlockScalar(state, parentIndent, props) {
   if (hadWhitespace && state.input.charCodeAt(state.position) === 35) skipUntilLineEnd(state);
   if (isEol(state.input.charCodeAt(state.position))) consumeLineBreak(state);
   else if (state.input.charCodeAt(state.position) !== 0) throwError(state, "a line break is expected");
-  let contentIndent = detectedIndent ? indent4 : -1;
+  let contentIndent = detectedIndent ? indent5 : -1;
   let maxLeadingIndent = 0;
   const valueStart = state.position;
   let valueEnd = state.position;
@@ -41327,10 +41621,10 @@ function tryLongOrMultilineAsBlock(layout) {
   let position = 0;
   let shouldFold = false;
   while (position <= value.length) {
-    let lineEnd2 = value.length;
+    let lineEnd3 = value.length;
     const nextLineBreak = value.indexOf("\n", position);
-    if (nextLineBreak !== -1) lineEnd2 = nextLineBreak;
-    const line4 = value.slice(position, lineEnd2);
+    if (nextLineBreak !== -1) lineEnd3 = nextLineBreak;
+    const line4 = value.slice(position, lineEnd3);
     if (line4.length > availableWidth && line4[0] !== " " && / [^ \t]/.test(line4)) shouldFold = true;
     if (nextLineBreak === -1) break;
     position = nextLineBreak + 1;
@@ -41938,16 +42232,16 @@ var init_js_yaml = __esm({
       */
       static throwAt(source3, position, message, filename = "") {
         let line4 = 0;
-        let lineStart = 0;
+        let lineStart2 = 0;
         for (let index = 0; index < position; index++) {
           const ch3 = source3.charCodeAt(index);
           if (ch3 === 10) {
             line4++;
-            lineStart = index + 1;
+            lineStart2 = index + 1;
           } else if (ch3 === 13) {
             line4++;
             if (source3.charCodeAt(index + 1) === 10) index++;
-            lineStart = index + 1;
+            lineStart2 = index + 1;
           }
         }
         const mark = {
@@ -41955,7 +42249,7 @@ var init_js_yaml = __esm({
           buffer: source3,
           position,
           line: line4,
-          column: position - lineStart
+          column: position - lineStart2
         };
         mark.snippet = makeSnippet(mark);
         throw new YAMLException2(message, mark);
@@ -42628,10 +42922,10 @@ function decodeTrieDict(input, resultLength, atomCount, dict1AtomCount, ngramCou
   single.fill(-1, dictSize + dict2AtomCount, slotCount);
   const start = new Int32Array(slotCount);
   const length = new Int32Array(slotCount);
-  function decodeDelta(count, off) {
+  function decodeDelta(count, off2) {
     let previous4 = 0;
-    let slot = off;
-    const end = off + count;
+    let slot = off2;
+    const end = off2 + count;
     while (slot < end) {
       const code19 = BASE91_INVERSE[input.charCodeAt(pos3++)];
       if (code19 < 89) {
@@ -42710,14 +43004,14 @@ var init_decode_shared = __esm({
   "node_modules/entities/dist/internal/decode-shared.js"() {
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     BASE91_INVERSE = /* @__PURE__ */ (() => {
-      const table2 = new Uint8Array(127);
+      const table3 = new Uint8Array(127);
       let code19 = 0;
       for (let char = 33; char <= 126; char++) {
         if (char !== 34 && char !== 36 && char !== 92) {
-          table2[char] = code19++;
+          table3[char] = code19++;
         }
       }
-      return table2;
+      return table3;
     })();
   }
 });
@@ -43096,12 +43390,12 @@ var init_build3 = __esm({
       escapeRE(str) {
         return str.replace(/[.?*+^$[\]\\(){}|-]/g, "\\$&");
       }
-      nestedPairRE(open, close, depth = 4) {
+      nestedPairRE(open, close, depth2 = 4) {
         const openRE = this.escapeRE(open);
         const closeRE = this.escapeRE(close);
         const atom = `(?:(?!${this.src_ZCc}|${openRE}|${closeRE}).)`;
         let pair2 = `${openRE}${atom}{0,1000}${closeRE}`;
-        for (let level = 2; level <= depth; level++) pair2 = `${openRE}(?:${atom}|${pair2}){0,1000}${closeRE}`;
+        for (let level = 2; level <= depth2; level++) pair2 = `${openRE}(?:${atom}|${pair2}){0,1000}${closeRE}`;
         return pair2;
       }
       get_text_separators() {
@@ -43498,12 +43792,12 @@ var init_build3 = __esm({
             if (fuzzyCandidate && schemaPrefix.index > fuzzyCandidate.index) break;
             const prefix2 = schemaPrefix;
             schemaPrefix = void 0;
-            const len = this.testSchemaAt(text5, prefix2.schema, prefix2.lastIndex);
-            if (len) {
+            const len2 = this.testSchemaAt(text5, prefix2.schema, prefix2.lastIndex);
+            if (len2) {
               schemaCandidate = {
                 schema: prefix2.schema,
                 index: prefix2.index,
-                lastIndex: prefix2.lastIndex + len
+                lastIndex: prefix2.lastIndex + len2
               };
               break;
             }
@@ -43533,9 +43827,9 @@ var init_build3 = __esm({
         if (!text5.length) return null;
         const m5 = this.re.get_schema_at_start().exec(text5);
         if (!m5) return null;
-        const len = this.testSchemaAt(text5, m5[2], m5[0].length);
-        if (!len) return null;
-        const match2 = new Match(text5, m5[2], m5.index + m5[1].length, m5.index + m5[0].length + len);
+        const len2 = this.testSchemaAt(text5, m5[2], m5[0].length);
+        if (!len2) return null;
+        const match2 = new Match(text5, m5[2], m5.index + m5[1].length, m5.index + m5[0].length + len2);
         this.__schemas__[match2.schema].normalize(match2, this);
         return match2;
       }
@@ -43831,8 +44125,8 @@ function callable(cls) {
   wrapper.prototype = cls.prototype;
   return wrapper;
 }
-function arrayReplaceAt(src, pos3, newElements) {
-  return [].concat(src.slice(0, pos3), newElements, src.slice(pos3 + 1));
+function arrayReplaceAt(src2, pos3, newElements) {
+  return [].concat(src2.slice(0, pos3), newElements, src2.slice(pos3 + 1));
 }
 function isValidEntityCode(c8) {
   if (c8 >= 55296 && c8 <= 57343) return false;
@@ -44617,8 +44911,8 @@ function fence(state, startLine, endLine, silent) {
   if (marker !== 126 && marker !== 96) return false;
   let mem = pos3;
   pos3 = state.skipChars(pos3, marker);
-  let len = pos3 - mem;
-  if (len < 3) return false;
+  let len2 = pos3 - mem;
+  if (len2 < 3) return false;
   const markup = state.src.slice(mem, pos3);
   const params2 = state.src.slice(pos3, max);
   if (marker === 96) {
@@ -44636,17 +44930,17 @@ function fence(state, startLine, endLine, silent) {
     if (state.src.charCodeAt(pos3) !== marker) continue;
     if (state.sCount[nextLine] - state.blkIndent >= 4) continue;
     pos3 = state.skipChars(pos3, marker);
-    if (pos3 - mem < len) continue;
+    if (pos3 - mem < len2) continue;
     pos3 = state.skipSpaces(pos3);
     if (pos3 < max) continue;
     haveEndMarker = true;
     break;
   }
-  len = state.sCount[startLine];
+  len2 = state.sCount[startLine];
   state.line = nextLine + (haveEndMarker ? 1 : 0);
   const token3 = state.push("fence", "code", 0);
   token3.info = params2;
-  token3.content = state.getLines(startLine + 1, nextLine, len, true);
+  token3.content = state.getLines(startLine + 1, nextLine, len2, true);
   token3.markup = markup;
   token3.map = [startLine, state.line];
   return true;
@@ -44868,7 +45162,7 @@ function list2(state, startLine, endLine, silent) {
     if (contentStart >= max) indentAfterMarker = 1;
     else indentAfterMarker = offset - initial;
     if (indentAfterMarker > 4) indentAfterMarker = 1;
-    const indent4 = initial + indentAfterMarker;
+    const indent5 = initial + indentAfterMarker;
     token3 = state.push("list_item_open", "li", 1);
     token3.markup = String.fromCharCode(markerCharCode);
     const itemLines = [nextLine, 0];
@@ -44879,7 +45173,7 @@ function list2(state, startLine, endLine, silent) {
     const oldSCount = state.sCount[nextLine];
     const oldListIndent = state.listIndent;
     state.listIndent = state.blkIndent;
-    state.blkIndent = indent4;
+    state.blkIndent = indent5;
     state.tight = true;
     state.tShift[nextLine] = contentStart - state.bMarks[nextLine];
     state.sCount[nextLine] = offset;
@@ -44961,40 +45255,40 @@ function getNextLinePos(state, nextLine) {
   return state.bMarks[nextLine] + state.tShift[nextLine];
 }
 function reference(state, startLine, _endLine, silent) {
-  const src = state.src;
+  const src2 = state.src;
   let pos3 = state.bMarks[startLine] + state.tShift[startLine];
   let nextLine = startLine + 1;
   if (state.sCount[startLine] - state.blkIndent >= 4) return false;
-  if (src.charCodeAt(pos3) !== 91) return false;
+  if (src2.charCodeAt(pos3) !== 91) return false;
   let max = lineEnd(state, startLine);
   let rawLabel = "";
   let labelEnd2 = -1;
   let segmentStart = ++pos3;
   while (pos3 < max) {
     if (rawLabel.length + pos3 - segmentStart > MAX_LABEL_LENGTH * 2) return false;
-    let ch3 = src.charCodeAt(pos3);
+    let ch3 = src2.charCodeAt(pos3);
     if (ch3 === 91) return false;
     if (ch3 === 93) {
       labelEnd2 = pos3;
       break;
     }
-    if (ch3 === 92) ch3 = src.charCodeAt(++pos3);
+    if (ch3 === 92) ch3 = src2.charCodeAt(++pos3);
     if (ch3 === 10 && pos3 < max) {
       const nextPos = getNextLinePos(state, nextLine);
       if (nextPos < 0) return false;
-      rawLabel += src.slice(segmentStart, max);
+      rawLabel += src2.slice(segmentStart, max);
       pos3 = segmentStart = nextPos;
       max = lineEnd(state, nextLine++);
       continue;
     }
     pos3++;
   }
-  if (labelEnd2 < 0 || src.charCodeAt(labelEnd2 + 1) !== 58) return false;
-  rawLabel += src.slice(segmentStart, labelEnd2);
+  if (labelEnd2 < 0 || src2.charCodeAt(labelEnd2 + 1) !== 58) return false;
+  rawLabel += src2.slice(segmentStart, labelEnd2);
   if (rawLabel.length > MAX_LABEL_LENGTH && countCodePoints(rawLabel) > MAX_LABEL_LENGTH) return false;
   pos3 = labelEnd2 + 2;
   while (pos3 < max) {
-    const ch3 = src.charCodeAt(pos3);
+    const ch3 = src2.charCodeAt(pos3);
     if (ch3 === 10) {
       const nextPos = getNextLinePos(state, nextLine);
       if (nextPos < 0) break;
@@ -45003,7 +45297,7 @@ function reference(state, startLine, _endLine, silent) {
     } else if (isSpace(ch3)) pos3++;
     else break;
   }
-  const destRes = state.md.helpers.parseLinkDestination(src, pos3, max);
+  const destRes = state.md.helpers.parseLinkDestination(src2, pos3, max);
   if (!destRes.ok) return false;
   const href = state.md.normalizeLink(destRes.str);
   if (!state.md.validateLink(href)) return false;
@@ -45012,7 +45306,7 @@ function reference(state, startLine, _endLine, silent) {
   const destEndMax = max;
   const destEndLineNo = nextLine;
   while (pos3 < max) {
-    const ch3 = src.charCodeAt(pos3);
+    const ch3 = src2.charCodeAt(pos3);
     if (ch3 === 10) {
       const nextPos = getNextLinePos(state, nextLine);
       if (nextPos < 0) break;
@@ -45022,13 +45316,13 @@ function reference(state, startLine, _endLine, silent) {
     else break;
   }
   const titleStart = pos3;
-  let titleRes = state.md.helpers.parseLinkTitle(src, pos3, max);
+  let titleRes = state.md.helpers.parseLinkTitle(src2, pos3, max);
   while (titleRes.can_continue) {
     const nextPos = getNextLinePos(state, nextLine);
     if (nextPos < 0) break;
     pos3 = nextPos;
     max = lineEnd(state, nextLine++);
-    titleRes = state.md.helpers.parseLinkTitle(src, pos3, max, titleRes);
+    titleRes = state.md.helpers.parseLinkTitle(src2, pos3, max, titleRes);
   }
   let title;
   if (titleStart !== destEndPos && titleRes.ok) {
@@ -45041,22 +45335,22 @@ function reference(state, startLine, _endLine, silent) {
     nextLine = destEndLineNo;
   }
   while (pos3 < max) {
-    if (!isSpace(src.charCodeAt(pos3))) break;
+    if (!isSpace(src2.charCodeAt(pos3))) break;
     pos3++;
   }
-  if (pos3 < max && src.charCodeAt(pos3) !== 10) {
+  if (pos3 < max && src2.charCodeAt(pos3) !== 10) {
     if (title) {
       title = "";
       pos3 = destEndPos;
       max = destEndMax;
       nextLine = destEndLineNo;
       while (pos3 < max) {
-        if (!isSpace(src.charCodeAt(pos3))) break;
+        if (!isSpace(src2.charCodeAt(pos3))) break;
         pos3++;
       }
     }
   }
-  if (pos3 < max && src.charCodeAt(pos3) !== 10) return false;
+  if (pos3 < max && src2.charCodeAt(pos3) !== 10) return false;
   const label5 = normalizeReference(rawLabel);
   if (!label5) return false;
   if (silent) return true;
@@ -45364,12 +45658,12 @@ function escape2(state, silent) {
   state.pos = pos3 + 1;
   return true;
 }
-function buildLastRuns(src) {
+function buildLastRuns(src2) {
   const lastRuns = {};
   let pos3 = 0;
-  while ((pos3 = src.indexOf("`", pos3)) !== -1) {
+  while ((pos3 = src2.indexOf("`", pos3)) !== -1) {
     const start = pos3;
-    while (src.charCodeAt(++pos3) === 96) ;
+    while (src2.charCodeAt(++pos3) === 96) ;
     lastRuns[pos3 - start] = start;
   }
   return lastRuns;
@@ -45417,16 +45711,16 @@ function strikethrough_tokenize(state, silent) {
   if (silent) return false;
   if (marker !== 126) return false;
   const scanned = state.scanDelims(state.pos, true);
-  let len = scanned.length;
+  let len2 = scanned.length;
   const ch3 = String.fromCharCode(marker);
-  if (len < 2) return false;
+  if (len2 < 2) return false;
   let token3;
-  if (len % 2) {
+  if (len2 % 2) {
     token3 = state.push("text", "", 0);
     token3.content = ch3;
-    len--;
+    len2--;
   }
-  for (let i = 0; i < len; i += 2) {
+  for (let i = 0; i < len2; i += 2) {
     token3 = state.push("text", "", 0);
     token3.content = ch3 + ch3;
     state.delimiters.push({
@@ -45770,26 +46064,26 @@ function isLetter(ch3) {
   return lc4 >= 97 && lc4 <= 122;
 }
 function scanSpecial(state, pos3) {
-  const src = state.src;
+  const src2 = state.src;
   let start;
   let terminator;
-  if (src.startsWith("<!--", pos3)) {
-    if (src.startsWith(">", pos3 + 4)) return pos3 + 5;
-    if (src.startsWith("->", pos3 + 4)) return pos3 + 6;
+  if (src2.startsWith("<!--", pos3)) {
+    if (src2.startsWith(">", pos3 + 4)) return pos3 + 5;
+    if (src2.startsWith("->", pos3 + 4)) return pos3 + 6;
     start = pos3 + 4;
     terminator = "-->";
-  } else if (src.startsWith("<![CDATA[", pos3)) {
+  } else if (src2.startsWith("<![CDATA[", pos3)) {
     start = pos3 + 9;
     terminator = "]]>";
-  } else if (src.charCodeAt(pos3 + 1) === 63) {
+  } else if (src2.charCodeAt(pos3 + 1) === 63) {
     start = pos3 + 2;
     terminator = "?>";
-  } else if (isLetter(src.charCodeAt(pos3 + 2))) {
+  } else if (isLetter(src2.charCodeAt(pos3 + 2))) {
     start = pos3 + 3;
     terminator = ">";
   } else return -1;
   if (state.skipHtmlSpecial) return -1;
-  const end = src.indexOf(terminator, start);
+  const end = src2.indexOf(terminator, start);
   if (end < 0) {
     state.skipHtmlSpecial = true;
     return -1;
@@ -46075,7 +46369,7 @@ var init_markdown_it = __esm({
       attrIndex(name) {
         if (!this.attrs) return -1;
         const attrs = this.attrs;
-        for (let i = 0, len = attrs.length; i < len; i++) if (attrs[i][0] === name) return i;
+        for (let i = 0, len2 = attrs.length; i < len2; i++) if (attrs[i][0] === name) return i;
         return -1;
       }
       /**
@@ -46457,7 +46751,7 @@ var init_markdown_it = __esm({
       renderInline(tokens, options7, env) {
         let result = "";
         const rules2 = this.rules;
-        for (let i = 0, len = tokens.length; i < len; i++) {
+        for (let i = 0, len2 = tokens.length; i < len2; i++) {
           const type = tokens[i].type;
           if (typeof rules2[type] !== "undefined") result += rules2[type](tokens, i, options7, env, this);
           else result += this.renderToken(tokens, i, options7);
@@ -46471,7 +46765,7 @@ var init_markdown_it = __esm({
       */
       renderInlineAsText(tokens, options7, env) {
         let result = "";
-        for (let i = 0, len = tokens.length; i < len; i++) switch (tokens[i].type) {
+        for (let i = 0, len2 = tokens.length; i < len2; i++) switch (tokens[i].type) {
           case "text":
           case "code_inline":
             result += tokens[i].content;
@@ -46496,7 +46790,7 @@ var init_markdown_it = __esm({
       render(tokens, options7, env) {
         let result = "";
         const rules2 = this.rules;
-        for (let i = 0, len = tokens.length; i < len; i++) {
+        for (let i = 0, len2 = tokens.length; i < len2; i++) {
           const type = tokens[i].type;
           if (type === "inline") result += this.renderInline(tokens[i].children, options7, env);
           else if (typeof rules2[type] !== "undefined") result += rules2[type](tokens, i, options7, env, this);
@@ -46506,11 +46800,11 @@ var init_markdown_it = __esm({
       }
     };
     StateCore = class {
-      constructor(src, md3, env) {
+      constructor(src2, md3, env) {
         _defineProperty(this, "tokens", []);
         _defineProperty(this, "inlineMode", false);
         _defineProperty(this, "Token", Token);
-        this.src = src;
+        this.src = src2;
         this.env = env;
         this.md = md3;
       }
@@ -46561,7 +46855,7 @@ var init_markdown_it = __esm({
       }
     };
     StateBlock = class {
-      constructor(src, md3, env, tokens) {
+      constructor(src2, md3, env, tokens) {
         _defineProperty(this, "bMarks", []);
         _defineProperty(this, "eMarks", []);
         _defineProperty(this, "tShift", []);
@@ -46575,30 +46869,30 @@ var init_markdown_it = __esm({
         _defineProperty(this, "parentType", "root");
         _defineProperty(this, "level", 0);
         _defineProperty(this, "Token", Token);
-        this.src = src;
+        this.src = src2;
         this.md = md3;
         this.env = env;
         this.tokens = tokens;
         const s = this.src;
-        for (let start = 0, pos3 = 0, indent4 = 0, offset = 0, len = s.length, indent_found = false; pos3 < len; pos3++) {
+        for (let start = 0, pos3 = 0, indent5 = 0, offset = 0, len2 = s.length, indent_found = false; pos3 < len2; pos3++) {
           const ch3 = s.charCodeAt(pos3);
           if (!indent_found) {
             if (isSpace(ch3)) {
-              indent4++;
+              indent5++;
               if (ch3 === 9) offset += 4 - offset % 4;
               else offset++;
               continue;
             } else indent_found = true;
           }
-          if (ch3 === 10 || pos3 === len - 1) {
+          if (ch3 === 10 || pos3 === len2 - 1) {
             if (ch3 !== 10) pos3++;
             this.bMarks.push(start);
             this.eMarks.push(pos3);
-            this.tShift.push(indent4);
+            this.tShift.push(indent5);
             this.sCount.push(offset);
             this.bsCount.push(0);
             indent_found = false;
-            indent4 = 0;
+            indent5 = 0;
             offset = 0;
             start = pos3 + 1;
           }
@@ -46644,26 +46938,26 @@ var init_markdown_it = __esm({
         while (pos3 > min) if (code19 !== this.src.charCodeAt(--pos3)) return pos3 + 1;
         return pos3;
       }
-      getLines(begin, end, indent4, keepLastLF) {
+      getLines(begin, end, indent5, keepLastLF) {
         if (begin >= end) return "";
         const queue = new Array(end - begin);
         for (let i = 0, line4 = begin; line4 < end; line4++, i++) {
           let lineIndent = 0;
-          const lineStart = this.bMarks[line4];
-          let first = lineStart;
+          const lineStart2 = this.bMarks[line4];
+          let first = lineStart2;
           let last;
           if (line4 + 1 < end || keepLastLF) last = this.eMarks[line4] + 1;
           else last = this.eMarks[line4];
-          while (first < last && lineIndent < indent4) {
+          while (first < last && lineIndent < indent5) {
             const ch3 = this.src.charCodeAt(first);
             if (isSpace(ch3)) {
               if (ch3 === 9) lineIndent += 4 - (lineIndent + this.bsCount[line4]) % 4;
               else lineIndent++;
-            } else if (first - lineStart < this.tShift[line4]) lineIndent++;
+            } else if (first - lineStart2 < this.tShift[line4]) lineIndent++;
             else break;
             first++;
           }
-          if (lineIndent > indent4) queue[i] = new Array(lineIndent - indent4 + 1).join(" ") + this.src.slice(first, last);
+          if (lineIndent > indent5) queue[i] = new Array(lineIndent - indent5 + 1).join(" ") + this.src.slice(first, last);
           else queue[i] = this.src.slice(first, last);
         }
         return queue.join("");
@@ -46859,7 +47153,7 @@ var init_markdown_it = __esm({
       }
       tokenize(state, startLine, endLine) {
         const rules2 = this.ruler.getRules("");
-        const len = rules2.length;
+        const len2 = rules2.length;
         const maxNesting = state.md.options.maxNesting;
         let line4 = startLine;
         let hasEmptyLines = false;
@@ -46873,7 +47167,7 @@ var init_markdown_it = __esm({
           }
           const prevLine = state.line;
           let ok2 = false;
-          for (let i = 0; i < len; i++) {
+          for (let i = 0; i < len2; i++) {
             ok2 = rules2[i](state, line4, endLine, false);
             if (ok2) {
               if (prevLine >= state.line) throw new Error("block rule didn't increment state.line");
@@ -46894,14 +47188,14 @@ var init_markdown_it = __esm({
       /**
       * Process input string and push block tokens into `outTokens`
       */
-      parse(src, md3, env, outTokens) {
-        if (!src) return;
-        const state = new this.State(src, md3, env, outTokens);
+      parse(src2, md3, env, outTokens) {
+        if (!src2) return;
+        const state = new this.State(src2, md3, env, outTokens);
         this.tokenize(state, state.line, state.lineMax);
       }
     };
     StateInline = class {
-      constructor(src, md3, env, outTokens) {
+      constructor(src2, md3, env, outTokens) {
         _defineProperty(this, "pos", 0);
         _defineProperty(this, "level", 0);
         _defineProperty(this, "pending", "");
@@ -46914,7 +47208,7 @@ var init_markdown_it = __esm({
         _defineProperty(this, "delimiters", []);
         _defineProperty(this, "_prev_delimiters", []);
         _defineProperty(this, "Token", Token);
-        this.src = src;
+        this.src = src2;
         this.env = env;
         this.md = md3;
         this.tokens = outTokens;
@@ -47048,7 +47342,7 @@ var init_markdown_it = __esm({
       skipToken(state) {
         const pos3 = state.pos;
         const rules2 = this.ruler.getRules("");
-        const len = rules2.length;
+        const len2 = rules2.length;
         const maxNesting = state.md.options.maxNesting;
         const cache5 = state.cache;
         if (typeof cache5[pos3] !== "undefined") {
@@ -47056,7 +47350,7 @@ var init_markdown_it = __esm({
           return;
         }
         let ok2 = false;
-        if (state.level < maxNesting) for (let i = 0; i < len; i++) {
+        if (state.level < maxNesting) for (let i = 0; i < len2; i++) {
           state.level++;
           ok2 = rules2[i](state, true);
           state.level--;
@@ -47071,13 +47365,13 @@ var init_markdown_it = __esm({
       }
       tokenize(state) {
         const rules2 = this.ruler.getRules("");
-        const len = rules2.length;
+        const len2 = rules2.length;
         const end = state.posMax;
         const maxNesting = state.md.options.maxNesting;
         while (state.pos < end) {
           const prevPos = state.pos;
           let ok2 = false;
-          if (state.level < maxNesting) for (let i = 0; i < len; i++) {
+          if (state.level < maxNesting) for (let i = 0; i < len2; i++) {
             ok2 = rules2[i](state, false);
             if (ok2) {
               if (prevPos >= state.pos) throw new Error("inline rule didn't increment state.pos");
@@ -47099,8 +47393,8 @@ var init_markdown_it = __esm({
         const state = new this.State(str, md3, env, outTokens);
         this.tokenize(state);
         const rules2 = this.ruler2.getRules("");
-        const len = rules2.length;
-        for (let i = 0; i < len; i++) rules2[i](state);
+        const len2 = rules2.length;
+        for (let i = 0; i < len2; i++) rules2[i](state);
       }
     };
     config = {
@@ -47489,9 +47783,9 @@ var init_markdown_it = __esm({
       * inject data in specific cases. Usually, you will be ok to pass `{}`,
       * and then pass updated object to renderer.
       */
-      parse(src, env) {
-        if (typeof src !== "string") throw new Error("Input data should be a String");
-        const state = new this.core.State(src, this, env);
+      parse(src2, env) {
+        if (typeof src2 !== "string") throw new Error("Input data should be a String");
+        const state = new this.core.State(src2, this, env);
         this.core.process(state);
         return state.tokens;
       }
@@ -47502,16 +47796,16 @@ var init_markdown_it = __esm({
       * But you will not need it with high probability. See also comment
       * in {@link MarkdownIt.parse}.
       */
-      render(src, env = {}) {
-        return this.renderer.render(this.parse(src, env), this.options, env);
+      render(src2, env = {}) {
+        return this.renderer.render(this.parse(src2, env), this.options, env);
       }
       /**
       * The same as {@link MarkdownIt.parse} but skip all block rules. It returns
       * the block tokens list with the single `inline` element, containing parsed
       * inline tokens in `children` property. Also updates `env` object.
       */
-      parseInline(src, env) {
-        const state = new this.core.State(src, this, env);
+      parseInline(src2, env) {
+        const state = new this.core.State(src2, this, env);
         state.inlineMode = true;
         this.core.process(state);
         return state.tokens;
@@ -47520,8 +47814,8 @@ var init_markdown_it = __esm({
       * Similar to {@link MarkdownIt.render} but for single paragraph content.
       * Result will NOT be wrapped into `<p>` tags.
       */
-      renderInline(src, env = {}) {
-        return this.renderer.render(this.parseInline(src, env), this.options, env);
+      renderInline(src2, env = {}) {
+        return this.renderer.render(this.parseInline(src2, env), this.options, env);
       }
     };
     _defineProperty(MarkdownIt, "Token", Token);
@@ -72159,7 +72453,7 @@ var init_flow2 = __esm({
             return J12 && t42 && !k10 ? mI(K13) : function() {
               return xI(K13, M10, s, arguments, k10);
             };
-          }, nQ = { b: aQ, c: sQ, d: YQ, a: eQ }, d4 = MQ(), MN = d4.f, aN = I9._flow_to_runnable_js_with_source_map = d4.g, sN = I9._hermesParse = d4.h, SN = I9._hermesParseResult_free = d4.i, kN = I9._hermesParseResult_getError = d4.j, YN = I9._hermesParseResult_getErrorColumn = d4.k, FN = I9._hermesParseResult_getErrorLine = d4.l, eN = I9._hermesParseResult_getPositionBuffer = d4.m, cN = I9._hermesParseResult_getPositionBufferSize = d4.n, tN = I9._hermesParseResult_getProgramBuffer = d4.o, UN = I9._hermesParseResult_getStringBuffer = d4.p, JN = d4.__errno_location, LN = d4.htonl, RN = d4.htons, rN = d4.ntohs, qN = I9._malloc = d4.q, nN = I9._free = d4.r, pQ = d4.s, HQ = d4.t, OI = d4.u;
+          }, nQ = { b: aQ, c: sQ, d: YQ, a: eQ }, d4 = MQ(), MN = d4.f, aN = I9._flow_to_runnable_js_with_source_map = d4.g, sN = I9._hermesParse = d4.h, SN = I9._hermesParseResult_free = d4.i, kN = I9._hermesParseResult_getError = d4.j, YN = I9._hermesParseResult_getErrorColumn = d4.k, FN = I9._hermesParseResult_getErrorLine = d4.l, eN = I9._hermesParseResult_getPositionBuffer = d4.m, cN = I9._hermesParseResult_getPositionBufferSize = d4.n, tN = I9._hermesParseResult_getProgramBuffer = d4.o, UN = I9._hermesParseResult_getStringBuffer = d4.p, JN = d4.__errno_location, LN2 = d4.htonl, RN = d4.htons, rN = d4.ntohs, qN = I9._malloc = d4.q, nN = I9._free = d4.r, pQ = d4.s, HQ = d4.t, OI = d4.u;
           function lQ(K13) {
             if (typeof y8 < "u" && y8) {
               var M10 = JE2.from(K13, "base64");
@@ -72248,11 +72542,11 @@ var init_flow2 = __esm({
       function UC(A5) {
         return A5 && A5.__esModule ? A5 : { default: A5 };
       }
-      var f4, JC, LC, dg4, ug4, Tg3, RC, rC, qC, nC, cC = "$FlowBabelLoweringError$";
+      var f4, JC, LC, dg4, ug4, Tg3, RC, rC, qC, nC2, cC = "$FlowBabelLoweringError$";
       function HE2() {
         f4 == null && (f4 = (0, nE3.default)({ quit(A5, g4) {
           throw g4;
-        } }), JC = f4.cwrap("hermesParse", "number", ["number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number"]), LC = f4.cwrap("hermesParseResult_free", "void", ["number"]), dg4 = f4.cwrap("hermesParseResult_getError", "string", ["number"]), ug4 = f4.cwrap("hermesParseResult_getErrorLine", "number", ["number"]), Tg3 = f4.cwrap("hermesParseResult_getErrorColumn", "number", ["number"]), RC = f4.cwrap("hermesParseResult_getProgramBuffer", "number", ["number"]), rC = f4.cwrap("hermesParseResult_getPositionBuffer", "number", ["number"]), qC = f4.cwrap("hermesParseResult_getPositionBufferSize", "number", ["number"]), nC = f4.cwrap("hermesParseResult_getStringBuffer", "number", ["number"]));
+        } }), JC = f4.cwrap("hermesParse", "number", ["number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number", "number"]), LC = f4.cwrap("hermesParseResult_free", "void", ["number"]), dg4 = f4.cwrap("hermesParseResult_getError", "string", ["number"]), ug4 = f4.cwrap("hermesParseResult_getErrorLine", "number", ["number"]), Tg3 = f4.cwrap("hermesParseResult_getErrorColumn", "number", ["number"]), RC = f4.cwrap("hermesParseResult_getProgramBuffer", "number", ["number"]), rC = f4.cwrap("hermesParseResult_getPositionBuffer", "number", ["number"]), qC = f4.cwrap("hermesParseResult_getPositionBufferSize", "number", ["number"]), nC2 = f4.cwrap("hermesParseResult_getStringBuffer", "number", ["number"]));
       }
       function tC(A5, g4) {
         f4.HEAP8.set(A5, g4), f4.HEAP8[g4 + A5.length] = 0;
@@ -72288,7 +72582,7 @@ var init_flow2 = __esm({
             let H12 = dg4(w8), l5 = new SyntaxError(H12 || "unknown parse error");
             throw l5.loc = { line: ug4(w8), column: Tg3(w8) }, l5;
           }
-          let e4 = new qE2.default(R12, rC(w8), qC(w8), nC(w8), f4, g4).deserialize();
+          let e4 = new qE2.default(R12, rC(w8), qC(w8), nC2(w8), f4, g4).deserialize();
           if (g4.babel === true) {
             if (e4.type !== "File") throw new Error(`Expected File, got ${e4.type}`);
             return e4;
@@ -72781,7 +73075,7 @@ var init_flow2 = __esm({
       E9.isBreakToken = hK;
       E9.isCallExpression = qD3;
       E9.isCaseToken = KK;
-      E9.isCatchClause = nD3;
+      E9.isCatchClause = nD4;
       E9.isCatchToken = yK;
       E9.isChainExpression = pD3;
       E9.isClassBody = HD3;
@@ -73135,7 +73429,7 @@ var init_flow2 = __esm({
       function qD3(A5) {
         return A5.type === "CallExpression";
       }
-      function nD3(A5) {
+      function nD4(A5) {
         return A5.type === "CatchClause";
       }
       function pD3(A5) {
@@ -74255,7 +74549,7 @@ var init_flow2 = __esm({
       "use strict";
       Object.defineProperty(hI, "__esModule", { value: true });
       hI.transformProgram = AG;
-      var Py3 = DA(), iA = qA(), nA = Bg(), a4 = Qg(), Wy3 = zy3(EI());
+      var Py3 = DA(), iA = qA(), nA2 = Bg(), a4 = Qg(), Wy3 = zy3(EI());
       function zy3(A5) {
         return A5 && A5.__esModule ? A5 : { default: A5 };
       }
@@ -74279,11 +74573,11 @@ var init_flow2 = __esm({
         return I9.type === "Identifier" ? { type: "MemberExpression", object: Q11, property: I9, computed: false, optional: false, ...(0, a4.etc)({ loc: C9, range: B12 }) } : { type: "MemberExpression", object: Q11, property: I9, computed: true, optional: false, ...(0, a4.etc)({ loc: C9, range: B12 }) };
       }
       function Dg3(A5, g4, I9) {
-        if (A5.has(I9)) throw (0, nA.createSyntaxError)(g4, `Duplicate variable name '${I9}' in match case pattern.`);
+        if (A5.has(I9)) throw (0, nA2.createSyntaxError)(g4, `Duplicate variable name '${I9}' in match case pattern.`);
         A5.add(I9);
       }
       function ig3(A5, g4) {
-        if (g4 === "var") throw (0, nA.createSyntaxError)(A5, "'var' bindings are not allowed. Use 'const' or 'let'.");
+        if (g4 === "var") throw (0, nA2.createSyntaxError)(A5, "'var' bindings are not allowed. Use 'const' or 'let'.");
       }
       function DI(A5) {
         switch (A5.type) {
@@ -74314,7 +74608,7 @@ var init_flow2 = __esm({
           let { key: y8, pattern: N8 } = G11;
           i.push(y8);
           let S7 = by3(y8);
-          if (w8.has(S7)) throw (0, nA.createSyntaxError)(N8, `Duplicate property name '${S7}' in match object pattern.`);
+          if (w8.has(S7)) throw (0, nA2.createSyntaxError)(N8, `Duplicate property name '${S7}' in match object pattern.`);
           w8.add(S7);
           let Y12 = A5.concat(y8);
           DI(N8) && Q11.push({ type: "prop-exists", key: A5, propName: S7 });
@@ -74344,7 +74638,7 @@ var init_flow2 = __esm({
           }
           case "MatchUnaryPattern": {
             let { operator: C9, argument: B12, loc: Q11, range: D8 } = A5;
-            if (B12.value === 0) throw (0, nA.createSyntaxError)(A5, "'+0' and '-0' are not yet supported in match unary patterns.");
+            if (B12.value === 0) throw (0, nA2.createSyntaxError)(A5, "'+0' and '-0' are not yet supported in match unary patterns.");
             let i = { type: "UnaryExpression", operator: C9, argument: B12, prefix: true, ...(0, a4.etc)({ loc: Q11, range: D8 }) };
             return { conditions: [{ type: "eq", key: g4, arg: i }], bindings: [] };
           }
@@ -74362,7 +74656,7 @@ var init_flow2 = __esm({
           }
           case "MatchAsPattern": {
             let { pattern: C9, target: B12 } = A5;
-            if (C9.type === "MatchBindingPattern") throw (0, nA.createSyntaxError)(A5, "Match 'as' patterns are not allowed directly on binding patterns.");
+            if (C9.type === "MatchBindingPattern") throw (0, nA2.createSyntaxError)(A5, "Match 'as' patterns are not allowed directly on binding patterns.");
             let { conditions: Q11, bindings: D8 } = PA(C9, g4, I9), i = "const", [w8, G11] = B12.type === "MatchBindingPattern" ? [B12.id, B12.kind] : [B12, i];
             Dg3(I9, A5, w8.name), ig3(A5, G11);
             let y8 = { type: "id", key: g4, kind: G11, id: w8 };
@@ -74390,7 +74684,7 @@ var init_flow2 = __esm({
           case "MatchOrPattern": {
             let { patterns: C9 } = A5, B12 = false, Q11 = C9.map((D8) => {
               let { conditions: i, bindings: w8 } = PA(D8, g4, I9);
-              if (w8.length > 0) throw (0, nA.createSyntaxError)(A5, "Bindings in match 'or' patterns are not yet supported.");
+              if (w8.length > 0) throw (0, nA2.createSyntaxError)(A5, "Bindings in match 'or' patterns are not yet supported.");
               return i.length === 0 && (B12 = true), i;
             });
             return B12 ? { conditions: [], bindings: [] } : { conditions: [{ type: "or", orConditions: Q11 }], bindings: [] };
@@ -116649,13 +116943,13 @@ function closestMatch(target, candidates, options7) {
     if (userMax !== void 0 && lengthDiff > userMax) {
       continue;
     }
-    const cap = Number.isFinite(bestDist) ? userMax === void 0 ? bestDist : Math.min(bestDist, userMax) : userMax;
-    const distance = cap === void 0 ? leven(target, candidate) : leven(target, candidate, { maxDistance: cap });
+    const cap2 = Number.isFinite(bestDist) ? userMax === void 0 ? bestDist : Math.min(bestDist, userMax) : userMax;
+    const distance = cap2 === void 0 ? leven(target, candidate) : leven(target, candidate, { maxDistance: cap2 });
     if (userMax !== void 0 && distance > userMax) {
       continue;
     }
     let actualD = distance;
-    if (cap !== void 0 && distance === cap && cap === userMax) {
+    if (cap2 !== void 0 && distance === cap2 && cap2 === userMax) {
       actualD = leven(target, candidate);
     }
     if (actualD < bestDist) {
@@ -116979,8 +117273,8 @@ function expandSequence(body, isAlphaSequence, max, maxLength) {
   }
   return N8;
 }
-function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
-  if (depth > maxDepth) {
+function expand_(str, max, maxLength, maxDepth, depth2, maxRewrites, isTop) {
+  if (depth2 > maxDepth) {
     return [str];
   }
   let acc = [""];
@@ -117024,7 +117318,7 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
     } else {
       let n4 = parseCommaParts(m5.body);
       if (n4.length === 1 && n4[0] !== void 0) {
-        n4 = expand_(n4[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace);
+        n4 = expand_(n4[0], max, maxLength, maxDepth, depth2 + 1, maxRewrites, false).map(embrace);
         if (n4.length === 1) {
           acc = combine(acc, pre + n4[0], [""], max, maxLength, dropEmpties && !m5.post.length);
           if (!m5.post.length)
@@ -117042,7 +117336,7 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
       values = [];
       let valuesLength = 0;
       outer: for (let j10 = 0; j10 < n4.length; j10++) {
-        const expanded = expand_(n4[j10], max, maxLength, maxDepth, depth + 1, maxRewrites, false);
+        const expanded = expand_(n4[j10], max, maxLength, maxDepth, depth2 + 1, maxRewrites, false);
         for (let k10 = 0; k10 < expanded.length; k10++) {
           const v6 = expanded[k10];
           if (dropsEmpties && !v6)
@@ -117194,8 +117488,8 @@ function processFileContents(filepath, contents, options7) {
 }
 async function readConfig(filepath, options7) {
   const contents = await new Promise((resolve4) => {
-    fs14.readFile(filepath, (_10, buf) => {
-      resolve4(buf);
+    fs14.readFile(filepath, (_10, buf2) => {
+      resolve4(buf2);
     });
   });
   return processFileContents(filepath, contents, options7);
@@ -118057,8 +118351,8 @@ function parseString22(ctx) {
       if (c23 === 120 || c23 === 117 || c23 === 85) {
         let errPtr = ctx.p++ - 1;
         let value = 0;
-        let len = c23 === 120 ? 2 : c23 === 117 ? 4 : 8;
-        for (let j10 = 0; j10 < len; j10++, ctx.p++) {
+        let len2 = c23 === 120 ? 2 : c23 === 117 ? 4 : 8;
+        for (let j10 = 0; j10 < len2; j10++, ctx.p++) {
           let hex = ctx.s.charCodeAt(ctx.p);
           let digit2 = (
             /* 0-9 */
@@ -118433,8 +118727,8 @@ function parseArray2(ctx) {
   }
   TomlError2.x("unfinished array", ctx, startPtr);
 }
-function peekTable2(ctx, key22, table2, meta, type) {
-  let t42 = table2;
+function peekTable2(ctx, key22, table3, meta, type) {
+  let t42 = table3;
   let m5 = meta;
   let k10;
   let hasOwn2 = false;
@@ -122945,8 +123239,8 @@ var init_prettier = __esm({
         function contains(arr, key22, val) {
           return arr.some((ele) => ele[key22] === val);
         }
-        function countNines(min, len) {
-          return Number(String(min).slice(0, -len) + "9".repeat(len));
+        function countNines(min, len2) {
+          return Number(String(min).slice(0, -len2) + "9".repeat(len2));
         }
         function countZeros(integer, zeros) {
           return integer - integer % Math.pow(10, zeros);
@@ -123235,7 +123529,7 @@ var init_prettier = __esm({
         var fill2 = require_fill_range2();
         var stringify32 = require_stringify2();
         var utils2 = require_utils5();
-        var append = (queue = "", stash = "", enclose = false) => {
+        var append2 = (queue = "", stash = "", enclose = false) => {
           const result = [];
           queue = [].concat(queue);
           stash = [].concat(stash);
@@ -123246,12 +123540,12 @@ var init_prettier = __esm({
           for (const item of queue) {
             if (Array.isArray(item)) {
               for (const value of item) {
-                result.push(append(value, stash, enclose));
+                result.push(append2(value, stash, enclose));
               }
             } else {
               for (let ele of stash) {
                 if (enclose === true && typeof ele === "string") ele = `{${ele}}`;
-                result.push(Array.isArray(ele) ? append(item, ele, enclose) : item + ele);
+                result.push(Array.isArray(ele) ? append2(item, ele, enclose) : item + ele);
               }
             }
           }
@@ -123268,11 +123562,11 @@ var init_prettier = __esm({
               q10 = p7.queue;
             }
             if (node.invalid || node.dollar) {
-              q10.push(append(q10.pop(), stringify32(node, options7)));
+              q10.push(append2(q10.pop(), stringify32(node, options7)));
               return;
             }
             if (node.type === "brace" && node.invalid !== true && node.nodes.length === 2) {
-              q10.push(append(q10.pop(), ["{}"]));
+              q10.push(append2(q10.pop(), ["{}"]));
               return;
             }
             if (node.nodes && node.ranges > 0) {
@@ -123284,7 +123578,7 @@ var init_prettier = __esm({
               if (range2.length === 0) {
                 range2 = stringify32(node, options7);
               }
-              q10.push(append(q10.pop(), range2));
+              q10.push(append2(q10.pop(), range2));
               node.nodes = [];
               return;
             }
@@ -123303,11 +123597,11 @@ var init_prettier = __esm({
                 continue;
               }
               if (child.type === "close") {
-                q10.push(append(q10.pop(), queue, enclose));
+                q10.push(append2(q10.pop(), queue, enclose));
                 continue;
               }
               if (child.value && child.type !== "open") {
-                queue.push(append(queue.pop(), child.value));
+                queue.push(append2(queue.pop(), child.value));
                 continue;
               }
               if (child.nodes) {
@@ -123469,7 +123763,7 @@ var init_prettier = __esm({
           let brackets = 0;
           const length = input.length;
           let index = 0;
-          let depth = 0;
+          let depth2 = 0;
           let value;
           const advance = () => input[index++];
           const push22 = (node) => {
@@ -123561,14 +123855,14 @@ var init_prettier = __esm({
               continue;
             }
             if (value === CHAR_LEFT_CURLY_BRACE) {
-              depth++;
+              depth2++;
               const dollar = prev.value && prev.value.slice(-1) === "$" || block2.dollar === true;
               const brace = {
                 type: "brace",
                 open: true,
                 close: false,
                 dollar,
-                depth,
+                depth: depth2,
                 commas: 0,
                 ranges: 0,
                 nodes: []
@@ -123587,11 +123881,11 @@ var init_prettier = __esm({
               block2 = stack22.pop();
               block2.close = true;
               push22({ type, value });
-              depth--;
+              depth2--;
               block2 = stack22[stack22.length - 1];
               continue;
             }
-            if (value === CHAR_COMMA && depth > 0) {
+            if (value === CHAR_COMMA && depth2 > 0) {
               if (block2.ranges > 0) {
                 block2.ranges = 0;
                 const open = block2.nodes.shift();
@@ -123601,9 +123895,9 @@ var init_prettier = __esm({
               block2.commas++;
               continue;
             }
-            if (value === CHAR_DOT && depth > 0 && block2.commas === 0) {
+            if (value === CHAR_DOT && depth2 > 0 && block2.commas === 0) {
               const siblings = block2.nodes;
-              if (depth === 0 || siblings.length === 0) {
+              if (depth2 === 0 || siblings.length === 0) {
                 push22({ type: "text", value });
                 continue;
               }
@@ -123966,8 +124260,8 @@ var init_prettier = __esm({
         };
         exports.wrapOutput = (input, state = {}, options7 = {}) => {
           const prepend = options7.contains ? "" : "^";
-          const append = options7.contains ? "" : "$";
-          let output = `${prepend}(?:${input})${append}`;
+          const append2 = options7.contains ? "" : "$";
+          let output = `${prepend}(?:${input})${append2}`;
           if (state.negated === true) {
             output = `(?:^(?!${output}).*$)`;
           }
@@ -124014,7 +124308,7 @@ var init_prettier = __esm({
         var isPathSeparator = (code19) => {
           return code19 === CHAR_FORWARD_SLASH || code19 === CHAR_BACKWARD_SLASH;
         };
-        var depth = (token22) => {
+        var depth2 = (token22) => {
           if (token22.isPrefix !== true) {
             token22.depth = token22.isGlobstar ? Infinity : 1;
           }
@@ -124278,7 +124572,7 @@ var init_prettier = __esm({
                 } else {
                   tokens[idx].value = value;
                 }
-                depth(tokens[idx]);
+                depth2(tokens[idx]);
                 state.maxDepth += tokens[idx].depth;
               }
               if (idx !== 0 || value !== "") {
@@ -124291,7 +124585,7 @@ var init_prettier = __esm({
               parts.push(value);
               if (opts2.tokens) {
                 tokens[tokens.length - 1].value = value;
-                depth(tokens[tokens.length - 1]);
+                depth2(tokens[tokens.length - 1]);
                 state.maxDepth += tokens[tokens.length - 1].depth;
               }
             }
@@ -124506,15 +124800,15 @@ var init_prettier = __esm({
           return `${source22}*`;
         };
         var repeatedExtglobRecursion = (pattern2) => {
-          let depth = 0;
+          let depth2 = 0;
           let value = pattern2.trim();
           let match2 = parseRepeatedExtglob(value);
           while (match2) {
-            depth++;
+            depth2++;
             value = match2.body.trim();
             match2 = parseRepeatedExtglob(value);
           }
-          return depth;
+          return depth2;
         };
         var analyzeRepeatedExtglob = (body, options7) => {
           if (options7.maxExtglobRecursion === false) {
@@ -124545,9 +124839,9 @@ var init_prettier = __esm({
           input = REPLACEMENTS[input] || input;
           const opts2 = { ...options7 };
           const max = typeof opts2.maxLength === "number" ? Math.min(MAX_LENGTH, opts2.maxLength) : MAX_LENGTH;
-          let len = input.length;
-          if (len > max) {
-            throw new SyntaxError(`Input length: ${len}, exceeds maximum allowed length: ${max}`);
+          let len2 = input.length;
+          if (len2 > max) {
+            throw new SyntaxError(`Input length: ${len2}, exceeds maximum allowed length: ${max}`);
           }
           const bos = { type: "bos", value: "", output: opts2.prepend || "" };
           const tokens = [bos];
@@ -124599,13 +124893,13 @@ var init_prettier = __esm({
             tokens
           };
           input = utils2.removePrefix(input, state);
-          len = input.length;
+          len2 = input.length;
           const extglobs = [];
           const braces = [];
           const stack22 = [];
           let prev = bos;
           let value;
-          const eos = () => state.index === len - 1;
+          const eos = () => state.index === len2 - 1;
           const peek22 = state.peek = (n4 = 1) => input[state.index + n4];
           const advance = state.advance = () => input[++state.index] || "";
           const remaining = () => input.slice(state.index + 1);
@@ -124613,7 +124907,7 @@ var init_prettier = __esm({
             state.consumed += value2;
             state.index += num;
           };
-          const append = (token22) => {
+          const append2 = (token22) => {
             state.output += token22.output != null ? token22.output : token22.value;
             consume(token22.value);
           };
@@ -124654,7 +124948,7 @@ var init_prettier = __esm({
             if (extglobs.length && tok.type !== "paren") {
               extglobs[extglobs.length - 1].inner += tok.value;
             }
-            if (tok.value || tok.output) append(tok);
+            if (tok.value || tok.output) append2(tok);
             if (prev && prev.type === "text" && tok.type === "text") {
               prev.value += tok.value;
               prev.output = (prev.output || "") + tok.value;
@@ -124831,13 +125125,13 @@ var init_prettier = __esm({
                 value = "^";
               }
               prev.value += value;
-              append({ value });
+              append2({ value });
               continue;
             }
             if (state.quotes === 1 && value !== '"') {
               value = utils2.escapeRegex(value);
               prev.value += value;
-              append({ value });
+              append2({ value });
               continue;
             }
             if (value === '"') {
@@ -124895,7 +125189,7 @@ var init_prettier = __esm({
                 value = `/${value}`;
               }
               prev.value += value;
-              append({ value });
+              append2({ value });
               if (opts2.literalBrackets === false || utils2.hasRegexChars(prevValue)) {
                 continue;
               }
@@ -125237,9 +125531,9 @@ var init_prettier = __esm({
         parse92.fastpaths = (input, options7) => {
           const opts2 = { ...options7 };
           const max = typeof opts2.maxLength === "number" ? Math.min(MAX_LENGTH, opts2.maxLength) : MAX_LENGTH;
-          const len = input.length;
-          if (len > max) {
-            throw new SyntaxError(`Input length: ${len}, exceeds maximum allowed length: ${max}`);
+          const len2 = input.length;
+          if (len2 > max) {
+            throw new SyntaxError(`Input length: ${len2}, exceeds maximum allowed length: ${max}`);
           }
           input = REPLACEMENTS[input] || input;
           const win32 = utils2.isWindows(options7);
@@ -125405,8 +125699,8 @@ var init_prettier = __esm({
           }
           const opts2 = options7 || {};
           const prepend = opts2.contains ? "" : "^";
-          const append = opts2.contains ? "" : "$";
-          let source22 = `${prepend}(?:${state.output})${append}`;
+          const append2 = opts2.contains ? "" : "$";
+          let source22 = `${prepend}(?:${state.output})${append2}`;
           if (state && state.negated === true) {
             source22 = `^(?!${source22}).*$`;
           }
@@ -125797,7 +126091,7 @@ var init_prettier = __esm({
           }
           const mergedStream = PassThrough(options7);
           function addStream() {
-            for (let i = 0, len = arguments.length; i < len; i++) {
+            for (let i = 0, len2 = arguments.length; i < len2; i++) {
               streamsQueue.push(pauseStreams(arguments[i], options7));
             }
             mergeStream();
@@ -125879,7 +126173,7 @@ var init_prettier = __esm({
             }
             streams.pause();
           } else {
-            for (let i = 0, len = streams.length; i < len; i++) {
+            for (let i = 0, len2 = streams.length; i < len2; i++) {
               streams[i] = pauseStreams(streams[i], options7);
             }
           }
@@ -129568,18 +129862,18 @@ var init_prettier = __esm({
               tokens.push({ single: source22.slice(index, index + 2) });
               index += 2;
             } else if (char === "(") {
-              let depth = 0;
+              let depth2 = 0;
               let end = index;
               do {
                 if (source22[end] === ESCAPE) {
                   end++;
                 } else if (source22[end] === "(") {
-                  depth++;
+                  depth2++;
                 } else if (source22[end] === ")") {
-                  depth--;
+                  depth2--;
                 }
                 end++;
-              } while (end < length && depth > 0);
+              } while (end < length && depth2 > 0);
               if ("*+?".indexOf(source22[end]) >= 0) {
                 end++;
               }
@@ -129729,11 +130023,11 @@ var init_prettier = __esm({
           while (end && isLineEnd(body[end - 1])) {
             end--;
           }
-          const lineEnd2 = end;
+          const lineEnd3 = end;
           while (end && body[end - 1] === SPACE) {
             end--;
           }
-          if (end === lineEnd2) {
+          if (end === lineEnd3) {
             return body.slice(0, end);
           }
           let backslashes = 0;
@@ -130852,9 +131146,9 @@ var init_prettier = __esm({
         return fixed(String(a4).padStart(width, "0"), String(b8).padStart(width, "0"));
       }
       const out = [];
-      for (let len = String(a4).length; len <= String(b8).length; len++) {
-        const lo7 = Math.max(a4, len === 1 ? 0 : 10 ** (len - 1));
-        const hi13 = Math.min(b8, 10 ** len - 1);
+      for (let len2 = String(a4).length; len2 <= String(b8).length; len2++) {
+        const lo7 = Math.max(a4, len2 === 1 ? 0 : 10 ** (len2 - 1));
+        const hi13 = Math.min(b8, 10 ** len2 - 1);
         out.push(...fixed(String(lo7), String(hi13)));
       }
       return out;
@@ -131896,7 +132190,7 @@ var init_prettier = __esm({
     extSafe = (pattern2) => {
       if (/^[?*+@]\(\)$/.test(pattern2) || pattern2.includes("[:"))
         return false;
-      let depth = 0;
+      let depth2 = 0;
       for (let i = 0; i < pattern2.length; i++) {
         const c23 = pattern2.charAt(i);
         if (c23 === "\\") {
@@ -131907,16 +132201,16 @@ var init_prettier = __esm({
           if (close !== -1)
             i = close;
         } else if ("+@!?*".includes(c23) && pattern2.charAt(i + 1) === "(") {
-          depth++;
+          depth2++;
           i++;
         } else if (c23 === ")") {
-          if (!depth--)
+          if (!depth2--)
             return false;
-        } else if (c23 === "|" && !depth) {
+        } else if (c23 === "|" && !depth2) {
           return false;
         }
       }
-      return !depth;
+      return !depth2;
     };
     portionMatch = (p7, f4) => typeof p7 === "string" ? f4 === p7 : f4 !== "" && p7.testUnchecked(f4);
     endIndex = (p7, last, lastStart, prev, prevStart) => portionMatch(p7, last) ? lastStart : prev !== void 0 && portionMatch(p7, prev) ? prevStart : -1;
@@ -132154,8 +132448,8 @@ var init_prettier = __esm({
         let merged = true;
         while (merged) {
           merged = false;
-          const len = Math.max(0, ...this.set.map((r8) => r8.length));
-          for (let k10 = 0; k10 < len; k10++) {
+          const len2 = Math.max(0, ...this.set.map((r8) => r8.length));
+          for (let k10 = 0; k10 < len2; k10++) {
             const groups = /* @__PURE__ */ new Map();
             this.set.forEach((row, i) => {
               if (!(row[k10] instanceof Matcher3 || row[k10] === PENDING) || !extSafe(this.globParts[i][k10])) {
@@ -135419,38 +135713,38 @@ ${codeblock}`, options7);
       }
       _extractLines(buffer22, isEof) {
         const lines = [];
-        let lineStart = 0;
+        let lineStart2 = 0;
         if (this.lastChunkEndedWithCR && buffer22.length > 0 && buffer22[0] === LF) {
-          lineStart = 1;
+          lineStart2 = 1;
         }
         this.lastChunkEndedWithCR = false;
         this.lineIsComplete = false;
-        for (let i = lineStart; i < buffer22.length; i++) {
+        for (let i = lineStart2; i < buffer22.length; i++) {
           const byte = buffer22[i];
           if (byte === LF) {
-            lines.push(buffer22.slice(lineStart, i));
-            lineStart = i + 1;
+            lines.push(buffer22.slice(lineStart2, i));
+            lineStart2 = i + 1;
           } else if (byte === CR) {
-            const lineEnd2 = i;
+            const lineEnd3 = i;
             if (i + 1 >= buffer22.length) {
               if (!isEof) {
                 this.lastChunkEndedWithCR = true;
               }
-              lines.push(buffer22.slice(lineStart, lineEnd2));
-              lineStart = i + 1;
+              lines.push(buffer22.slice(lineStart2, lineEnd3));
+              lineStart2 = i + 1;
             } else if (buffer22[i + 1] === LF) {
-              lines.push(buffer22.slice(lineStart, lineEnd2));
+              lines.push(buffer22.slice(lineStart2, lineEnd3));
               i++;
-              lineStart = i + 1;
+              lineStart2 = i + 1;
             } else {
-              lines.push(buffer22.slice(lineStart, lineEnd2));
-              lineStart = i + 1;
+              lines.push(buffer22.slice(lineStart2, lineEnd3));
+              lineStart2 = i + 1;
             }
           }
         }
-        if (lineStart < buffer22.length) {
-          lines.push(buffer22.slice(lineStart));
-        } else if (lineStart === buffer22.length) {
+        if (lineStart2 < buffer22.length) {
+          lines.push(buffer22.slice(lineStart2));
+        } else if (lineStart2 === buffer22.length) {
           this.lineIsComplete = true;
         }
         return lines;
@@ -136809,7 +137103,7 @@ var init_dist3 = __esm({
     };
     stringify2 = function stringify3(value, replacer, space) {
       const stack3 = [];
-      let indent4 = "";
+      let indent5 = "";
       let propertyList;
       let replacerFunc;
       let gap = "";
@@ -136941,8 +137235,8 @@ var init_dist3 = __esm({
           throw TypeError("Converting circular structure to JSON5");
         }
         stack3.push(value2);
-        let stepback = indent4;
-        indent4 = indent4 + gap;
+        let stepback = indent5;
+        indent5 = indent5 + gap;
         let keys = propertyList || Object.keys(value2);
         let partial = [];
         for (const key3 of keys) {
@@ -136965,13 +137259,13 @@ var init_dist3 = __esm({
             properties = partial.join(",");
             final = "{" + properties + "}";
           } else {
-            let separator = ",\n" + indent4;
+            let separator = ",\n" + indent5;
             properties = partial.join(separator);
-            final = "{\n" + indent4 + properties + ",\n" + stepback + "}";
+            final = "{\n" + indent5 + properties + ",\n" + stepback + "}";
           }
         }
         stack3.pop();
-        indent4 = stepback;
+        indent5 = stepback;
         return final;
       }
       function serializeKey(key3) {
@@ -136994,8 +137288,8 @@ var init_dist3 = __esm({
           throw TypeError("Converting circular structure to JSON5");
         }
         stack3.push(value2);
-        let stepback = indent4;
-        indent4 = indent4 + gap;
+        let stepback = indent5;
+        indent5 = indent5 + gap;
         let partial = [];
         for (let i = 0; i < value2.length; i++) {
           const propertyString = serializeProperty(String(i), value2);
@@ -137009,13 +137303,13 @@ var init_dist3 = __esm({
             let properties = partial.join(",");
             final = "[" + properties + "]";
           } else {
-            let separator = ",\n" + indent4;
+            let separator = ",\n" + indent5;
             let properties = partial.join(separator);
-            final = "[\n" + indent4 + properties + ",\n" + stepback + "]";
+            final = "[\n" + indent5 + properties + ",\n" + stepback + "]";
           }
         }
         stack3.pop();
-        indent4 = stepback;
+        indent5 = stepback;
         return final;
       }
     };
@@ -137118,21 +137412,21 @@ var require_snippet = __commonJS({
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     var common = require_common5();
-    function getLine4(buffer3, lineStart, lineEnd2, position, maxLineLength) {
+    function getLine4(buffer3, lineStart2, lineEnd3, position, maxLineLength) {
       let head = "";
       let tail = "";
       const maxHalfLength = Math.floor(maxLineLength / 2) - 1;
-      if (position - lineStart > maxHalfLength) {
+      if (position - lineStart2 > maxHalfLength) {
         head = " ... ";
-        lineStart = position - maxHalfLength + head.length;
+        lineStart2 = position - maxHalfLength + head.length;
       }
-      if (lineEnd2 - position > maxHalfLength) {
+      if (lineEnd3 - position > maxHalfLength) {
         tail = " ...";
-        lineEnd2 = position + maxHalfLength - tail.length;
+        lineEnd3 = position + maxHalfLength - tail.length;
       }
       return {
-        str: head + buffer3.slice(lineStart, lineEnd2).replace(/\t/g, "\u2192") + tail,
-        pos: position - lineStart + head.length
+        str: head + buffer3.slice(lineStart2, lineEnd3).replace(/\t/g, "\u2192") + tail,
+        pos: position - lineStart2 + head.length
         // relative position
       };
     }
@@ -139675,8 +139969,8 @@ var require_dumper = __commonJS({
             return state.quotingType === QUOTING_TYPE_DOUBLE ? '"' + string3 + '"' : "'" + string3 + "'";
           }
         }
-        const indent4 = state.indent * Math.max(1, level);
-        const lineWidth = state.lineWidth === -1 ? -1 : Math.max(Math.min(state.lineWidth, 40), state.lineWidth - indent4);
+        const indent5 = state.indent * Math.max(1, level);
+        const lineWidth = state.lineWidth === -1 ? -1 : Math.max(Math.min(state.lineWidth, 40), state.lineWidth - indent5);
         const singleLineOnly = iskey || // No block styles in flow mode.
         state.flowLevel > -1 && level >= state.flowLevel;
         function testAmbiguity(string4) {
@@ -139697,9 +139991,9 @@ var require_dumper = __commonJS({
           case STYLE_SINGLE:
             return "'" + string3.replace(/'/g, "''") + "'";
           case STYLE_LITERAL:
-            return "|" + blockHeader(string3, state.indent) + dropEndingNewline(indentString(string3, indent4));
+            return "|" + blockHeader(string3, state.indent) + dropEndingNewline(indentString(string3, indent5));
           case STYLE_FOLDED:
-            return ">" + blockHeader(string3, state.indent) + dropEndingNewline(indentString(foldString(string3, lineWidth), indent4));
+            return ">" + blockHeader(string3, state.indent) + dropEndingNewline(indentString(foldString(string3, lineWidth), indent5));
           case STYLE_DOUBLE:
             return '"' + escapeString(string3, lineWidth) + '"';
           default:
@@ -140472,7 +140766,7 @@ var require_textlint_module_resolver = __commonJS({
           }
           return null;
         };
-        this.baseDirectory = config2 && config2.rulesBaseDirectory ? config2.rulesBaseDirectory : "";
+        this.baseDirectory = config2 && config2.rulesBaseDirectory ? path20.resolve(config2.rulesBaseDirectory) : "";
       }
       /**
        * Take package name, and return path to module.
@@ -141135,15639 +141429,3628 @@ var require_src11 = __commonJS({
   }
 });
 
-// node_modules/@textlint/markdown-to-ast/lib/src/mapping/markdown-syntax-map.js
-var require_markdown_syntax_map = __commonJS({
-  "node_modules/@textlint/markdown-to-ast/lib/src/mapping/markdown-syntax-map.js"(exports) {
+// node_modules/@textlint/markdown-to-ast/node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js
+var require_ASTNodeTypes2 = __commonJS({
+  "node_modules/@textlint/markdown-to-ast/node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.SyntaxMap = void 0;
-    var ast_node_types_1 = require_src5();
-    exports.SyntaxMap = {
-      root: ast_node_types_1.ASTNodeTypes.Document,
-      paragraph: ast_node_types_1.ASTNodeTypes.Paragraph,
-      blockquote: ast_node_types_1.ASTNodeTypes.BlockQuote,
-      listItem: ast_node_types_1.ASTNodeTypes.ListItem,
-      list: ast_node_types_1.ASTNodeTypes.List,
-      Bullet: "Bullet",
-      // no need?
-      heading: ast_node_types_1.ASTNodeTypes.Header,
-      code: ast_node_types_1.ASTNodeTypes.CodeBlock,
-      HtmlBlock: ast_node_types_1.ASTNodeTypes.HtmlBlock,
-      thematicBreak: ast_node_types_1.ASTNodeTypes.HorizontalRule,
-      // inline block
-      text: ast_node_types_1.ASTNodeTypes.Str,
-      break: ast_node_types_1.ASTNodeTypes.Break,
-      emphasis: ast_node_types_1.ASTNodeTypes.Emphasis,
-      strong: ast_node_types_1.ASTNodeTypes.Strong,
-      html: ast_node_types_1.ASTNodeTypes.Html,
-      link: ast_node_types_1.ASTNodeTypes.Link,
-      image: ast_node_types_1.ASTNodeTypes.Image,
-      inlineCode: ast_node_types_1.ASTNodeTypes.Code,
-      delete: ast_node_types_1.ASTNodeTypes.Delete,
-      // remark(markdown) extension
-      // Following type is not in @textlint/ast-node-types
-      yaml: "Yaml",
-      toml: "Toml",
-      json: "Json",
-      table: "Table",
-      tableRow: "TableRow",
-      tableCell: "TableCell",
-      linkReference: "LinkReference",
-      imageReference: "ImageReference",
-      footnoteReference: "FootnoteReference",
-      // textlint@12+
-      definition: "Definition",
-      /**
-       * @deprecated
-       */
-      ReferenceDef: ast_node_types_1.ASTNodeTypes.ReferenceDef
-    };
+    exports.ASTNodeTypes = void 0;
+    var ASTNodeTypes2;
+    (function(ASTNodeTypes3) {
+      ASTNodeTypes3["Document"] = "Document";
+      ASTNodeTypes3["DocumentExit"] = "Document:exit";
+      ASTNodeTypes3["Paragraph"] = "Paragraph";
+      ASTNodeTypes3["ParagraphExit"] = "Paragraph:exit";
+      ASTNodeTypes3["BlockQuote"] = "BlockQuote";
+      ASTNodeTypes3["BlockQuoteExit"] = "BlockQuote:exit";
+      ASTNodeTypes3["ListItem"] = "ListItem";
+      ASTNodeTypes3["ListItemExit"] = "ListItem:exit";
+      ASTNodeTypes3["List"] = "List";
+      ASTNodeTypes3["ListExit"] = "List:exit";
+      ASTNodeTypes3["Header"] = "Header";
+      ASTNodeTypes3["HeaderExit"] = "Header:exit";
+      ASTNodeTypes3["CodeBlock"] = "CodeBlock";
+      ASTNodeTypes3["CodeBlockExit"] = "CodeBlock:exit";
+      ASTNodeTypes3["HtmlBlock"] = "HtmlBlock";
+      ASTNodeTypes3["HtmlBlockExit"] = "HtmlBlock:exit";
+      ASTNodeTypes3["HorizontalRule"] = "HorizontalRule";
+      ASTNodeTypes3["HorizontalRuleExit"] = "HorizontalRule:exit";
+      ASTNodeTypes3["Comment"] = "Comment";
+      ASTNodeTypes3["CommentExit"] = "Comment:exit";
+      ASTNodeTypes3["ReferenceDef"] = "ReferenceDef";
+      ASTNodeTypes3["ReferenceDefExit"] = "ReferenceDef:exit";
+      ASTNodeTypes3["Str"] = "Str";
+      ASTNodeTypes3["StrExit"] = "Str:exit";
+      ASTNodeTypes3["Break"] = "Break";
+      ASTNodeTypes3["BreakExit"] = "Break:exit";
+      ASTNodeTypes3["Emphasis"] = "Emphasis";
+      ASTNodeTypes3["EmphasisExit"] = "Emphasis:exit";
+      ASTNodeTypes3["Strong"] = "Strong";
+      ASTNodeTypes3["StrongExit"] = "Strong:exit";
+      ASTNodeTypes3["Html"] = "Html";
+      ASTNodeTypes3["HtmlExit"] = "Html:exit";
+      ASTNodeTypes3["Link"] = "Link";
+      ASTNodeTypes3["LinkExit"] = "Link:exit";
+      ASTNodeTypes3["LinkReference"] = "LinkReference";
+      ASTNodeTypes3["LinkReferenceExit"] = "LinkReference:exit";
+      ASTNodeTypes3["Image"] = "Image";
+      ASTNodeTypes3["ImageExit"] = "Image:exit";
+      ASTNodeTypes3["ImageReference"] = "ImageReference";
+      ASTNodeTypes3["ImageReferenceExit"] = "ImageReference:exit";
+      ASTNodeTypes3["Definition"] = "Definition";
+      ASTNodeTypes3["DefinitionExit"] = "Definition:exit";
+      ASTNodeTypes3["Code"] = "Code";
+      ASTNodeTypes3["CodeExit"] = "Code:exit";
+      ASTNodeTypes3["Delete"] = "Delete";
+      ASTNodeTypes3["DeleteExit"] = "Delete:exit";
+      ASTNodeTypes3["Table"] = "Table";
+      ASTNodeTypes3["TableExit"] = "Table:exit";
+      ASTNodeTypes3["TableRow"] = "TableRow";
+      ASTNodeTypes3["TableRowExit"] = "TableRow:exit";
+      ASTNodeTypes3["TableCell"] = "TableCell";
+      ASTNodeTypes3["TableCellExit"] = "TableCell:exit";
+    })(ASTNodeTypes2 || (exports.ASTNodeTypes = ASTNodeTypes2 = {}));
   }
 });
 
-// node_modules/neotraverse/dist/legacy/legacy.cjs
-var require_legacy = __commonJS({
-  "node_modules/neotraverse/dist/legacy/legacy.cjs"(exports, module) {
+// node_modules/@textlint/markdown-to-ast/node_modules/@textlint/ast-node-types/lib/src/index.js
+var require_src12 = __commonJS({
+  "node_modules/@textlint/markdown-to-ast/node_modules/@textlint/ast-node-types/lib/src/index.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function _array_like_to_array(arr, len) {
-      if (len == null || len > arr.length) len = arr.length;
-      for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-      return arr2;
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.ASTNodeTypes = void 0;
+    var ASTNodeTypes_js_1 = require_ASTNodeTypes2();
+    Object.defineProperty(exports, "ASTNodeTypes", { enumerable: true, get: function() {
+      return ASTNodeTypes_js_1.ASTNodeTypes;
+    } });
+  }
+});
+
+// node_modules/@textlint/markdown-to-ast/lib/src/cjk.js
+function isCjkCodePoint(cp2) {
+  if (cp2 < CJK_RANGES[0] || cp2 > CJK_RANGES[CJK_RANGES.length - 1]) {
+    return false;
+  }
+  let lo7 = 0;
+  let hi13 = (CJK_RANGES.length >> 1) - 1;
+  while (lo7 <= hi13) {
+    const mid = lo7 + hi13 >> 1;
+    if (cp2 < CJK_RANGES[mid * 2]) {
+      hi13 = mid - 1;
+    } else if (cp2 > CJK_RANGES[mid * 2 + 1]) {
+      lo7 = mid + 1;
+    } else {
+      return true;
     }
-    function _array_with_holes(arr) {
-      if (Array.isArray(arr)) return arr;
+  }
+  return false;
+}
+var CJK_RANGES;
+var init_cjk = __esm({
+  "node_modules/@textlint/markdown-to-ast/lib/src/cjk.js"() {
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    CJK_RANGES = new Int32Array([
+      4352,
+      4607,
+      8361,
+      8361,
+      9001,
+      9002,
+      9776,
+      9783,
+      9866,
+      9871,
+      11904,
+      11929,
+      11931,
+      12019,
+      12032,
+      12245,
+      12272,
+      12350,
+      12353,
+      12438,
+      12441,
+      12543,
+      12549,
+      12591,
+      12593,
+      12686,
+      12688,
+      12773,
+      12783,
+      12830,
+      12832,
+      12871,
+      12880,
+      42124,
+      42128,
+      42182,
+      43360,
+      43388,
+      44032,
+      55203,
+      55216,
+      55238,
+      55243,
+      55291,
+      63744,
+      64255,
+      65040,
+      65049,
+      65072,
+      65106,
+      65108,
+      65126,
+      65128,
+      65131,
+      65281,
+      65470,
+      65474,
+      65479,
+      65482,
+      65487,
+      65490,
+      65495,
+      65498,
+      65500,
+      65504,
+      65510,
+      65512,
+      65518,
+      94176,
+      94180,
+      94192,
+      94198,
+      94208,
+      101594,
+      101631,
+      101664,
+      101760,
+      101874,
+      101888,
+      102801,
+      102816,
+      102866,
+      110576,
+      110579,
+      110581,
+      110587,
+      110589,
+      110590,
+      110592,
+      110888,
+      110898,
+      110898,
+      110928,
+      110930,
+      110933,
+      110933,
+      110948,
+      110952,
+      110960,
+      111355,
+      119552,
+      119638,
+      119648,
+      119670,
+      127406,
+      127406,
+      127488,
+      127488,
+      127490,
+      127490,
+      127504,
+      127513,
+      127515,
+      127534,
+      127536,
+      127537,
+      127543,
+      127543,
+      127547,
+      127547,
+      127552,
+      127560,
+      127584,
+      127589,
+      128986,
+      128986,
+      131072,
+      262141
+    ]);
+  }
+});
+
+// node_modules/@textlint/markdown-to-ast/lib/src/entities.js
+function decodeNamedEntity(name) {
+  if (table2 === void 0) {
+    table2 = /* @__PURE__ */ new Map();
+    const names = NAMES.split(",");
+    const values = VALUES.split("\0");
+    for (let i = 0; i < names.length; i++) {
+      table2.set(names[i], values[i]);
     }
-    function _class_call_check(instance, Constructor) {
-      if (!(instance instanceof Constructor)) {
-        throw new TypeError("Cannot call a class as a function");
+  }
+  return table2.get(name);
+}
+var NAMES, VALUES, table2;
+var init_entities = __esm({
+  "node_modules/@textlint/markdown-to-ast/lib/src/entities.js"() {
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    NAMES = "AElig,AMP,Aacute,Abreve,Acirc,Acy,Afr,Agrave,Alpha,Amacr,And,Aogon,Aopf,ApplyFunction,Aring,Ascr,Assign,Atilde,Auml,Backslash,Barv,Barwed,Bcy,Because,Bernoullis,Beta,Bfr,Bopf,Breve,Bscr,Bumpeq,CHcy,COPY,Cacute,Cap,CapitalDifferentialD,Cayleys,Ccaron,Ccedil,Ccirc,Cconint,Cdot,Cedilla,CenterDot,Cfr,Chi,CircleDot,CircleMinus,CirclePlus,CircleTimes,ClockwiseContourIntegral,CloseCurlyDoubleQuote,CloseCurlyQuote,Colon,Colone,Congruent,Conint,ContourIntegral,Copf,Coproduct,CounterClockwiseContourIntegral,Cross,Cscr,Cup,CupCap,DD,DDotrahd,DJcy,DScy,DZcy,Dagger,Darr,Dashv,Dcaron,Dcy,Del,Delta,Dfr,DiacriticalAcute,DiacriticalDot,DiacriticalDoubleAcute,DiacriticalGrave,DiacriticalTilde,Diamond,DifferentialD,Dopf,Dot,DotDot,DotEqual,DoubleContourIntegral,DoubleDot,DoubleDownArrow,DoubleLeftArrow,DoubleLeftRightArrow,DoubleLeftTee,DoubleLongLeftArrow,DoubleLongLeftRightArrow,DoubleLongRightArrow,DoubleRightArrow,DoubleRightTee,DoubleUpArrow,DoubleUpDownArrow,DoubleVerticalBar,DownArrow,DownArrowBar,DownArrowUpArrow,DownBreve,DownLeftRightVector,DownLeftTeeVector,DownLeftVector,DownLeftVectorBar,DownRightTeeVector,DownRightVector,DownRightVectorBar,DownTee,DownTeeArrow,Downarrow,Dscr,Dstrok,ENG,ETH,Eacute,Ecaron,Ecirc,Ecy,Edot,Efr,Egrave,Element,Emacr,EmptySmallSquare,EmptyVerySmallSquare,Eogon,Eopf,Epsilon,Equal,EqualTilde,Equilibrium,Escr,Esim,Eta,Euml,Exists,ExponentialE,Fcy,Ffr,FilledSmallSquare,FilledVerySmallSquare,Fopf,ForAll,Fouriertrf,Fscr,GJcy,GT,Gamma,Gammad,Gbreve,Gcedil,Gcirc,Gcy,Gdot,Gfr,Gg,Gopf,GreaterEqual,GreaterEqualLess,GreaterFullEqual,GreaterGreater,GreaterLess,GreaterSlantEqual,GreaterTilde,Gscr,Gt,HARDcy,Hacek,Hat,Hcirc,Hfr,HilbertSpace,Hopf,HorizontalLine,Hscr,Hstrok,HumpDownHump,HumpEqual,IEcy,IJlig,IOcy,Iacute,Icirc,Icy,Idot,Ifr,Igrave,Im,Imacr,ImaginaryI,Implies,Int,Integral,Intersection,InvisibleComma,InvisibleTimes,Iogon,Iopf,Iota,Iscr,Itilde,Iukcy,Iuml,Jcirc,Jcy,Jfr,Jopf,Jscr,Jsercy,Jukcy,KHcy,KJcy,Kappa,Kcedil,Kcy,Kfr,Kopf,Kscr,LJcy,LT,Lacute,Lambda,Lang,Laplacetrf,Larr,Lcaron,Lcedil,Lcy,LeftAngleBracket,LeftArrow,LeftArrowBar,LeftArrowRightArrow,LeftCeiling,LeftDoubleBracket,LeftDownTeeVector,LeftDownVector,LeftDownVectorBar,LeftFloor,LeftRightArrow,LeftRightVector,LeftTee,LeftTeeArrow,LeftTeeVector,LeftTriangle,LeftTriangleBar,LeftTriangleEqual,LeftUpDownVector,LeftUpTeeVector,LeftUpVector,LeftUpVectorBar,LeftVector,LeftVectorBar,Leftarrow,Leftrightarrow,LessEqualGreater,LessFullEqual,LessGreater,LessLess,LessSlantEqual,LessTilde,Lfr,Ll,Lleftarrow,Lmidot,LongLeftArrow,LongLeftRightArrow,LongRightArrow,Longleftarrow,Longleftrightarrow,Longrightarrow,Lopf,LowerLeftArrow,LowerRightArrow,Lscr,Lsh,Lstrok,Lt,Map,Mcy,MediumSpace,Mellintrf,Mfr,MinusPlus,Mopf,Mscr,Mu,NJcy,Nacute,Ncaron,Ncedil,Ncy,NegativeMediumSpace,NegativeThickSpace,NegativeThinSpace,NegativeVeryThinSpace,NestedGreaterGreater,NestedLessLess,NewLine,Nfr,NoBreak,NonBreakingSpace,Nopf,Not,NotCongruent,NotCupCap,NotDoubleVerticalBar,NotElement,NotEqual,NotEqualTilde,NotExists,NotGreater,NotGreaterEqual,NotGreaterFullEqual,NotGreaterGreater,NotGreaterLess,NotGreaterSlantEqual,NotGreaterTilde,NotHumpDownHump,NotHumpEqual,NotLeftTriangle,NotLeftTriangleBar,NotLeftTriangleEqual,NotLess,NotLessEqual,NotLessGreater,NotLessLess,NotLessSlantEqual,NotLessTilde,NotNestedGreaterGreater,NotNestedLessLess,NotPrecedes,NotPrecedesEqual,NotPrecedesSlantEqual,NotReverseElement,NotRightTriangle,NotRightTriangleBar,NotRightTriangleEqual,NotSquareSubset,NotSquareSubsetEqual,NotSquareSuperset,NotSquareSupersetEqual,NotSubset,NotSubsetEqual,NotSucceeds,NotSucceedsEqual,NotSucceedsSlantEqual,NotSucceedsTilde,NotSuperset,NotSupersetEqual,NotTilde,NotTildeEqual,NotTildeFullEqual,NotTildeTilde,NotVerticalBar,Nscr,Ntilde,Nu,OElig,Oacute,Ocirc,Ocy,Odblac,Ofr,Ograve,Omacr,Omega,Omicron,Oopf,OpenCurlyDoubleQuote,OpenCurlyQuote,Or,Oscr,Oslash,Otilde,Otimes,Ouml,OverBar,OverBrace,OverBracket,OverParenthesis,PartialD,Pcy,Pfr,Phi,Pi,PlusMinus,Poincareplane,Popf,Pr,Precedes,PrecedesEqual,PrecedesSlantEqual,PrecedesTilde,Prime,Product,Proportion,Proportional,Pscr,Psi,QUOT,Qfr,Qopf,Qscr,RBarr,REG,Racute,Rang,Rarr,Rarrtl,Rcaron,Rcedil,Rcy,Re,ReverseElement,ReverseEquilibrium,ReverseUpEquilibrium,Rfr,Rho,RightAngleBracket,RightArrow,RightArrowBar,RightArrowLeftArrow,RightCeiling,RightDoubleBracket,RightDownTeeVector,RightDownVector,RightDownVectorBar,RightFloor,RightTee,RightTeeArrow,RightTeeVector,RightTriangle,RightTriangleBar,RightTriangleEqual,RightUpDownVector,RightUpTeeVector,RightUpVector,RightUpVectorBar,RightVector,RightVectorBar,Rightarrow,Ropf,RoundImplies,Rrightarrow,Rscr,Rsh,RuleDelayed,SHCHcy,SHcy,SOFTcy,Sacute,Sc,Scaron,Scedil,Scirc,Scy,Sfr,ShortDownArrow,ShortLeftArrow,ShortRightArrow,ShortUpArrow,Sigma,SmallCircle,Sopf,Sqrt,Square,SquareIntersection,SquareSubset,SquareSubsetEqual,SquareSuperset,SquareSupersetEqual,SquareUnion,Sscr,Star,Sub,Subset,SubsetEqual,Succeeds,SucceedsEqual,SucceedsSlantEqual,SucceedsTilde,SuchThat,Sum,Sup,Superset,SupersetEqual,Supset,THORN,TRADE,TSHcy,TScy,Tab,Tau,Tcaron,Tcedil,Tcy,Tfr,Therefore,Theta,ThickSpace,ThinSpace,Tilde,TildeEqual,TildeFullEqual,TildeTilde,Topf,TripleDot,Tscr,Tstrok,Uacute,Uarr,Uarrocir,Ubrcy,Ubreve,Ucirc,Ucy,Udblac,Ufr,Ugrave,Umacr,UnderBar,UnderBrace,UnderBracket,UnderParenthesis,Union,UnionPlus,Uogon,Uopf,UpArrow,UpArrowBar,UpArrowDownArrow,UpDownArrow,UpEquilibrium,UpTee,UpTeeArrow,Uparrow,Updownarrow,UpperLeftArrow,UpperRightArrow,Upsi,Upsilon,Uring,Uscr,Utilde,Uuml,VDash,Vbar,Vcy,Vdash,Vdashl,Vee,Verbar,Vert,VerticalBar,VerticalLine,VerticalSeparator,VerticalTilde,VeryThinSpace,Vfr,Vopf,Vscr,Vvdash,Wcirc,Wedge,Wfr,Wopf,Wscr,Xfr,Xi,Xopf,Xscr,YAcy,YIcy,YUcy,Yacute,Ycirc,Ycy,Yfr,Yopf,Yscr,Yuml,ZHcy,Zacute,Zcaron,Zcy,Zdot,ZeroWidthSpace,Zeta,Zfr,Zopf,Zscr,aacute,abreve,ac,acE,acd,acirc,acute,acy,aelig,af,afr,agrave,alefsym,aleph,alpha,amacr,amalg,amp,and,andand,andd,andslope,andv,ang,ange,angle,angmsd,angmsdaa,angmsdab,angmsdac,angmsdad,angmsdae,angmsdaf,angmsdag,angmsdah,angrt,angrtvb,angrtvbd,angsph,angst,angzarr,aogon,aopf,ap,apE,apacir,ape,apid,apos,approx,approxeq,aring,ascr,ast,asymp,asympeq,atilde,auml,awconint,awint,bNot,backcong,backepsilon,backprime,backsim,backsimeq,barvee,barwed,barwedge,bbrk,bbrktbrk,bcong,bcy,bdquo,becaus,because,bemptyv,bepsi,bernou,beta,beth,between,bfr,bigcap,bigcirc,bigcup,bigodot,bigoplus,bigotimes,bigsqcup,bigstar,bigtriangledown,bigtriangleup,biguplus,bigvee,bigwedge,bkarow,blacklozenge,blacksquare,blacktriangle,blacktriangledown,blacktriangleleft,blacktriangleright,blank,blk12,blk14,blk34,block,bne,bnequiv,bnot,bopf,bot,bottom,bowtie,boxDL,boxDR,boxDl,boxDr,boxH,boxHD,boxHU,boxHd,boxHu,boxUL,boxUR,boxUl,boxUr,boxV,boxVH,boxVL,boxVR,boxVh,boxVl,boxVr,boxbox,boxdL,boxdR,boxdl,boxdr,boxh,boxhD,boxhU,boxhd,boxhu,boxminus,boxplus,boxtimes,boxuL,boxuR,boxul,boxur,boxv,boxvH,boxvL,boxvR,boxvh,boxvl,boxvr,bprime,breve,brvbar,bscr,bsemi,bsim,bsime,bsol,bsolb,bsolhsub,bull,bullet,bump,bumpE,bumpe,bumpeq,cacute,cap,capand,capbrcup,capcap,capcup,capdot,caps,caret,caron,ccaps,ccaron,ccedil,ccirc,ccups,ccupssm,cdot,cedil,cemptyv,cent,centerdot,cfr,chcy,check,checkmark,chi,cir,cirE,circ,circeq,circlearrowleft,circlearrowright,circledR,circledS,circledast,circledcirc,circleddash,cire,cirfnint,cirmid,cirscir,clubs,clubsuit,colon,colone,coloneq,comma,commat,comp,compfn,complement,complexes,cong,congdot,conint,copf,coprod,copy,copysr,crarr,cross,cscr,csub,csube,csup,csupe,ctdot,cudarrl,cudarrr,cuepr,cuesc,cularr,cularrp,cup,cupbrcap,cupcap,cupcup,cupdot,cupor,cups,curarr,curarrm,curlyeqprec,curlyeqsucc,curlyvee,curlywedge,curren,curvearrowleft,curvearrowright,cuvee,cuwed,cwconint,cwint,cylcty,dArr,dHar,dagger,daleth,darr,dash,dashv,dbkarow,dblac,dcaron,dcy,dd,ddagger,ddarr,ddotseq,deg,delta,demptyv,dfisht,dfr,dharl,dharr,diam,diamond,diamondsuit,diams,die,digamma,disin,div,divide,divideontimes,divonx,djcy,dlcorn,dlcrop,dollar,dopf,dot,doteq,doteqdot,dotminus,dotplus,dotsquare,doublebarwedge,downarrow,downdownarrows,downharpoonleft,downharpoonright,drbkarow,drcorn,drcrop,dscr,dscy,dsol,dstrok,dtdot,dtri,dtrif,duarr,duhar,dwangle,dzcy,dzigrarr,eDDot,eDot,eacute,easter,ecaron,ecir,ecirc,ecolon,ecy,edot,ee,efDot,efr,eg,egrave,egs,egsdot,el,elinters,ell,els,elsdot,emacr,empty,emptyset,emptyv,emsp13,emsp14,emsp,eng,ensp,eogon,eopf,epar,eparsl,eplus,epsi,epsilon,epsiv,eqcirc,eqcolon,eqsim,eqslantgtr,eqslantless,equals,equest,equiv,equivDD,eqvparsl,erDot,erarr,escr,esdot,esim,eta,eth,euml,euro,excl,exist,expectation,exponentiale,fallingdotseq,fcy,female,ffilig,fflig,ffllig,ffr,filig,fjlig,flat,fllig,fltns,fnof,fopf,forall,fork,forkv,fpartint,frac12,frac13,frac14,frac15,frac16,frac18,frac23,frac25,frac34,frac35,frac38,frac45,frac56,frac58,frac78,frasl,frown,fscr,gE,gEl,gacute,gamma,gammad,gap,gbreve,gcirc,gcy,gdot,ge,gel,geq,geqq,geqslant,ges,gescc,gesdot,gesdoto,gesdotol,gesl,gesles,gfr,gg,ggg,gimel,gjcy,gl,glE,gla,glj,gnE,gnap,gnapprox,gne,gneq,gneqq,gnsim,gopf,grave,gscr,gsim,gsime,gsiml,gt,gtcc,gtcir,gtdot,gtlPar,gtquest,gtrapprox,gtrarr,gtrdot,gtreqless,gtreqqless,gtrless,gtrsim,gvertneqq,gvnE,hArr,hairsp,half,hamilt,hardcy,harr,harrcir,harrw,hbar,hcirc,hearts,heartsuit,hellip,hercon,hfr,hksearow,hkswarow,hoarr,homtht,hookleftarrow,hookrightarrow,hopf,horbar,hscr,hslash,hstrok,hybull,hyphen,iacute,ic,icirc,icy,iecy,iexcl,iff,ifr,igrave,ii,iiiint,iiint,iinfin,iiota,ijlig,imacr,image,imagline,imagpart,imath,imof,imped,in,incare,infin,infintie,inodot,int,intcal,integers,intercal,intlarhk,intprod,iocy,iogon,iopf,iota,iprod,iquest,iscr,isin,isinE,isindot,isins,isinsv,isinv,it,itilde,iukcy,iuml,jcirc,jcy,jfr,jmath,jopf,jscr,jsercy,jukcy,kappa,kappav,kcedil,kcy,kfr,kgreen,khcy,kjcy,kopf,kscr,lAarr,lArr,lAtail,lBarr,lE,lEg,lHar,lacute,laemptyv,lagran,lambda,lang,langd,langle,lap,laquo,larr,larrb,larrbfs,larrfs,larrhk,larrlp,larrpl,larrsim,larrtl,lat,latail,late,lates,lbarr,lbbrk,lbrace,lbrack,lbrke,lbrksld,lbrkslu,lcaron,lcedil,lceil,lcub,lcy,ldca,ldquo,ldquor,ldrdhar,ldrushar,ldsh,le,leftarrow,leftarrowtail,leftharpoondown,leftharpoonup,leftleftarrows,leftrightarrow,leftrightarrows,leftrightharpoons,leftrightsquigarrow,leftthreetimes,leg,leq,leqq,leqslant,les,lescc,lesdot,lesdoto,lesdotor,lesg,lesges,lessapprox,lessdot,lesseqgtr,lesseqqgtr,lessgtr,lesssim,lfisht,lfloor,lfr,lg,lgE,lhard,lharu,lharul,lhblk,ljcy,ll,llarr,llcorner,llhard,lltri,lmidot,lmoust,lmoustache,lnE,lnap,lnapprox,lne,lneq,lneqq,lnsim,loang,loarr,lobrk,longleftarrow,longleftrightarrow,longmapsto,longrightarrow,looparrowleft,looparrowright,lopar,lopf,loplus,lotimes,lowast,lowbar,loz,lozenge,lozf,lpar,lparlt,lrarr,lrcorner,lrhar,lrhard,lrm,lrtri,lsaquo,lscr,lsh,lsim,lsime,lsimg,lsqb,lsquo,lsquor,lstrok,lt,ltcc,ltcir,ltdot,lthree,ltimes,ltlarr,ltquest,ltrPar,ltri,ltrie,ltrif,lurdshar,luruhar,lvertneqq,lvnE,mDDot,macr,male,malt,maltese,map,mapsto,mapstodown,mapstoleft,mapstoup,marker,mcomma,mcy,mdash,measuredangle,mfr,mho,micro,mid,midast,midcir,middot,minus,minusb,minusd,minusdu,mlcp,mldr,mnplus,models,mopf,mp,mscr,mstpos,mu,multimap,mumap,nGg,nGt,nGtv,nLeftarrow,nLeftrightarrow,nLl,nLt,nLtv,nRightarrow,nVDash,nVdash,nabla,nacute,nang,nap,napE,napid,napos,napprox,natur,natural,naturals,nbsp,nbump,nbumpe,ncap,ncaron,ncedil,ncong,ncongdot,ncup,ncy,ndash,ne,neArr,nearhk,nearr,nearrow,nedot,nequiv,nesear,nesim,nexist,nexists,nfr,ngE,nge,ngeq,ngeqq,ngeqslant,nges,ngsim,ngt,ngtr,nhArr,nharr,nhpar,ni,nis,nisd,niv,njcy,nlArr,nlE,nlarr,nldr,nle,nleftarrow,nleftrightarrow,nleq,nleqq,nleqslant,nles,nless,nlsim,nlt,nltri,nltrie,nmid,nopf,not,notin,notinE,notindot,notinva,notinvb,notinvc,notni,notniva,notnivb,notnivc,npar,nparallel,nparsl,npart,npolint,npr,nprcue,npre,nprec,npreceq,nrArr,nrarr,nrarrc,nrarrw,nrightarrow,nrtri,nrtrie,nsc,nsccue,nsce,nscr,nshortmid,nshortparallel,nsim,nsime,nsimeq,nsmid,nspar,nsqsube,nsqsupe,nsub,nsubE,nsube,nsubset,nsubseteq,nsubseteqq,nsucc,nsucceq,nsup,nsupE,nsupe,nsupset,nsupseteq,nsupseteqq,ntgl,ntilde,ntlg,ntriangleleft,ntrianglelefteq,ntriangleright,ntrianglerighteq,nu,num,numero,numsp,nvDash,nvHarr,nvap,nvdash,nvge,nvgt,nvinfin,nvlArr,nvle,nvlt,nvltrie,nvrArr,nvrtrie,nvsim,nwArr,nwarhk,nwarr,nwarrow,nwnear,oS,oacute,oast,ocir,ocirc,ocy,odash,odblac,odiv,odot,odsold,oelig,ofcir,ofr,ogon,ograve,ogt,ohbar,ohm,oint,olarr,olcir,olcross,oline,olt,omacr,omega,omicron,omid,ominus,oopf,opar,operp,oplus,or,orarr,ord,order,orderof,ordf,ordm,origof,oror,orslope,orv,oscr,oslash,osol,otilde,otimes,otimesas,ouml,ovbar,par,para,parallel,parsim,parsl,part,pcy,percnt,period,permil,perp,pertenk,pfr,phi,phiv,phmmat,phone,pi,pitchfork,piv,planck,planckh,plankv,plus,plusacir,plusb,pluscir,plusdo,plusdu,pluse,plusmn,plussim,plustwo,pm,pointint,popf,pound,pr,prE,prap,prcue,pre,prec,precapprox,preccurlyeq,preceq,precnapprox,precneqq,precnsim,precsim,prime,primes,prnE,prnap,prnsim,prod,profalar,profline,profsurf,prop,propto,prsim,prurel,pscr,psi,puncsp,qfr,qint,qopf,qprime,qscr,quaternions,quatint,quest,questeq,quot,rAarr,rArr,rAtail,rBarr,rHar,race,racute,radic,raemptyv,rang,rangd,range,rangle,raquo,rarr,rarrap,rarrb,rarrbfs,rarrc,rarrfs,rarrhk,rarrlp,rarrpl,rarrsim,rarrtl,rarrw,ratail,ratio,rationals,rbarr,rbbrk,rbrace,rbrack,rbrke,rbrksld,rbrkslu,rcaron,rcedil,rceil,rcub,rcy,rdca,rdldhar,rdquo,rdquor,rdsh,real,realine,realpart,reals,rect,reg,rfisht,rfloor,rfr,rhard,rharu,rharul,rho,rhov,rightarrow,rightarrowtail,rightharpoondown,rightharpoonup,rightleftarrows,rightleftharpoons,rightrightarrows,rightsquigarrow,rightthreetimes,ring,risingdotseq,rlarr,rlhar,rlm,rmoust,rmoustache,rnmid,roang,roarr,robrk,ropar,ropf,roplus,rotimes,rpar,rpargt,rppolint,rrarr,rsaquo,rscr,rsh,rsqb,rsquo,rsquor,rthree,rtimes,rtri,rtrie,rtrif,rtriltri,ruluhar,rx,sacute,sbquo,sc,scE,scap,scaron,sccue,sce,scedil,scirc,scnE,scnap,scnsim,scpolint,scsim,scy,sdot,sdotb,sdote,seArr,searhk,searr,searrow,sect,semi,seswar,setminus,setmn,sext,sfr,sfrown,sharp,shchcy,shcy,shortmid,shortparallel,shy,sigma,sigmaf,sigmav,sim,simdot,sime,simeq,simg,simgE,siml,simlE,simne,simplus,simrarr,slarr,smallsetminus,smashp,smeparsl,smid,smile,smt,smte,smtes,softcy,sol,solb,solbar,sopf,spades,spadesuit,spar,sqcap,sqcaps,sqcup,sqcups,sqsub,sqsube,sqsubset,sqsubseteq,sqsup,sqsupe,sqsupset,sqsupseteq,squ,square,squarf,squf,srarr,sscr,ssetmn,ssmile,sstarf,star,starf,straightepsilon,straightphi,strns,sub,subE,subdot,sube,subedot,submult,subnE,subne,subplus,subrarr,subset,subseteq,subseteqq,subsetneq,subsetneqq,subsim,subsub,subsup,succ,succapprox,succcurlyeq,succeq,succnapprox,succneqq,succnsim,succsim,sum,sung,sup1,sup2,sup3,sup,supE,supdot,supdsub,supe,supedot,suphsol,suphsub,suplarr,supmult,supnE,supne,supplus,supset,supseteq,supseteqq,supsetneq,supsetneqq,supsim,supsub,supsup,swArr,swarhk,swarr,swarrow,swnwar,szlig,target,tau,tbrk,tcaron,tcedil,tcy,tdot,telrec,tfr,there4,therefore,theta,thetasym,thetav,thickapprox,thicksim,thinsp,thkap,thksim,thorn,tilde,times,timesb,timesbar,timesd,tint,toea,top,topbot,topcir,topf,topfork,tosa,tprime,trade,triangle,triangledown,triangleleft,trianglelefteq,triangleq,triangleright,trianglerighteq,tridot,trie,triminus,triplus,trisb,tritime,trpezium,tscr,tscy,tshcy,tstrok,twixt,twoheadleftarrow,twoheadrightarrow,uArr,uHar,uacute,uarr,ubrcy,ubreve,ucirc,ucy,udarr,udblac,udhar,ufisht,ufr,ugrave,uharl,uharr,uhblk,ulcorn,ulcorner,ulcrop,ultri,umacr,uml,uogon,uopf,uparrow,updownarrow,upharpoonleft,upharpoonright,uplus,upsi,upsih,upsilon,upuparrows,urcorn,urcorner,urcrop,uring,urtri,uscr,utdot,utilde,utri,utrif,uuarr,uuml,uwangle,vArr,vBar,vBarv,vDash,vangrt,varepsilon,varkappa,varnothing,varphi,varpi,varpropto,varr,varrho,varsigma,varsubsetneq,varsubsetneqq,varsupsetneq,varsupsetneqq,vartheta,vartriangleleft,vartriangleright,vcy,vdash,vee,veebar,veeeq,vellip,verbar,vert,vfr,vltri,vnsub,vnsup,vopf,vprop,vrtri,vscr,vsubnE,vsubne,vsupnE,vsupne,vzigzag,wcirc,wedbar,wedge,wedgeq,weierp,wfr,wopf,wp,wr,wreath,wscr,xcap,xcirc,xcup,xdtri,xfr,xhArr,xharr,xi,xlArr,xlarr,xmap,xnis,xodot,xopf,xoplus,xotime,xrArr,xrarr,xscr,xsqcup,xuplus,xutri,xvee,xwedge,yacute,yacy,ycirc,ycy,yen,yfr,yicy,yopf,yscr,yucy,yuml,zacute,zcaron,zcy,zdot,zeetrf,zeta,zfr,zhcy,zigrarr,zopf,zscr,zwj,zwnj";
+    VALUES = '\xC6\0&\0\xC1\0\u0102\0\xC2\0\u0410\0\u{1D504}\0\xC0\0\u0391\0\u0100\0\u2A53\0\u0104\0\u{1D538}\0\u2061\0\xC5\0\u{1D49C}\0\u2254\0\xC3\0\xC4\0\u2216\0\u2AE7\0\u2306\0\u0411\0\u2235\0\u212C\0\u0392\0\u{1D505}\0\u{1D539}\0\u02D8\0\u212C\0\u224E\0\u0427\0\xA9\0\u0106\0\u22D2\0\u2145\0\u212D\0\u010C\0\xC7\0\u0108\0\u2230\0\u010A\0\xB8\0\xB7\0\u212D\0\u03A7\0\u2299\0\u2296\0\u2295\0\u2297\0\u2232\0\u201D\0\u2019\0\u2237\0\u2A74\0\u2261\0\u222F\0\u222E\0\u2102\0\u2210\0\u2233\0\u2A2F\0\u{1D49E}\0\u22D3\0\u224D\0\u2145\0\u2911\0\u0402\0\u0405\0\u040F\0\u2021\0\u21A1\0\u2AE4\0\u010E\0\u0414\0\u2207\0\u0394\0\u{1D507}\0\xB4\0\u02D9\0\u02DD\0`\0\u02DC\0\u22C4\0\u2146\0\u{1D53B}\0\xA8\0\u20DC\0\u2250\0\u222F\0\xA8\0\u21D3\0\u21D0\0\u21D4\0\u2AE4\0\u27F8\0\u27FA\0\u27F9\0\u21D2\0\u22A8\0\u21D1\0\u21D5\0\u2225\0\u2193\0\u2913\0\u21F5\0\u0311\0\u2950\0\u295E\0\u21BD\0\u2956\0\u295F\0\u21C1\0\u2957\0\u22A4\0\u21A7\0\u21D3\0\u{1D49F}\0\u0110\0\u014A\0\xD0\0\xC9\0\u011A\0\xCA\0\u042D\0\u0116\0\u{1D508}\0\xC8\0\u2208\0\u0112\0\u25FB\0\u25AB\0\u0118\0\u{1D53C}\0\u0395\0\u2A75\0\u2242\0\u21CC\0\u2130\0\u2A73\0\u0397\0\xCB\0\u2203\0\u2147\0\u0424\0\u{1D509}\0\u25FC\0\u25AA\0\u{1D53D}\0\u2200\0\u2131\0\u2131\0\u0403\0>\0\u0393\0\u03DC\0\u011E\0\u0122\0\u011C\0\u0413\0\u0120\0\u{1D50A}\0\u22D9\0\u{1D53E}\0\u2265\0\u22DB\0\u2267\0\u2AA2\0\u2277\0\u2A7E\0\u2273\0\u{1D4A2}\0\u226B\0\u042A\0\u02C7\0^\0\u0124\0\u210C\0\u210B\0\u210D\0\u2500\0\u210B\0\u0126\0\u224E\0\u224F\0\u0415\0\u0132\0\u0401\0\xCD\0\xCE\0\u0418\0\u0130\0\u2111\0\xCC\0\u2111\0\u012A\0\u2148\0\u21D2\0\u222C\0\u222B\0\u22C2\0\u2063\0\u2062\0\u012E\0\u{1D540}\0\u0399\0\u2110\0\u0128\0\u0406\0\xCF\0\u0134\0\u0419\0\u{1D50D}\0\u{1D541}\0\u{1D4A5}\0\u0408\0\u0404\0\u0425\0\u040C\0\u039A\0\u0136\0\u041A\0\u{1D50E}\0\u{1D542}\0\u{1D4A6}\0\u0409\0<\0\u0139\0\u039B\0\u27EA\0\u2112\0\u219E\0\u013D\0\u013B\0\u041B\0\u27E8\0\u2190\0\u21E4\0\u21C6\0\u2308\0\u27E6\0\u2961\0\u21C3\0\u2959\0\u230A\0\u2194\0\u294E\0\u22A3\0\u21A4\0\u295A\0\u22B2\0\u29CF\0\u22B4\0\u2951\0\u2960\0\u21BF\0\u2958\0\u21BC\0\u2952\0\u21D0\0\u21D4\0\u22DA\0\u2266\0\u2276\0\u2AA1\0\u2A7D\0\u2272\0\u{1D50F}\0\u22D8\0\u21DA\0\u013F\0\u27F5\0\u27F7\0\u27F6\0\u27F8\0\u27FA\0\u27F9\0\u{1D543}\0\u2199\0\u2198\0\u2112\0\u21B0\0\u0141\0\u226A\0\u2905\0\u041C\0\u205F\0\u2133\0\u{1D510}\0\u2213\0\u{1D544}\0\u2133\0\u039C\0\u040A\0\u0143\0\u0147\0\u0145\0\u041D\0\u200B\0\u200B\0\u200B\0\u200B\0\u226B\0\u226A\0\n\0\u{1D511}\0\u2060\0\xA0\0\u2115\0\u2AEC\0\u2262\0\u226D\0\u2226\0\u2209\0\u2260\0\u2242\u0338\0\u2204\0\u226F\0\u2271\0\u2267\u0338\0\u226B\u0338\0\u2279\0\u2A7E\u0338\0\u2275\0\u224E\u0338\0\u224F\u0338\0\u22EA\0\u29CF\u0338\0\u22EC\0\u226E\0\u2270\0\u2278\0\u226A\u0338\0\u2A7D\u0338\0\u2274\0\u2AA2\u0338\0\u2AA1\u0338\0\u2280\0\u2AAF\u0338\0\u22E0\0\u220C\0\u22EB\0\u29D0\u0338\0\u22ED\0\u228F\u0338\0\u22E2\0\u2290\u0338\0\u22E3\0\u2282\u20D2\0\u2288\0\u2281\0\u2AB0\u0338\0\u22E1\0\u227F\u0338\0\u2283\u20D2\0\u2289\0\u2241\0\u2244\0\u2247\0\u2249\0\u2224\0\u{1D4A9}\0\xD1\0\u039D\0\u0152\0\xD3\0\xD4\0\u041E\0\u0150\0\u{1D512}\0\xD2\0\u014C\0\u03A9\0\u039F\0\u{1D546}\0\u201C\0\u2018\0\u2A54\0\u{1D4AA}\0\xD8\0\xD5\0\u2A37\0\xD6\0\u203E\0\u23DE\0\u23B4\0\u23DC\0\u2202\0\u041F\0\u{1D513}\0\u03A6\0\u03A0\0\xB1\0\u210C\0\u2119\0\u2ABB\0\u227A\0\u2AAF\0\u227C\0\u227E\0\u2033\0\u220F\0\u2237\0\u221D\0\u{1D4AB}\0\u03A8\0"\0\u{1D514}\0\u211A\0\u{1D4AC}\0\u2910\0\xAE\0\u0154\0\u27EB\0\u21A0\0\u2916\0\u0158\0\u0156\0\u0420\0\u211C\0\u220B\0\u21CB\0\u296F\0\u211C\0\u03A1\0\u27E9\0\u2192\0\u21E5\0\u21C4\0\u2309\0\u27E7\0\u295D\0\u21C2\0\u2955\0\u230B\0\u22A2\0\u21A6\0\u295B\0\u22B3\0\u29D0\0\u22B5\0\u294F\0\u295C\0\u21BE\0\u2954\0\u21C0\0\u2953\0\u21D2\0\u211D\0\u2970\0\u21DB\0\u211B\0\u21B1\0\u29F4\0\u0429\0\u0428\0\u042C\0\u015A\0\u2ABC\0\u0160\0\u015E\0\u015C\0\u0421\0\u{1D516}\0\u2193\0\u2190\0\u2192\0\u2191\0\u03A3\0\u2218\0\u{1D54A}\0\u221A\0\u25A1\0\u2293\0\u228F\0\u2291\0\u2290\0\u2292\0\u2294\0\u{1D4AE}\0\u22C6\0\u22D0\0\u22D0\0\u2286\0\u227B\0\u2AB0\0\u227D\0\u227F\0\u220B\0\u2211\0\u22D1\0\u2283\0\u2287\0\u22D1\0\xDE\0\u2122\0\u040B\0\u0426\0	\0\u03A4\0\u0164\0\u0162\0\u0422\0\u{1D517}\0\u2234\0\u0398\0\u205F\u200A\0\u2009\0\u223C\0\u2243\0\u2245\0\u2248\0\u{1D54B}\0\u20DB\0\u{1D4AF}\0\u0166\0\xDA\0\u219F\0\u2949\0\u040E\0\u016C\0\xDB\0\u0423\0\u0170\0\u{1D518}\0\xD9\0\u016A\0_\0\u23DF\0\u23B5\0\u23DD\0\u22C3\0\u228E\0\u0172\0\u{1D54C}\0\u2191\0\u2912\0\u21C5\0\u2195\0\u296E\0\u22A5\0\u21A5\0\u21D1\0\u21D5\0\u2196\0\u2197\0\u03D2\0\u03A5\0\u016E\0\u{1D4B0}\0\u0168\0\xDC\0\u22AB\0\u2AEB\0\u0412\0\u22A9\0\u2AE6\0\u22C1\0\u2016\0\u2016\0\u2223\0|\0\u2758\0\u2240\0\u200A\0\u{1D519}\0\u{1D54D}\0\u{1D4B1}\0\u22AA\0\u0174\0\u22C0\0\u{1D51A}\0\u{1D54E}\0\u{1D4B2}\0\u{1D51B}\0\u039E\0\u{1D54F}\0\u{1D4B3}\0\u042F\0\u0407\0\u042E\0\xDD\0\u0176\0\u042B\0\u{1D51C}\0\u{1D550}\0\u{1D4B4}\0\u0178\0\u0416\0\u0179\0\u017D\0\u0417\0\u017B\0\u200B\0\u0396\0\u2128\0\u2124\0\u{1D4B5}\0\xE1\0\u0103\0\u223E\0\u223E\u0333\0\u223F\0\xE2\0\xB4\0\u0430\0\xE6\0\u2061\0\u{1D51E}\0\xE0\0\u2135\0\u2135\0\u03B1\0\u0101\0\u2A3F\0&\0\u2227\0\u2A55\0\u2A5C\0\u2A58\0\u2A5A\0\u2220\0\u29A4\0\u2220\0\u2221\0\u29A8\0\u29A9\0\u29AA\0\u29AB\0\u29AC\0\u29AD\0\u29AE\0\u29AF\0\u221F\0\u22BE\0\u299D\0\u2222\0\xC5\0\u237C\0\u0105\0\u{1D552}\0\u2248\0\u2A70\0\u2A6F\0\u224A\0\u224B\0\'\0\u2248\0\u224A\0\xE5\0\u{1D4B6}\0*\0\u2248\0\u224D\0\xE3\0\xE4\0\u2233\0\u2A11\0\u2AED\0\u224C\0\u03F6\0\u2035\0\u223D\0\u22CD\0\u22BD\0\u2305\0\u2305\0\u23B5\0\u23B6\0\u224C\0\u0431\0\u201E\0\u2235\0\u2235\0\u29B0\0\u03F6\0\u212C\0\u03B2\0\u2136\0\u226C\0\u{1D51F}\0\u22C2\0\u25EF\0\u22C3\0\u2A00\0\u2A01\0\u2A02\0\u2A06\0\u2605\0\u25BD\0\u25B3\0\u2A04\0\u22C1\0\u22C0\0\u290D\0\u29EB\0\u25AA\0\u25B4\0\u25BE\0\u25C2\0\u25B8\0\u2423\0\u2592\0\u2591\0\u2593\0\u2588\0=\u20E5\0\u2261\u20E5\0\u2310\0\u{1D553}\0\u22A5\0\u22A5\0\u22C8\0\u2557\0\u2554\0\u2556\0\u2553\0\u2550\0\u2566\0\u2569\0\u2564\0\u2567\0\u255D\0\u255A\0\u255C\0\u2559\0\u2551\0\u256C\0\u2563\0\u2560\0\u256B\0\u2562\0\u255F\0\u29C9\0\u2555\0\u2552\0\u2510\0\u250C\0\u2500\0\u2565\0\u2568\0\u252C\0\u2534\0\u229F\0\u229E\0\u22A0\0\u255B\0\u2558\0\u2518\0\u2514\0\u2502\0\u256A\0\u2561\0\u255E\0\u253C\0\u2524\0\u251C\0\u2035\0\u02D8\0\xA6\0\u{1D4B7}\0\u204F\0\u223D\0\u22CD\0\\\0\u29C5\0\u27C8\0\u2022\0\u2022\0\u224E\0\u2AAE\0\u224F\0\u224F\0\u0107\0\u2229\0\u2A44\0\u2A49\0\u2A4B\0\u2A47\0\u2A40\0\u2229\uFE00\0\u2041\0\u02C7\0\u2A4D\0\u010D\0\xE7\0\u0109\0\u2A4C\0\u2A50\0\u010B\0\xB8\0\u29B2\0\xA2\0\xB7\0\u{1D520}\0\u0447\0\u2713\0\u2713\0\u03C7\0\u25CB\0\u29C3\0\u02C6\0\u2257\0\u21BA\0\u21BB\0\xAE\0\u24C8\0\u229B\0\u229A\0\u229D\0\u2257\0\u2A10\0\u2AEF\0\u29C2\0\u2663\0\u2663\0:\0\u2254\0\u2254\0,\0@\0\u2201\0\u2218\0\u2201\0\u2102\0\u2245\0\u2A6D\0\u222E\0\u{1D554}\0\u2210\0\xA9\0\u2117\0\u21B5\0\u2717\0\u{1D4B8}\0\u2ACF\0\u2AD1\0\u2AD0\0\u2AD2\0\u22EF\0\u2938\0\u2935\0\u22DE\0\u22DF\0\u21B6\0\u293D\0\u222A\0\u2A48\0\u2A46\0\u2A4A\0\u228D\0\u2A45\0\u222A\uFE00\0\u21B7\0\u293C\0\u22DE\0\u22DF\0\u22CE\0\u22CF\0\xA4\0\u21B6\0\u21B7\0\u22CE\0\u22CF\0\u2232\0\u2231\0\u232D\0\u21D3\0\u2965\0\u2020\0\u2138\0\u2193\0\u2010\0\u22A3\0\u290F\0\u02DD\0\u010F\0\u0434\0\u2146\0\u2021\0\u21CA\0\u2A77\0\xB0\0\u03B4\0\u29B1\0\u297F\0\u{1D521}\0\u21C3\0\u21C2\0\u22C4\0\u22C4\0\u2666\0\u2666\0\xA8\0\u03DD\0\u22F2\0\xF7\0\xF7\0\u22C7\0\u22C7\0\u0452\0\u231E\0\u230D\0$\0\u{1D555}\0\u02D9\0\u2250\0\u2251\0\u2238\0\u2214\0\u22A1\0\u2306\0\u2193\0\u21CA\0\u21C3\0\u21C2\0\u2910\0\u231F\0\u230C\0\u{1D4B9}\0\u0455\0\u29F6\0\u0111\0\u22F1\0\u25BF\0\u25BE\0\u21F5\0\u296F\0\u29A6\0\u045F\0\u27FF\0\u2A77\0\u2251\0\xE9\0\u2A6E\0\u011B\0\u2256\0\xEA\0\u2255\0\u044D\0\u0117\0\u2147\0\u2252\0\u{1D522}\0\u2A9A\0\xE8\0\u2A96\0\u2A98\0\u2A99\0\u23E7\0\u2113\0\u2A95\0\u2A97\0\u0113\0\u2205\0\u2205\0\u2205\0\u2004\0\u2005\0\u2003\0\u014B\0\u2002\0\u0119\0\u{1D556}\0\u22D5\0\u29E3\0\u2A71\0\u03B5\0\u03B5\0\u03F5\0\u2256\0\u2255\0\u2242\0\u2A96\0\u2A95\0=\0\u225F\0\u2261\0\u2A78\0\u29E5\0\u2253\0\u2971\0\u212F\0\u2250\0\u2242\0\u03B7\0\xF0\0\xEB\0\u20AC\0!\0\u2203\0\u2130\0\u2147\0\u2252\0\u0444\0\u2640\0\uFB03\0\uFB00\0\uFB04\0\u{1D523}\0\uFB01\0fj\0\u266D\0\uFB02\0\u25B1\0\u0192\0\u{1D557}\0\u2200\0\u22D4\0\u2AD9\0\u2A0D\0\xBD\0\u2153\0\xBC\0\u2155\0\u2159\0\u215B\0\u2154\0\u2156\0\xBE\0\u2157\0\u215C\0\u2158\0\u215A\0\u215D\0\u215E\0\u2044\0\u2322\0\u{1D4BB}\0\u2267\0\u2A8C\0\u01F5\0\u03B3\0\u03DD\0\u2A86\0\u011F\0\u011D\0\u0433\0\u0121\0\u2265\0\u22DB\0\u2265\0\u2267\0\u2A7E\0\u2A7E\0\u2AA9\0\u2A80\0\u2A82\0\u2A84\0\u22DB\uFE00\0\u2A94\0\u{1D524}\0\u226B\0\u22D9\0\u2137\0\u0453\0\u2277\0\u2A92\0\u2AA5\0\u2AA4\0\u2269\0\u2A8A\0\u2A8A\0\u2A88\0\u2A88\0\u2269\0\u22E7\0\u{1D558}\0`\0\u210A\0\u2273\0\u2A8E\0\u2A90\0>\0\u2AA7\0\u2A7A\0\u22D7\0\u2995\0\u2A7C\0\u2A86\0\u2978\0\u22D7\0\u22DB\0\u2A8C\0\u2277\0\u2273\0\u2269\uFE00\0\u2269\uFE00\0\u21D4\0\u200A\0\xBD\0\u210B\0\u044A\0\u2194\0\u2948\0\u21AD\0\u210F\0\u0125\0\u2665\0\u2665\0\u2026\0\u22B9\0\u{1D525}\0\u2925\0\u2926\0\u21FF\0\u223B\0\u21A9\0\u21AA\0\u{1D559}\0\u2015\0\u{1D4BD}\0\u210F\0\u0127\0\u2043\0\u2010\0\xED\0\u2063\0\xEE\0\u0438\0\u0435\0\xA1\0\u21D4\0\u{1D526}\0\xEC\0\u2148\0\u2A0C\0\u222D\0\u29DC\0\u2129\0\u0133\0\u012B\0\u2111\0\u2110\0\u2111\0\u0131\0\u22B7\0\u01B5\0\u2208\0\u2105\0\u221E\0\u29DD\0\u0131\0\u222B\0\u22BA\0\u2124\0\u22BA\0\u2A17\0\u2A3C\0\u0451\0\u012F\0\u{1D55A}\0\u03B9\0\u2A3C\0\xBF\0\u{1D4BE}\0\u2208\0\u22F9\0\u22F5\0\u22F4\0\u22F3\0\u2208\0\u2062\0\u0129\0\u0456\0\xEF\0\u0135\0\u0439\0\u{1D527}\0\u0237\0\u{1D55B}\0\u{1D4BF}\0\u0458\0\u0454\0\u03BA\0\u03F0\0\u0137\0\u043A\0\u{1D528}\0\u0138\0\u0445\0\u045C\0\u{1D55C}\0\u{1D4C0}\0\u21DA\0\u21D0\0\u291B\0\u290E\0\u2266\0\u2A8B\0\u2962\0\u013A\0\u29B4\0\u2112\0\u03BB\0\u27E8\0\u2991\0\u27E8\0\u2A85\0\xAB\0\u2190\0\u21E4\0\u291F\0\u291D\0\u21A9\0\u21AB\0\u2939\0\u2973\0\u21A2\0\u2AAB\0\u2919\0\u2AAD\0\u2AAD\uFE00\0\u290C\0\u2772\0{\0[\0\u298B\0\u298F\0\u298D\0\u013E\0\u013C\0\u2308\0{\0\u043B\0\u2936\0\u201C\0\u201E\0\u2967\0\u294B\0\u21B2\0\u2264\0\u2190\0\u21A2\0\u21BD\0\u21BC\0\u21C7\0\u2194\0\u21C6\0\u21CB\0\u21AD\0\u22CB\0\u22DA\0\u2264\0\u2266\0\u2A7D\0\u2A7D\0\u2AA8\0\u2A7F\0\u2A81\0\u2A83\0\u22DA\uFE00\0\u2A93\0\u2A85\0\u22D6\0\u22DA\0\u2A8B\0\u2276\0\u2272\0\u297C\0\u230A\0\u{1D529}\0\u2276\0\u2A91\0\u21BD\0\u21BC\0\u296A\0\u2584\0\u0459\0\u226A\0\u21C7\0\u231E\0\u296B\0\u25FA\0\u0140\0\u23B0\0\u23B0\0\u2268\0\u2A89\0\u2A89\0\u2A87\0\u2A87\0\u2268\0\u22E6\0\u27EC\0\u21FD\0\u27E6\0\u27F5\0\u27F7\0\u27FC\0\u27F6\0\u21AB\0\u21AC\0\u2985\0\u{1D55D}\0\u2A2D\0\u2A34\0\u2217\0_\0\u25CA\0\u25CA\0\u29EB\0(\0\u2993\0\u21C6\0\u231F\0\u21CB\0\u296D\0\u200E\0\u22BF\0\u2039\0\u{1D4C1}\0\u21B0\0\u2272\0\u2A8D\0\u2A8F\0[\0\u2018\0\u201A\0\u0142\0<\0\u2AA6\0\u2A79\0\u22D6\0\u22CB\0\u22C9\0\u2976\0\u2A7B\0\u2996\0\u25C3\0\u22B4\0\u25C2\0\u294A\0\u2966\0\u2268\uFE00\0\u2268\uFE00\0\u223A\0\xAF\0\u2642\0\u2720\0\u2720\0\u21A6\0\u21A6\0\u21A7\0\u21A4\0\u21A5\0\u25AE\0\u2A29\0\u043C\0\u2014\0\u2221\0\u{1D52A}\0\u2127\0\xB5\0\u2223\0*\0\u2AF0\0\xB7\0\u2212\0\u229F\0\u2238\0\u2A2A\0\u2ADB\0\u2026\0\u2213\0\u22A7\0\u{1D55E}\0\u2213\0\u{1D4C2}\0\u223E\0\u03BC\0\u22B8\0\u22B8\0\u22D9\u0338\0\u226B\u20D2\0\u226B\u0338\0\u21CD\0\u21CE\0\u22D8\u0338\0\u226A\u20D2\0\u226A\u0338\0\u21CF\0\u22AF\0\u22AE\0\u2207\0\u0144\0\u2220\u20D2\0\u2249\0\u2A70\u0338\0\u224B\u0338\0\u0149\0\u2249\0\u266E\0\u266E\0\u2115\0\xA0\0\u224E\u0338\0\u224F\u0338\0\u2A43\0\u0148\0\u0146\0\u2247\0\u2A6D\u0338\0\u2A42\0\u043D\0\u2013\0\u2260\0\u21D7\0\u2924\0\u2197\0\u2197\0\u2250\u0338\0\u2262\0\u2928\0\u2242\u0338\0\u2204\0\u2204\0\u{1D52B}\0\u2267\u0338\0\u2271\0\u2271\0\u2267\u0338\0\u2A7E\u0338\0\u2A7E\u0338\0\u2275\0\u226F\0\u226F\0\u21CE\0\u21AE\0\u2AF2\0\u220B\0\u22FC\0\u22FA\0\u220B\0\u045A\0\u21CD\0\u2266\u0338\0\u219A\0\u2025\0\u2270\0\u219A\0\u21AE\0\u2270\0\u2266\u0338\0\u2A7D\u0338\0\u2A7D\u0338\0\u226E\0\u2274\0\u226E\0\u22EA\0\u22EC\0\u2224\0\u{1D55F}\0\xAC\0\u2209\0\u22F9\u0338\0\u22F5\u0338\0\u2209\0\u22F7\0\u22F6\0\u220C\0\u220C\0\u22FE\0\u22FD\0\u2226\0\u2226\0\u2AFD\u20E5\0\u2202\u0338\0\u2A14\0\u2280\0\u22E0\0\u2AAF\u0338\0\u2280\0\u2AAF\u0338\0\u21CF\0\u219B\0\u2933\u0338\0\u219D\u0338\0\u219B\0\u22EB\0\u22ED\0\u2281\0\u22E1\0\u2AB0\u0338\0\u{1D4C3}\0\u2224\0\u2226\0\u2241\0\u2244\0\u2244\0\u2224\0\u2226\0\u22E2\0\u22E3\0\u2284\0\u2AC5\u0338\0\u2288\0\u2282\u20D2\0\u2288\0\u2AC5\u0338\0\u2281\0\u2AB0\u0338\0\u2285\0\u2AC6\u0338\0\u2289\0\u2283\u20D2\0\u2289\0\u2AC6\u0338\0\u2279\0\xF1\0\u2278\0\u22EA\0\u22EC\0\u22EB\0\u22ED\0\u03BD\0#\0\u2116\0\u2007\0\u22AD\0\u2904\0\u224D\u20D2\0\u22AC\0\u2265\u20D2\0>\u20D2\0\u29DE\0\u2902\0\u2264\u20D2\0<\u20D2\0\u22B4\u20D2\0\u2903\0\u22B5\u20D2\0\u223C\u20D2\0\u21D6\0\u2923\0\u2196\0\u2196\0\u2927\0\u24C8\0\xF3\0\u229B\0\u229A\0\xF4\0\u043E\0\u229D\0\u0151\0\u2A38\0\u2299\0\u29BC\0\u0153\0\u29BF\0\u{1D52C}\0\u02DB\0\xF2\0\u29C1\0\u29B5\0\u03A9\0\u222E\0\u21BA\0\u29BE\0\u29BB\0\u203E\0\u29C0\0\u014D\0\u03C9\0\u03BF\0\u29B6\0\u2296\0\u{1D560}\0\u29B7\0\u29B9\0\u2295\0\u2228\0\u21BB\0\u2A5D\0\u2134\0\u2134\0\xAA\0\xBA\0\u22B6\0\u2A56\0\u2A57\0\u2A5B\0\u2134\0\xF8\0\u2298\0\xF5\0\u2297\0\u2A36\0\xF6\0\u233D\0\u2225\0\xB6\0\u2225\0\u2AF3\0\u2AFD\0\u2202\0\u043F\0%\0.\0\u2030\0\u22A5\0\u2031\0\u{1D52D}\0\u03C6\0\u03D5\0\u2133\0\u260E\0\u03C0\0\u22D4\0\u03D6\0\u210F\0\u210E\0\u210F\0+\0\u2A23\0\u229E\0\u2A22\0\u2214\0\u2A25\0\u2A72\0\xB1\0\u2A26\0\u2A27\0\xB1\0\u2A15\0\u{1D561}\0\xA3\0\u227A\0\u2AB3\0\u2AB7\0\u227C\0\u2AAF\0\u227A\0\u2AB7\0\u227C\0\u2AAF\0\u2AB9\0\u2AB5\0\u22E8\0\u227E\0\u2032\0\u2119\0\u2AB5\0\u2AB9\0\u22E8\0\u220F\0\u232E\0\u2312\0\u2313\0\u221D\0\u221D\0\u227E\0\u22B0\0\u{1D4C5}\0\u03C8\0\u2008\0\u{1D52E}\0\u2A0C\0\u{1D562}\0\u2057\0\u{1D4C6}\0\u210D\0\u2A16\0?\0\u225F\0"\0\u21DB\0\u21D2\0\u291C\0\u290F\0\u2964\0\u223D\u0331\0\u0155\0\u221A\0\u29B3\0\u27E9\0\u2992\0\u29A5\0\u27E9\0\xBB\0\u2192\0\u2975\0\u21E5\0\u2920\0\u2933\0\u291E\0\u21AA\0\u21AC\0\u2945\0\u2974\0\u21A3\0\u219D\0\u291A\0\u2236\0\u211A\0\u290D\0\u2773\0}\0]\0\u298C\0\u298E\0\u2990\0\u0159\0\u0157\0\u2309\0}\0\u0440\0\u2937\0\u2969\0\u201D\0\u201D\0\u21B3\0\u211C\0\u211B\0\u211C\0\u211D\0\u25AD\0\xAE\0\u297D\0\u230B\0\u{1D52F}\0\u21C1\0\u21C0\0\u296C\0\u03C1\0\u03F1\0\u2192\0\u21A3\0\u21C1\0\u21C0\0\u21C4\0\u21CC\0\u21C9\0\u219D\0\u22CC\0\u02DA\0\u2253\0\u21C4\0\u21CC\0\u200F\0\u23B1\0\u23B1\0\u2AEE\0\u27ED\0\u21FE\0\u27E7\0\u2986\0\u{1D563}\0\u2A2E\0\u2A35\0)\0\u2994\0\u2A12\0\u21C9\0\u203A\0\u{1D4C7}\0\u21B1\0]\0\u2019\0\u2019\0\u22CC\0\u22CA\0\u25B9\0\u22B5\0\u25B8\0\u29CE\0\u2968\0\u211E\0\u015B\0\u201A\0\u227B\0\u2AB4\0\u2AB8\0\u0161\0\u227D\0\u2AB0\0\u015F\0\u015D\0\u2AB6\0\u2ABA\0\u22E9\0\u2A13\0\u227F\0\u0441\0\u22C5\0\u22A1\0\u2A66\0\u21D8\0\u2925\0\u2198\0\u2198\0\xA7\0;\0\u2929\0\u2216\0\u2216\0\u2736\0\u{1D530}\0\u2322\0\u266F\0\u0449\0\u0448\0\u2223\0\u2225\0\xAD\0\u03C3\0\u03C2\0\u03C2\0\u223C\0\u2A6A\0\u2243\0\u2243\0\u2A9E\0\u2AA0\0\u2A9D\0\u2A9F\0\u2246\0\u2A24\0\u2972\0\u2190\0\u2216\0\u2A33\0\u29E4\0\u2223\0\u2323\0\u2AAA\0\u2AAC\0\u2AAC\uFE00\0\u044C\0/\0\u29C4\0\u233F\0\u{1D564}\0\u2660\0\u2660\0\u2225\0\u2293\0\u2293\uFE00\0\u2294\0\u2294\uFE00\0\u228F\0\u2291\0\u228F\0\u2291\0\u2290\0\u2292\0\u2290\0\u2292\0\u25A1\0\u25A1\0\u25AA\0\u25AA\0\u2192\0\u{1D4C8}\0\u2216\0\u2323\0\u22C6\0\u2606\0\u2605\0\u03F5\0\u03D5\0\xAF\0\u2282\0\u2AC5\0\u2ABD\0\u2286\0\u2AC3\0\u2AC1\0\u2ACB\0\u228A\0\u2ABF\0\u2979\0\u2282\0\u2286\0\u2AC5\0\u228A\0\u2ACB\0\u2AC7\0\u2AD5\0\u2AD3\0\u227B\0\u2AB8\0\u227D\0\u2AB0\0\u2ABA\0\u2AB6\0\u22E9\0\u227F\0\u2211\0\u266A\0\xB9\0\xB2\0\xB3\0\u2283\0\u2AC6\0\u2ABE\0\u2AD8\0\u2287\0\u2AC4\0\u27C9\0\u2AD7\0\u297B\0\u2AC2\0\u2ACC\0\u228B\0\u2AC0\0\u2283\0\u2287\0\u2AC6\0\u228B\0\u2ACC\0\u2AC8\0\u2AD4\0\u2AD6\0\u21D9\0\u2926\0\u2199\0\u2199\0\u292A\0\xDF\0\u2316\0\u03C4\0\u23B4\0\u0165\0\u0163\0\u0442\0\u20DB\0\u2315\0\u{1D531}\0\u2234\0\u2234\0\u03B8\0\u03D1\0\u03D1\0\u2248\0\u223C\0\u2009\0\u2248\0\u223C\0\xFE\0\u02DC\0\xD7\0\u22A0\0\u2A31\0\u2A30\0\u222D\0\u2928\0\u22A4\0\u2336\0\u2AF1\0\u{1D565}\0\u2ADA\0\u2929\0\u2034\0\u2122\0\u25B5\0\u25BF\0\u25C3\0\u22B4\0\u225C\0\u25B9\0\u22B5\0\u25EC\0\u225C\0\u2A3A\0\u2A39\0\u29CD\0\u2A3B\0\u23E2\0\u{1D4C9}\0\u0446\0\u045B\0\u0167\0\u226C\0\u219E\0\u21A0\0\u21D1\0\u2963\0\xFA\0\u2191\0\u045E\0\u016D\0\xFB\0\u0443\0\u21C5\0\u0171\0\u296E\0\u297E\0\u{1D532}\0\xF9\0\u21BF\0\u21BE\0\u2580\0\u231C\0\u231C\0\u230F\0\u25F8\0\u016B\0\xA8\0\u0173\0\u{1D566}\0\u2191\0\u2195\0\u21BF\0\u21BE\0\u228E\0\u03C5\0\u03D2\0\u03C5\0\u21C8\0\u231D\0\u231D\0\u230E\0\u016F\0\u25F9\0\u{1D4CA}\0\u22F0\0\u0169\0\u25B5\0\u25B4\0\u21C8\0\xFC\0\u29A7\0\u21D5\0\u2AE8\0\u2AE9\0\u22A8\0\u299C\0\u03F5\0\u03F0\0\u2205\0\u03D5\0\u03D6\0\u221D\0\u2195\0\u03F1\0\u03C2\0\u228A\uFE00\0\u2ACB\uFE00\0\u228B\uFE00\0\u2ACC\uFE00\0\u03D1\0\u22B2\0\u22B3\0\u0432\0\u22A2\0\u2228\0\u22BB\0\u225A\0\u22EE\0|\0|\0\u{1D533}\0\u22B2\0\u2282\u20D2\0\u2283\u20D2\0\u{1D567}\0\u221D\0\u22B3\0\u{1D4CB}\0\u2ACB\uFE00\0\u228A\uFE00\0\u2ACC\uFE00\0\u228B\uFE00\0\u299A\0\u0175\0\u2A5F\0\u2227\0\u2259\0\u2118\0\u{1D534}\0\u{1D568}\0\u2118\0\u2240\0\u2240\0\u{1D4CC}\0\u22C2\0\u25EF\0\u22C3\0\u25BD\0\u{1D535}\0\u27FA\0\u27F7\0\u03BE\0\u27F8\0\u27F5\0\u27FC\0\u22FB\0\u2A00\0\u{1D569}\0\u2A01\0\u2A02\0\u27F9\0\u27F6\0\u{1D4CD}\0\u2A06\0\u2A04\0\u25B3\0\u22C1\0\u22C0\0\xFD\0\u044F\0\u0177\0\u044B\0\xA5\0\u{1D536}\0\u0457\0\u{1D56A}\0\u{1D4CE}\0\u044E\0\xFF\0\u017A\0\u017E\0\u0437\0\u017C\0\u2128\0\u03B6\0\u{1D537}\0\u0436\0\u21DD\0\u{1D56B}\0\u{1D4CF}\0\u200D\0\u200C';
+  }
+});
+
+// node_modules/@textlint/markdown-to-ast/lib/src/parser.js
+function buildLines() {
+  LN = 0;
+  let n4 = 0;
+  let lines = LS;
+  lines[n4++] = 0;
+  if (!hasCR) {
+    let i = src.indexOf("\n");
+    while (i !== -1) {
+      if (n4 + 2 > lines.length) {
+        lines = growInt32(lines);
+      }
+      lines[n4++] = i + 1;
+      i = src.indexOf("\n", i + 1);
+    }
+  } else {
+    for (let i = 0; i < len; i++) {
+      const c8 = src.charCodeAt(i);
+      if (c8 === 10 || c8 === 13) {
+        if (c8 === 13 && src.charCodeAt(i + 1) === 10) {
+          i++;
+        }
+        if (n4 + 2 > lines.length) {
+          lines = growInt32(lines);
+        }
+        lines[n4++] = i + 1;
       }
     }
-    function _defineProperties(target, props) {
-      for (var i = 0; i < props.length; i++) {
-        var descriptor = props[i];
-        descriptor.enumerable = descriptor.enumerable || false;
-        descriptor.configurable = true;
-        if ("value" in descriptor) descriptor.writable = true;
-        Object.defineProperty(target, descriptor.key, descriptor);
+  }
+  lines[n4] = 2147483647;
+  LS = lines;
+  LN = n4;
+}
+function growInt32(a4) {
+  const b8 = new Int32Array(a4.length * 2);
+  b8.set(a4);
+  return b8;
+}
+function lineEndOf(li13) {
+  if (li13 + 1 >= LN) {
+    return len;
+  }
+  const e4 = LS[li13 + 1];
+  if (src.charCodeAt(e4 - 1) === 10) {
+    return hasCR && src.charCodeAt(e4 - 2) === 13 ? e4 - 2 : e4 - 1;
+  }
+  return e4 - 1;
+}
+function lineOf(offset) {
+  let li13 = lineCache;
+  if (offset >= LS[li13]) {
+    if (offset < LS[li13 + 1]) {
+      return li13;
+    }
+    if (offset < LS[li13 + 2]) {
+      return lineCache = li13 + 1;
+    }
+  }
+  let lo7 = 0;
+  let hi13 = LN - 1;
+  while (lo7 < hi13) {
+    const mid = lo7 + hi13 + 1 >> 1;
+    if (LS[mid] <= offset) {
+      lo7 = mid;
+    } else {
+      hi13 = mid - 1;
+    }
+  }
+  li13 = lo7;
+  return lineCache = li13;
+}
+function eolAt(i) {
+  const c8 = src.charCodeAt(i);
+  if (c8 === 10) {
+    return "\n";
+  }
+  if (c8 === 13) {
+    return src.charCodeAt(i + 1) === 10 ? "\r\n" : "\r";
+  }
+  return "";
+}
+function growPool() {
+  cap *= 2;
+  const k10 = new Uint8Array(cap);
+  k10.set(nKind);
+  nKind = k10;
+  const grow = (a4) => {
+    const b8 = new Int32Array(cap);
+    b8.set(a4);
+    return b8;
+  };
+  nStart = grow(nStart);
+  nEnd = grow(nEnd);
+  nParent = grow(nParent);
+  nFirst = grow(nFirst);
+  nLast = grow(nLast);
+  nNext = grow(nNext);
+  nPrev = grow(nPrev);
+  nA = grow(nA);
+  nB2 = grow(nB2);
+  nC = grow(nC);
+  nD3 = grow(nD3);
+}
+function newNode(kind, start, end) {
+  const i = nCount++;
+  if (i >= cap) {
+    growPool();
+  }
+  nKind[i] = kind;
+  nStart[i] = start;
+  nEnd[i] = end;
+  nParent[i] = -1;
+  nFirst[i] = -1;
+  nLast[i] = -1;
+  nNext[i] = -1;
+  nPrev[i] = -1;
+  nA[i] = -1;
+  nB2[i] = -1;
+  nC[i] = -1;
+  nD3[i] = -1;
+  return i;
+}
+function append(parent, child) {
+  const last = nLast[parent];
+  nParent[child] = parent;
+  nPrev[child] = last;
+  nNext[child] = -1;
+  if (last === -1) {
+    nFirst[parent] = child;
+  } else {
+    nNext[last] = child;
+  }
+  nLast[parent] = child;
+}
+function insertBefore(ref, child) {
+  const parent = nParent[ref];
+  const prev = nPrev[ref];
+  nParent[child] = parent;
+  nPrev[child] = prev;
+  nNext[child] = ref;
+  nPrev[ref] = child;
+  if (prev === -1) {
+    nFirst[parent] = child;
+  } else {
+    nNext[prev] = child;
+  }
+}
+function insertAfter(ref, child) {
+  const parent = nParent[ref];
+  const next = nNext[ref];
+  nParent[child] = parent;
+  nPrev[child] = ref;
+  nNext[child] = next;
+  nNext[ref] = child;
+  if (next === -1) {
+    nLast[parent] = child;
+  } else {
+    nPrev[next] = child;
+  }
+}
+function unlink(node) {
+  const parent = nParent[node];
+  const prev = nPrev[node];
+  const next = nNext[node];
+  if (prev === -1) {
+    nFirst[parent] = next;
+  } else {
+    nNext[prev] = next;
+  }
+  if (next === -1) {
+    nLast[parent] = prev;
+  } else {
+    nPrev[next] = prev;
+  }
+  nParent[node] = -1;
+  nPrev[node] = -1;
+  nNext[node] = -1;
+  nKind[node] = Dead;
+}
+function moveBetween(from, to8, target) {
+  const first = nNext[from];
+  if (first === to8) {
+    return;
+  }
+  const last = to8 === -1 ? nLast[nParent[from]] : nPrev[to8];
+  nNext[from] = to8;
+  if (to8 === -1) {
+    nLast[nParent[from]] = from;
+  } else {
+    nPrev[to8] = from;
+  }
+  nPrev[first] = -1;
+  nNext[last] = -1;
+  nFirst[target] = first;
+  nLast[target] = last;
+  for (let c8 = first; c8 !== -1; c8 = nNext[c8]) {
+    nParent[c8] = target;
+  }
+}
+function heightBetween(from, to8) {
+  let height = 0;
+  for (let c8 = nNext[from]; c8 !== to8 && c8 !== -1; c8 = nNext[c8]) {
+    const kind = nKind[c8];
+    if ((kind >= Emphasis && kind <= Delete || kind === Link || kind === LinkReference || kind === Footnote) && nD3[c8] > height) {
+      height = nD3[c8];
+    }
+  }
+  return height;
+}
+function addSide(value) {
+  side.push(value);
+  return side.length - 1;
+}
+function pushSeg(s, e4, lead) {
+  if (segN >= segCap) {
+    segCap *= 2;
+    const grow = (a4) => {
+      const b8 = new Int32Array(segCap);
+      b8.set(a4);
+      return b8;
+    };
+    segS = grow(segS);
+    segE = grow(segE);
+    segL = grow(segL);
+  }
+  segS[segN] = s;
+  segE[segN] = e4;
+  segL[segN] = lead;
+  segN++;
+}
+function classify(c8) {
+  if (c8 < 0) {
+    return 1;
+  }
+  if (c8 < 128) {
+    if (c8 === 32 || c8 >= 9 && c8 <= 13) {
+      return 1;
+    }
+    return ASCII_PUNCT[c8] ? 2 : 0;
+  }
+  let k10 = NON_ASCII_CLASS[c8];
+  if (k10 === 0) {
+    const s = String.fromCharCode(c8);
+    k10 = UNICODE_WHITESPACE.test(s) ? 2 : UNICODE_PUNCTUATION.test(s) ? 3 : 1;
+    NON_ASCII_CLASS[c8] = k10;
+  }
+  return k10 - 1;
+}
+function classifyCodePoint(cp2) {
+  if (cp2 <= 65535) {
+    return classify(cp2);
+  }
+  return UNICODE_PUNCTUATION.test(String.fromCodePoint(cp2)) ? 2 : 0;
+}
+function scanCjkFlank(p7, q10, s02, e4, checkCjk) {
+  let prev = -1;
+  let i = p7;
+  if (i > s02) {
+    prev = buf.charCodeAt(i - 1);
+    i--;
+    if (prev >= 56320 && prev <= 57343 && i > s02) {
+      const hi13 = buf.charCodeAt(i - 1);
+      if (hi13 >= 55296 && hi13 <= 56319) {
+        prev = (hi13 - 55296) * 1024 + (prev - 56320) + 65536;
+        i--;
       }
     }
-    function _create_class(Constructor, protoProps, staticProps) {
-      if (protoProps) _defineProperties(Constructor.prototype, protoProps);
-      if (staticProps) _defineProperties(Constructor, staticProps);
-      return Constructor;
+  }
+  let prevSequenceIsCjk = false;
+  if (prev >= 65024 && prev <= 65038) {
+    let base2 = -1;
+    if (i > s02) {
+      base2 = buf.charCodeAt(i - 1);
+      if (base2 >= 56320 && base2 <= 57343 && i - 1 > s02) {
+        const hi13 = buf.charCodeAt(i - 2);
+        if (hi13 >= 55296 && hi13 <= 56319) {
+          base2 = (hi13 - 55296) * 1024 + (base2 - 56320) + 65536;
+        }
+      }
     }
-    function _instanceof(left, right) {
-      if (right != null && typeof Symbol !== "undefined" && right[Symbol.hasInstance]) {
-        return !!right[Symbol.hasInstance](left);
+    if (classifyCodePoint(base2) !== 1 && !(base2 >= 917760 && base2 <= 917999)) {
+      prevSequenceIsCjk = prev === 65025 && (base2 === 8216 || base2 === 8217 || base2 === 8220 || base2 === 8221);
+      prev = base2;
+    }
+  }
+  let next = -1;
+  if (q10 < e4) {
+    next = buf.charCodeAt(q10);
+    if (next >= 55296 && next <= 56319 && q10 + 1 < e4) {
+      const lo7 = buf.charCodeAt(q10 + 1);
+      if (lo7 >= 56320 && lo7 <= 57343) {
+        next = (next - 55296) * 1024 + (lo7 - 56320) + 65536;
+      }
+    }
+  }
+  cjkBefore = classifyCodePoint(prev);
+  cjkAfter = classifyCodePoint(next);
+  cjkEither = checkCjk && cjkBefore !== 1 && cjkAfter !== 1 && (prevSequenceIsCjk || isCjkCodePoint(prev) || prev >= 917760 && prev <= 917999 || isCjkCodePoint(next));
+}
+function isAlnum(c8) {
+  return c8 >= 48 && c8 <= 57 || c8 >= 65 && c8 <= 90 || c8 >= 97 && c8 <= 122;
+}
+function isAlpha2(c8) {
+  return c8 >= 65 && c8 <= 90 || c8 >= 97 && c8 <= 122;
+}
+function isAtext(c8) {
+  return isAlnum(c8) || c8 === 43 || c8 === 45 || c8 === 46 || c8 === 95;
+}
+function normalizeIdentifier2(value) {
+  return value.replace(/[\t\n\r ]+/g, " ").replace(/^ | $/g, "").toLowerCase().toUpperCase();
+}
+function findNns() {
+  let i = off;
+  let c8 = col;
+  while (i < lineEnd2) {
+    const ch3 = src.charCodeAt(i);
+    if (ch3 === 32) {
+      i++;
+      c8++;
+    } else if (ch3 === 9) {
+      i++;
+      c8 += 4 - c8 % 4;
+    } else {
+      break;
+    }
+  }
+  blank = i >= lineEnd2;
+  nns = i;
+  nnsCol = c8;
+  indent4 = c8 - col;
+}
+function advanceOffset(count, columns) {
+  while (count > 0 && off < lineEnd2) {
+    if (src.charCodeAt(off) === 9) {
+      const toTab = 4 - col % 4;
+      if (columns) {
+        ptab = toTab > count;
+        const adv = toTab > count ? count : toTab;
+        col += adv;
+        if (!ptab) {
+          off++;
+        }
+        count -= adv;
       } else {
-        return left instanceof right;
+        ptab = false;
+        col += toTab;
+        off++;
+        count--;
       }
+    } else {
+      ptab = false;
+      off++;
+      col++;
+      count--;
     }
-    function _iterable_to_array_limit(arr, i) {
-      var _i12 = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
-      if (_i12 == null) return;
-      var _arr = [];
-      var _n10 = true;
-      var _d3 = false;
-      var _s10, _e13;
-      try {
-        for (_i12 = _i12.call(arr); !(_n10 = (_s10 = _i12.next()).done); _n10 = true) {
-          _arr.push(_s10.value);
-          if (i && _arr.length === i) break;
-        }
-      } catch (err) {
-        _d3 = true;
-        _e13 = err;
-      } finally {
-        try {
-          if (!_n10 && _i12["return"] != null) _i12["return"]();
-        } finally {
-          if (_d3) throw _e13;
-        }
-      }
-      return _arr;
+  }
+}
+function advanceNns() {
+  off = nns;
+  col = nnsCol;
+  ptab = false;
+}
+function isBlankRange(s, e4) {
+  for (let i = s; i < e4; i++) {
+    const c8 = src.charCodeAt(i);
+    if (c8 !== 32 && c8 !== 9) {
+      return false;
     }
-    function _non_iterable_rest() {
-      throw new TypeError("Invalid attempt to destructure non-iterable instance.\\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+  }
+  return true;
+}
+function pushContainer(node, itemIndent) {
+  append(cNode[depth], node);
+  depth++;
+  cNode[depth] = node;
+  cIndent[depth] = itemIndent;
+}
+function containerEnd(node) {
+  const last = nLast[node];
+  const min = last !== -1 ? nEnd[last] : nStart[node];
+  let i = closePos;
+  while (i > min) {
+    const c8 = src.charCodeAt(i - 1);
+    if (c8 !== 32 && c8 !== 9 && c8 !== 10 && c8 !== 13) {
+      break;
     }
-    function _sliced_to_array(arr, i) {
-      return _array_with_holes(arr) || _iterable_to_array_limit(arr, i) || _unsupported_iterable_to_array(arr, i) || _non_iterable_rest();
+    i--;
+  }
+  for (let j10 = i; j10 < closePos; j10++) {
+    const c8 = src.charCodeAt(j10);
+    if (c8 === 10 || c8 === 13) {
+      return j10;
     }
-    function _type_of(obj) {
-      "@swc/helpers - typeof";
-      return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj;
-    }
-    function _unsupported_iterable_to_array(o4, minLen) {
-      if (!o4) return;
-      if (typeof o4 === "string") return _array_like_to_array(o4, minLen);
-      var n4 = Object.prototype.toString.call(o4).slice(8, -1);
-      if (n4 === "Object" && o4.constructor) n4 = o4.constructor.name;
-      if (n4 === "Map" || n4 === "Set") return Array.from(n4);
-      if (n4 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n4)) return _array_like_to_array(o4, minLen);
-    }
-    var __defProp5 = Object.defineProperty;
-    var __getOwnPropDesc3 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames3 = Object.getOwnPropertyNames;
-    var __hasOwnProp3 = Object.prototype.hasOwnProperty;
-    var __typeError = function(msg) {
-      throw TypeError(msg);
-    };
-    var __export4 = function(target, all) {
-      for (var name in all) __defProp5(target, name, {
-        get: all[name],
-        enumerable: true
-      });
-    };
-    var __copyProps3 = function(to8, from, except, desc) {
-      if (from && (typeof from === "undefined" ? "undefined" : _type_of(from)) === "object" || typeof from === "function") {
-        var _iteratorNormalCompletion = true, _didIteratorError = false, _iteratorError = void 0;
-        try {
-          var _loop = function() {
-            var key3 = _step.value;
-            if (!__hasOwnProp3.call(to8, key3) && key3 !== except) __defProp5(to8, key3, {
-              get: function() {
-                return from[key3];
-              },
-              enumerable: !(desc = __getOwnPropDesc3(from, key3)) || desc.enumerable
-            });
-          };
-          for (var _iterator = __getOwnPropNames3(from)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) _loop();
-        } catch (err) {
-          _didIteratorError = true;
-          _iteratorError = err;
-        } finally {
-          try {
-            if (!_iteratorNormalCompletion && _iterator.return != null) {
-              _iterator.return();
-            }
-          } finally {
-            if (_didIteratorError) {
-              throw _iteratorError;
-            }
-          }
+  }
+  return closePos < min ? min : closePos;
+}
+function popContainer() {
+  const node = cNode[depth];
+  const kind = nKind[node];
+  const last = nLast[node];
+  if (kind === BlockQuote) {
+    nEnd[node] = containerEnd(node);
+  } else if (kind === ListItem) {
+    if (last !== -1) {
+      nEnd[node] = nEnd[last];
+      let spread = 0;
+      for (let c8 = nFirst[node]; c8 !== -1 && nNext[c8] !== -1; c8 = nNext[c8]) {
+        if (lineOf(nStart[nNext[c8]]) - lineOf(nEnd[c8]) > 1) {
+          spread = 1;
+          break;
         }
       }
-      return to8;
-    };
-    var __toCommonJS2 = function(mod) {
-      return __copyProps3(__defProp5({}, "__esModule", {
-        value: true
-      }), mod);
-    };
-    var __accessCheck = function(obj, member, msg) {
-      return member.has(obj) || __typeError("Cannot " + msg);
-    };
-    var __privateGet = function(obj, member, getter) {
-      return __accessCheck(obj, member, "read from private field"), getter ? getter.call(obj) : member.get(obj);
-    };
-    var __privateAdd = function(obj, member, value) {
-      return member.has(obj) ? __typeError("Cannot add the same private member more than once") : _instanceof(member, WeakSet) ? member.add(obj) : member.set(obj, value);
-    };
-    var __privateSet = function(obj, member, value, setter) {
-      return __accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value;
-    };
-    var legacy_exports = {};
-    __export4(legacy_exports, {
-      default: function() {
-        return src_default;
-      }
-    });
-    module.exports = __toCommonJS2(legacy_exports);
-    var to_string = function(obj) {
-      return Object.prototype.toString.call(obj);
-    };
-    var is_typed_array = function(value) {
-      return ArrayBuffer.isView(value) && !_instanceof(value, DataView);
-    };
-    var is_date = function(obj) {
-      return to_string(obj) === "[object Date]";
-    };
-    var is_regexp = function(obj) {
-      return to_string(obj) === "[object RegExp]";
-    };
-    var is_error = function(obj) {
-      return to_string(obj) === "[object Error]";
-    };
-    var is_boolean = function(obj) {
-      return to_string(obj) === "[object Boolean]";
-    };
-    var is_number = function(obj) {
-      return to_string(obj) === "[object Number]";
-    };
-    var is_string = function(obj) {
-      return to_string(obj) === "[object String]";
-    };
-    var is_array = Array.isArray;
-    var gopd = Object.getOwnPropertyDescriptor;
-    var is_property_enumerable = Object.prototype.propertyIsEnumerable;
-    var get_own_property_symbols = Object.getOwnPropertySymbols;
-    var has_own_property = Object.prototype.hasOwnProperty;
-    function own_enumerable_keys(obj) {
-      var res = Object.keys(obj);
-      var symbols = get_own_property_symbols(obj);
-      for (var i = 0; i < symbols.length; i++) {
-        if (is_property_enumerable.call(obj, symbols[i])) {
-          res.push(symbols[i]);
-        }
-      }
-      return res;
+      nB2[node] = spread;
     }
-    function is_writable(object, key3) {
-      var _gopd;
-      return !((_gopd = gopd(object, key3)) === null || _gopd === void 0 ? void 0 : _gopd.writable);
+  } else if (kind === List) {
+    const end = containerEnd(node);
+    nEnd[node] = end;
+    let spread = lineOf(end) - lineOf(nEnd[last]) > 1 ? 1 : 0;
+    for (let c8 = nFirst[node]; spread === 0 && c8 !== -1 && nNext[c8] !== -1; c8 = nNext[c8]) {
+      if (lineOf(nStart[nNext[c8]]) - lineOf(nEnd[c8]) > 1) {
+        spread = 1;
+      }
     }
-    function copy(src, options7) {
-      if ((typeof src === "undefined" ? "undefined" : _type_of(src)) === "object" && src !== null) {
-        var dst;
-        if (is_array(src)) {
-          dst = [];
-        } else if (is_date(src)) {
-          dst = new Date(src.getTime ? src.getTime() : src);
-        } else if (is_regexp(src)) {
-          dst = new RegExp(src);
-        } else if (is_error(src)) {
-          dst = {
-            message: src.message
-          };
-        } else if (is_boolean(src) || is_number(src) || is_string(src)) {
-          dst = Object(src);
-        } else if (is_typed_array(src)) {
-          return src.slice();
+    nD3[node] = spread;
+  } else if (kind === FootnoteDefinition) {
+    nEnd[node] = containerEnd(node);
+  }
+  depth--;
+}
+function joinSegs(s02, s13) {
+  if (s13 <= s02) {
+    return "";
+  }
+  if (leafContig) {
+    return src.slice(segS[s02], segE[s13 - 1]);
+  }
+  let value = "";
+  for (let k10 = s02; k10 < s13; k10++) {
+    if (k10 > s02) {
+      value += eolAt(segE[k10 - 1]);
+    }
+    if (segL[k10] > 0) {
+      value += " ".repeat(segL[k10]);
+    }
+    value += src.slice(segS[k10], segE[k10]);
+  }
+  return value;
+}
+function addLeafLine() {
+  if (ptab) {
+    pushSeg(off + 1, lineEnd2, 4 - col % 4);
+    leafContig = false;
+  } else {
+    if (off !== lineStart && segN > leafSeg0) {
+      leafContig = false;
+    }
+    pushSeg(off, lineEnd2, 0);
+  }
+}
+function stripOneEol(value) {
+  const n4 = value.length;
+  if (n4 === 0) {
+    return value;
+  }
+  const c8 = value.charCodeAt(n4 - 1);
+  if (c8 === 10) {
+    return value.slice(0, n4 > 1 && value.charCodeAt(n4 - 2) === 13 ? n4 - 2 : n4 - 1);
+  }
+  if (c8 === 13) {
+    return value.slice(0, n4 - 1);
+  }
+  return value;
+}
+function closeLeaf(mode) {
+  const node = leaf;
+  if (node === -1) {
+    return;
+  }
+  const kind = leafKind;
+  leaf = -1;
+  leafKind = 0;
+  if (kind === Paragraph) {
+    closeParagraph(node);
+  } else if (kind === CodeBlock) {
+    if (fenced) {
+      let value = joinSegs(leafSeg0, segN);
+      if (mode === 2) {
+        if (len > 0 && eolAt(len - 1) !== "") {
+          nEnd[node] = len;
         } else {
-          dst = Object.create(Object.getPrototypeOf(src));
+          const last = segN - 1;
+          nEnd[node] = last >= leafSeg0 && segS[last] === segE[last] ? LS[lineOf(segS[last])] : len;
+          value = stripOneEol(value);
         }
-        var iterator_function = options7.includeSymbols ? own_enumerable_keys : Object.keys;
-        var _iteratorNormalCompletion = true, _didIteratorError = false, _iteratorError = void 0;
-        try {
-          for (var _iterator = iterator_function(src)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-            var key3 = _step.value;
-            dst[key3] = src[key3];
-          }
-        } catch (err) {
-          _didIteratorError = true;
-          _iteratorError = err;
-        } finally {
-          try {
-            if (!_iteratorNormalCompletion && _iterator.return != null) {
-              _iterator.return();
-            }
-          } finally {
-            if (_didIteratorError) {
-              throw _iteratorError;
-            }
-          }
-        }
-        return dst;
-      }
-      return src;
-    }
-    var empty_null = {
-      includeSymbols: false,
-      immutable: false
-    };
-    function walk(root3, cb2) {
-      var options7 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : empty_null;
-      var path20 = [];
-      var parents = [];
-      var alive = true;
-      var iterator_function = options7.includeSymbols ? own_enumerable_keys : Object.keys;
-      var immutable = !!options7.immutable;
-      return (function walker(node_) {
-        var node = immutable ? copy(node_, options7) : node_;
-        var modifiers = {};
-        var keep_going = true;
-        var state = {
-          node,
-          node_,
-          path: [].concat(path20),
-          parent: parents[parents.length - 1],
-          parents,
-          key: path20[path20.length - 1],
-          isRoot: path20.length === 0,
-          level: path20.length,
-          circular: void 0,
-          isLeaf: false,
-          notLeaf: true,
-          notRoot: true,
-          isFirst: false,
-          isLast: false,
-          update: function update(x7) {
-            var stopHere = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : false;
-            if (!state.isRoot) {
-              state.parent.node[state.key] = x7;
-            }
-            state.node = x7;
-            if (stopHere) {
-              keep_going = false;
-            }
-          },
-          delete: function _delete(stopHere) {
-            delete state.parent.node[state.key];
-            if (stopHere) {
-              keep_going = false;
-            }
-          },
-          remove: function remove(stopHere) {
-            if (is_array(state.parent.node)) {
-              state.parent.node.splice(state.key, 1);
-            } else {
-              delete state.parent.node[state.key];
-            }
-            if (stopHere) {
-              keep_going = false;
-            }
-          },
-          keys: null,
-          before: function before(f4) {
-            modifiers.before = f4;
-          },
-          after: function after(f4) {
-            modifiers.after = f4;
-          },
-          pre: function pre(f4) {
-            modifiers.pre = f4;
-          },
-          post: function post(f4) {
-            modifiers.post = f4;
-          },
-          stop: function stop() {
-            alive = false;
-          },
-          block: function block2() {
-            keep_going = false;
-          }
-        };
-        if (!alive) {
-          return state;
-        }
-        function update_state() {
-          if (_type_of(state.node) === "object" && state.node !== null) {
-            if (!state.keys || state.node_ !== state.node) {
-              state.keys = iterator_function(state.node);
-            }
-            state.isLeaf = state.keys.length === 0;
-            for (var i = 0; i < parents.length; i++) {
-              if (parents[i].node_ === node_) {
-                state.circular = parents[i];
-                break;
-              }
-            }
-          } else {
-            state.isLeaf = true;
-            state.keys = null;
-          }
-          state.notLeaf = !state.isLeaf;
-          state.notRoot = !state.isRoot;
-        }
-        update_state();
-        var ret = cb2.call(state, state.node);
-        if (ret !== void 0 && state.update) {
-          state.update(ret);
-        }
-        if (modifiers.before) {
-          modifiers.before.call(state, state.node);
-        }
-        if (!keep_going) {
-          return state;
-        }
-        if (_type_of(state.node) === "object" && state.node !== null && !state.circular) {
-          parents.push(state);
-          update_state();
-          var _state_keys;
-          var _iteratorNormalCompletion = true, _didIteratorError = false, _iteratorError = void 0;
-          try {
-            for (var _iterator = Object.entries((_state_keys = state.keys) !== null && _state_keys !== void 0 ? _state_keys : [])[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-              var _step_value = _sliced_to_array(_step.value, 2), index = _step_value[0], key3 = _step_value[1];
-              var _state_keys1;
-              path20.push(key3);
-              if (modifiers.pre) {
-                modifiers.pre.call(state, state.node[key3], key3);
-              }
-              var child = walker(state.node[key3]);
-              if (immutable && has_own_property.call(state.node, key3) && !is_writable(state.node, key3)) {
-                state.node[key3] = child.node;
-              }
-              child.isLast = ((_state_keys1 = state.keys) === null || _state_keys1 === void 0 ? void 0 : _state_keys1.length) ? +index === state.keys.length - 1 : false;
-              child.isFirst = +index === 0;
-              if (modifiers.post) {
-                modifiers.post.call(state, child);
-              }
-              path20.pop();
-            }
-          } catch (err) {
-            _didIteratorError = true;
-            _iteratorError = err;
-          } finally {
-            try {
-              if (!_iteratorNormalCompletion && _iterator.return != null) {
-                _iterator.return();
-              }
-            } finally {
-              if (_didIteratorError) {
-                throw _iteratorError;
-              }
-            }
-          }
-          parents.pop();
-        }
-        if (modifiers.after) {
-          modifiers.after.call(state, state.node);
-        }
-        return state;
-      })(root3).node;
-    }
-    var _value;
-    var _options;
-    var Traverse = /* @__PURE__ */ (function() {
-      function Traverse2(obj) {
-        var options7 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : empty_null;
-        _class_call_check(this, Traverse2);
-        __privateAdd(this, _value);
-        __privateAdd(this, _options);
-        __privateSet(this, _value, obj);
-        __privateSet(this, _options, options7);
-      }
-      _create_class(Traverse2, [
-        {
-          /**
-          * Get the element at the array `path`.
-          */
-          key: "get",
-          value: function get(paths) {
-            var node = __privateGet(this, _value);
-            for (var i = 0; node && i < paths.length; i++) {
-              var key3 = paths[i];
-              if (!has_own_property.call(node, key3) || !__privateGet(this, _options).includeSymbols && (typeof key3 === "undefined" ? "undefined" : _type_of(key3)) === "symbol") {
-                return void 0;
-              }
-              node = node[key3];
-            }
-            return node;
-          }
-        },
-        {
-          /**
-          * Return whether the element at the array `path` exists.
-          */
-          key: "has",
-          value: function has(paths) {
-            var node = __privateGet(this, _value);
-            for (var i = 0; node && i < paths.length; i++) {
-              var key3 = paths[i];
-              if (!has_own_property.call(node, key3) || !__privateGet(this, _options).includeSymbols && (typeof key3 === "undefined" ? "undefined" : _type_of(key3)) === "symbol") {
-                return false;
-              }
-              node = node[key3];
-            }
-            return true;
-          }
-        },
-        {
-          /**
-          * Set the element at the array `path` to `value`.
-          */
-          key: "set",
-          value: function set(path20, value) {
-            var node = __privateGet(this, _value);
-            var i = 0;
-            for (i = 0; i < path20.length - 1; i++) {
-              var key3 = path20[i];
-              if (!has_own_property.call(node, key3)) {
-                node[key3] = {};
-              }
-              node = node[key3];
-            }
-            node[path20[i]] = value;
-            return value;
-          }
-        },
-        {
-          /**
-          * Execute `fn` for each node in the object and return a new object with the results of the walk. To update nodes in the result use `this.update(value)`.
-          */
-          key: "map",
-          value: function map3(cb2) {
-            return walk(__privateGet(this, _value), cb2, {
-              immutable: true,
-              includeSymbols: !!__privateGet(this, _options).includeSymbols
-            });
-          }
-        },
-        {
-          /**
-          * Execute `fn` for each node in the object but unlike `.map()`, when `this.update()` is called it updates the object in-place.
-          */
-          key: "forEach",
-          value: function forEach(cb2) {
-            __privateSet(this, _value, walk(__privateGet(this, _value), cb2, __privateGet(this, _options)));
-            return __privateGet(this, _value);
-          }
-        },
-        {
-          /**
-          * For each node in the object, perform a [left-fold](http://en.wikipedia.org/wiki/Fold_(higher-order_function)) with the return value of `fn(acc, node)`.
-          *
-          * If `init` isn't specified, `init` is set to the root object for the first step and the root element is skipped.
-          */
-          key: "reduce",
-          value: function reduce(cb2, init) {
-            var skip2 = arguments.length === 1;
-            var acc = skip2 ? __privateGet(this, _value) : init;
-            this.forEach(function(x7) {
-              if (!this.isRoot || !skip2) {
-                acc = cb2.call(this, acc, x7);
-              }
-            });
-            return acc;
-          }
-        },
-        {
-          /**
-          * Return an `Array` of every possible non-cyclic path in the object.
-          * Paths are `Array`s of string keys.
-          */
-          key: "paths",
-          value: function paths() {
-            var acc = [];
-            this.forEach(function() {
-              acc.push(this.path);
-            });
-            return acc;
-          }
-        },
-        {
-          /**
-          * Return an `Array` of every node in the object.
-          */
-          key: "nodes",
-          value: function nodes() {
-            var acc = [];
-            this.forEach(function() {
-              acc.push(this.node);
-            });
-            return acc;
-          }
-        },
-        {
-          /**
-          * Create a deep clone of the object.
-          */
-          key: "clone",
-          value: function clone() {
-            var parents = [];
-            var nodes = [];
-            var options7 = __privateGet(this, _options);
-            if (is_typed_array(__privateGet(this, _value))) {
-              return __privateGet(this, _value).slice();
-            }
-            return (function clone2(src) {
-              for (var i = 0; i < parents.length; i++) {
-                if (parents[i] === src) {
-                  return nodes[i];
-                }
-              }
-              if ((typeof src === "undefined" ? "undefined" : _type_of(src)) === "object" && src !== null) {
-                var dst = copy(src, options7);
-                parents.push(src);
-                nodes.push(dst);
-                var iteratorFunction = options7.includeSymbols ? own_enumerable_keys : Object.keys;
-                var _iteratorNormalCompletion = true, _didIteratorError = false, _iteratorError = void 0;
-                try {
-                  for (var _iterator = iteratorFunction(src)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                    var key3 = _step.value;
-                    dst[key3] = clone2(src[key3]);
-                  }
-                } catch (err) {
-                  _didIteratorError = true;
-                  _iteratorError = err;
-                } finally {
-                  try {
-                    if (!_iteratorNormalCompletion && _iterator.return != null) {
-                      _iterator.return();
-                    }
-                  } finally {
-                    if (_didIteratorError) {
-                      throw _iteratorError;
-                    }
-                  }
-                }
-                parents.pop();
-                nodes.pop();
-                return dst;
-              }
-              return src;
-            })(__privateGet(this, _value));
-          }
-        }
-      ]);
-      return Traverse2;
-    })();
-    _value = /* @__PURE__ */ new WeakMap();
-    _options = /* @__PURE__ */ new WeakMap();
-    var traverse = function(obj, options7) {
-      return new Traverse(obj, options7);
-    };
-    traverse.get = function(obj, paths, options7) {
-      return new Traverse(obj, options7).get(paths);
-    };
-    traverse.set = function(obj, path20, value, options7) {
-      return new Traverse(obj, options7).set(path20, value);
-    };
-    traverse.has = function(obj, paths, options7) {
-      return new Traverse(obj, options7).has(paths);
-    };
-    traverse.map = function(obj, cb2, options7) {
-      return new Traverse(obj, options7).map(cb2);
-    };
-    traverse.forEach = function(obj, cb2, options7) {
-      return new Traverse(obj, options7).forEach(cb2);
-    };
-    traverse.reduce = function(obj, cb2, init, options7) {
-      return new Traverse(obj, options7).reduce(cb2, init);
-    };
-    traverse.paths = function(obj, options7) {
-      return new Traverse(obj, options7).paths();
-    };
-    traverse.nodes = function(obj, options7) {
-      return new Traverse(obj, options7).nodes();
-    };
-    traverse.clone = function(obj, options7) {
-      return new Traverse(obj, options7).clone();
-    };
-    var src_default = traverse;
-    module.exports = src_default;
-  }
-});
-
-// node_modules/bail/index.js
-var require_bail = __commonJS({
-  "node_modules/bail/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = bail;
-    function bail(err) {
-      if (err) {
-        throw err;
-      }
-    }
-  }
-});
-
-// node_modules/unified/node_modules/is-buffer/index.js
-var require_is_buffer = __commonJS({
-  "node_modules/unified/node_modules/is-buffer/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = function isBuffer(obj) {
-      return obj != null && obj.constructor != null && typeof obj.constructor.isBuffer === "function" && obj.constructor.isBuffer(obj);
-    };
-  }
-});
-
-// node_modules/extend/index.js
-var require_extend = __commonJS({
-  "node_modules/extend/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var hasOwn2 = Object.prototype.hasOwnProperty;
-    var toStr = Object.prototype.toString;
-    var defineProperty = Object.defineProperty;
-    var gOPD = Object.getOwnPropertyDescriptor;
-    var isArray = function isArray2(arr) {
-      if (typeof Array.isArray === "function") {
-        return Array.isArray(arr);
-      }
-      return toStr.call(arr) === "[object Array]";
-    };
-    var isPlainObject3 = function isPlainObject4(obj) {
-      if (!obj || toStr.call(obj) !== "[object Object]") {
-        return false;
-      }
-      var hasOwnConstructor = hasOwn2.call(obj, "constructor");
-      var hasIsPrototypeOf = obj.constructor && obj.constructor.prototype && hasOwn2.call(obj.constructor.prototype, "isPrototypeOf");
-      if (obj.constructor && !hasOwnConstructor && !hasIsPrototypeOf) {
-        return false;
-      }
-      var key3;
-      for (key3 in obj) {
-      }
-      return typeof key3 === "undefined" || hasOwn2.call(obj, key3);
-    };
-    var setProperty2 = function setProperty3(target, options7) {
-      if (defineProperty && options7.name === "__proto__") {
-        defineProperty(target, options7.name, {
-          enumerable: true,
-          configurable: true,
-          value: options7.newValue,
-          writable: true
-        });
+      } else if (mode === 3) {
+        nEnd[node] = lineStart;
       } else {
-        target[options7.name] = options7.newValue;
+        nEnd[node] = lineEndOf(curLine - 1);
+        value = stripOneEol(value);
       }
-    };
-    var getProperty = function getProperty2(obj, name) {
-      if (name === "__proto__") {
-        if (!hasOwn2.call(obj, name)) {
-          return void 0;
-        } else if (gOPD) {
-          return gOPD(obj, name).value;
-        }
+      nC[node] = addSide(value);
+    } else {
+      nEnd[node] = segE[codeSegEnd - 1];
+      nC[node] = addSide(stripOneEol(joinSegs(leafSeg0, codeSegEnd)));
+    }
+  } else if (kind === HtmlBlock) {
+    let value = joinSegs(leafSeg0, segN);
+    if (mode === 3 && hType <= 5) {
+      nEnd[node] = lineStart;
+      value += eolAt(segE[segN - 1]);
+    } else if (mode === 2 && hType <= 5) {
+      nEnd[node] = len;
+      if (len > 0) {
+        value += eolAt(hasCR && src.charCodeAt(len - 1) === 10 && src.charCodeAt(len - 2) === 13 ? len - 2 : len - 1);
       }
-      return obj[name];
-    };
-    module.exports = function extend() {
-      var options7, name, src, copy, copyIsArray, clone;
-      var target = arguments[0];
-      var i = 1;
-      var length = arguments.length;
-      var deep = false;
-      if (typeof target === "boolean") {
-        deep = target;
-        target = arguments[1] || {};
-        i = 2;
-      }
-      if (target == null || typeof target !== "object" && typeof target !== "function") {
-        target = {};
-      }
-      for (; i < length; ++i) {
-        options7 = arguments[i];
-        if (options7 != null) {
-          for (name in options7) {
-            src = getProperty(target, name);
-            copy = getProperty(options7, name);
-            if (target !== copy) {
-              if (deep && copy && (isPlainObject3(copy) || (copyIsArray = isArray(copy)))) {
-                if (copyIsArray) {
-                  copyIsArray = false;
-                  clone = src && isArray(src) ? src : [];
-                } else {
-                  clone = src && isPlainObject3(src) ? src : {};
-                }
-                setProperty2(target, { name, newValue: extend(deep, clone, copy) });
-              } else if (typeof copy !== "undefined") {
-                setProperty2(target, { name, newValue: copy });
-              }
-            }
-          }
-        }
-      }
-      return target;
-    };
+    } else {
+      nEnd[node] = segE[segN - 1];
+    }
+    nA[node] = addSide(value);
   }
-});
-
-// node_modules/is-plain-obj/index.js
-var require_is_plain_obj = __commonJS({
-  "node_modules/is-plain-obj/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = (value) => {
-      if (Object.prototype.toString.call(value) !== "[object Object]") {
-        return false;
-      }
-      const prototype = Object.getPrototypeOf(value);
-      return prototype === null || prototype === Object.prototype;
-    };
+}
+function closeParagraph(node) {
+  if (!pDefsDone && src.charCodeAt(segS[leafSeg0]) === 91) {
+    if (!resolveDefinitions(node)) {
+      return;
+    }
   }
-});
-
-// node_modules/trough/wrap.js
-var require_wrap = __commonJS({
-  "node_modules/trough/wrap.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var slice = [].slice;
-    module.exports = wrap;
-    function wrap(fn9, callback) {
-      var invoked;
-      return wrapped;
-      function wrapped() {
-        var params2 = slice.call(arguments, 0);
-        var callback2 = fn9.length > params2.length;
-        var result;
-        if (callback2) {
-          params2.push(done);
-        }
-        try {
-          result = fn9.apply(null, params2);
-        } catch (error2) {
-          if (callback2 && invoked) {
-            throw error2;
-          }
-          return done(error2);
-        }
-        if (!callback2) {
-          if (result && typeof result.then === "function") {
-            result.then(then, done);
-          } else if (result instanceof Error) {
-            done(result);
-          } else {
-            then(result);
-          }
-        }
-      }
-      function done() {
-        if (!invoked) {
-          invoked = true;
-          callback.apply(null, arguments);
-        }
-      }
-      function then(value) {
-        done(null, value);
+  nStart[node] = segS[leafSeg0];
+  nEnd[node] = segE[segN - 1];
+  nC[node] = leafSeg0;
+  nD3[node] = segN - leafSeg0;
+}
+function resolveDefinitions(node) {
+  pDefsDone = true;
+  if (src.charCodeAt(segS[leafSeg0]) !== 91) {
+    return true;
+  }
+  const count = segN - leafSeg0;
+  setupBuf(leafSeg0, count, false);
+  let p7 = bStart;
+  let consumedLines = 0;
+  while (p7 < bEnd && buf.charCodeAt(p7) === 91 && buf.charCodeAt(p7 + 1) !== 94) {
+    const end = parseDefinition(p7);
+    if (end === -1) {
+      break;
+    }
+    const def = newNode(Definition, mapPos(p7), mapPos(end));
+    nA[def] = addSide(normalizeIdentifier2(defLabel).toLowerCase());
+    nB2[def] = addSide(decodeString(defLabelRaw));
+    nC[def] = defTitle === null ? -1 : addSide(defTitle);
+    nD3[def] = addSide(defUrl);
+    definitions.add(normalizeIdentifier2(defLabel));
+    insertBefore(node, def);
+    p7 = end + 1;
+    if (count === 1) {
+      consumedLines = 1;
+    } else {
+      while (consumedLines < count && vStart[consumedLines] < p7) {
+        consumedLines++;
       }
     }
   }
-});
-
-// node_modules/trough/index.js
-var require_trough = __commonJS({
-  "node_modules/trough/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var wrap = require_wrap();
-    module.exports = trough;
-    trough.wrap = wrap;
-    var slice = [].slice;
-    function trough() {
-      var fns = [];
-      var middleware = {};
-      middleware.run = run;
-      middleware.use = use;
-      return middleware;
-      function run() {
-        var index = -1;
-        var input = slice.call(arguments, 0, -1);
-        var done = arguments[arguments.length - 1];
-        if (typeof done !== "function") {
-          throw new Error("Expected function as last argument, not " + done);
+  if (consumedLines >= count) {
+    unlink(node);
+    segN = leafSeg0;
+    return false;
+  }
+  leafSeg0 += consumedLines;
+  return true;
+}
+function startBlock(matched, keepList, container = false) {
+  if (matched < depth) {
+    closeLeaf(container ? 3 : 1);
+    if (container) {
+      closePos = off;
+    }
+    while (depth > matched) {
+      popContainer();
+    }
+  } else if (leaf !== -1) {
+    closeLeaf(0);
+  }
+  if (!keepList) {
+    while (nKind[cNode[depth]] === List) {
+      popContainer();
+    }
+  }
+}
+function htmlBlockType(line4, allow7) {
+  const c8 = line4.charCodeAt(1);
+  if (c8 === 33) {
+    if (line4.startsWith("<!--")) {
+      return 2;
+    }
+    if (line4.startsWith("<![CDATA[")) {
+      return 5;
+    }
+    return RE_HTML_4.test(line4) ? 4 : 0;
+  }
+  if (c8 === 63) {
+    return 3;
+  }
+  if (RE_HTML_1.test(line4)) {
+    return 1;
+  }
+  if (RE_HTML_6.test(line4)) {
+    return 6;
+  }
+  if (allow7 && RE_HTML_7.test(line4)) {
+    return 7;
+  }
+  return 0;
+}
+function htmlBlockEnds(line4) {
+  switch (hType) {
+    case 1:
+      return RE_HTML_1_END.test(line4);
+    case 2:
+      return line4.includes("-->");
+    case 3:
+      return line4.includes("?>");
+    case 4:
+      return line4.includes(">");
+    case 5:
+      return line4.includes("]]>");
+  }
+  return false;
+}
+function tableHeaderCells(s, e4) {
+  let size = 0;
+  let sizeB = 0;
+  let seen = false;
+  let i = s;
+  if (src.charCodeAt(i) !== 124) {
+    seen = true;
+    sizeB = 1;
+  }
+  while (i < e4) {
+    let c8 = src.charCodeAt(i);
+    if (c8 === 32 || c8 === 9) {
+      i++;
+      continue;
+    }
+    sizeB++;
+    if (seen) {
+      seen = false;
+      size++;
+    }
+    if (c8 === 124) {
+      i++;
+      seen = true;
+      continue;
+    }
+    while (i < e4) {
+      c8 = src.charCodeAt(i);
+      if (c8 === 124 || c8 === 32 || c8 === 9) {
+        break;
+      }
+      i++;
+      if (c8 === 92 && i < e4) {
+        const d4 = src.charCodeAt(i);
+        if (d4 === 92 || d4 === 124) {
+          i++;
         }
-        next.apply(null, [null].concat(input));
-        function next(err) {
-          var fn9 = fns[++index];
-          var params2 = slice.call(arguments, 0);
-          var values = params2.slice(1);
-          var length = input.length;
-          var pos3 = -1;
-          if (err) {
-            done(err);
+      }
+    }
+  }
+  return sizeB > 1 ? size : 0;
+}
+function tableDelimiterCells(s, e4) {
+  let i = s;
+  let seen = false;
+  let n4 = 0;
+  const align2 = [];
+  for (; ; ) {
+    let c8 = src.charCodeAt(i);
+    if (c8 === 124) {
+      seen = true;
+      i++;
+      while (i < e4 && (src.charCodeAt(i) === 32 || src.charCodeAt(i) === 9)) {
+        i++;
+      }
+      if (i >= e4) {
+        break;
+      }
+      c8 = src.charCodeAt(i);
+    }
+    let left = false;
+    let right = false;
+    if (c8 === 58) {
+      seen = true;
+      left = true;
+      i++;
+      if (i >= e4 || src.charCodeAt(i) !== 45) {
+        return -1;
+      }
+    } else if (c8 !== 45 || i >= e4) {
+      return -1;
+    }
+    n4++;
+    while (i < e4 && src.charCodeAt(i) === 45) {
+      i++;
+    }
+    if (i < e4 && src.charCodeAt(i) === 58) {
+      seen = true;
+      right = true;
+      i++;
+    }
+    while (i < e4 && (src.charCodeAt(i) === 32 || src.charCodeAt(i) === 9)) {
+      i++;
+    }
+    align2.push(left ? right ? "center" : "left" : right ? "right" : null);
+    if (i >= e4) {
+      break;
+    }
+    if (src.charCodeAt(i) !== 124) {
+      return -1;
+    }
+  }
+  if (!seen) {
+    return -1;
+  }
+  tableAlign = align2;
+  return n4;
+}
+function addTableCell(row, start, end, cs11, ce13) {
+  const cell = newNode(TableCell, start, end);
+  if (cs11 >= 0) {
+    nC[cell] = segN;
+    nD3[cell] = 1;
+    pushSeg(cs11, ce13, 0);
+  } else {
+    nD3[cell] = 0;
+  }
+  append(row, cell);
+}
+function addTableRow(table3, s, e4) {
+  const row = newNode(TableRow, s, e4);
+  append(table3, row);
+  nEnd[table3] = e4;
+  let inFirst = true;
+  let hasLast = false;
+  let lastStart = 0;
+  let lastCS = -1;
+  let lastCE = -1;
+  let curStart = s;
+  let curCS = -1;
+  let curCE = -1;
+  let i = s;
+  while (i < e4) {
+    let c8 = src.charCodeAt(i);
+    if (c8 === 32 || c8 === 9) {
+      i++;
+      continue;
+    }
+    if (c8 === 124) {
+      if (inFirst) {
+        inFirst = false;
+      } else {
+        if (hasLast) {
+          addTableCell(row, lastStart, curStart, lastCS, lastCE);
+        }
+        hasLast = true;
+        lastStart = curStart;
+        lastCS = curCS;
+        lastCE = curCE;
+        curStart = i;
+        curCS = -1;
+        curCE = -1;
+      }
+      i++;
+      continue;
+    }
+    const dataStart = i;
+    while (i < e4) {
+      c8 = src.charCodeAt(i);
+      if (c8 === 124 || c8 === 32 || c8 === 9) {
+        break;
+      }
+      i++;
+      if (c8 === 92 && i < e4) {
+        const d4 = src.charCodeAt(i);
+        if (d4 === 92 || d4 === 124) {
+          i++;
+        }
+      }
+    }
+    inFirst = false;
+    if (curCS < 0) {
+      if (hasLast) {
+        addTableCell(row, lastStart, curStart, lastCS, lastCE);
+        hasLast = false;
+      }
+      curCS = dataStart;
+    }
+    curCE = i;
+  }
+  if (hasLast) {
+    addTableCell(row, lastStart, e4, lastCS, lastCE);
+  } else {
+    addTableCell(row, curStart, e4, curCS, curCE);
+  }
+}
+function processLine(li13) {
+  curLine = li13;
+  lineStart = LS[li13];
+  lineEnd2 = lineEndOf(li13);
+  off = lineStart;
+  col = 0;
+  ptab = false;
+  closePos = lineStart;
+  let i = 1;
+  for (; i <= depth; i++) {
+    const node = cNode[i];
+    const kind = nKind[node];
+    if (kind === List) {
+      continue;
+    }
+    findNns();
+    if (kind === BlockQuote) {
+      if (indent4 <= 3 && !blank && src.charCodeAt(nns) === 62) {
+        advanceNns();
+        advanceOffset(1, false);
+        if (off < lineEnd2) {
+          const c8 = src.charCodeAt(off);
+          if (c8 === 32 || c8 === 9) {
+            advanceOffset(1, true);
+          }
+        }
+      } else {
+        break;
+      }
+    } else if (kind === ListItem) {
+      if (blank) {
+        if (nFirst[node] === -1) {
+          break;
+        }
+        advanceOffset(cIndent[i], true);
+      } else if (indent4 >= cIndent[i]) {
+        advanceOffset(cIndent[i], true);
+      } else {
+        break;
+      }
+    } else {
+      if (blank || indent4 >= 4) {
+        advanceOffset(4, true);
+      } else {
+        break;
+      }
+    }
+  }
+  let matched = i - 1;
+  const allMatched = matched === depth;
+  let interrupt = allMatched && leafKind === Paragraph;
+  if (allMatched && leaf !== -1) {
+    if (leafKind === CodeBlock) {
+      if (fenced) {
+        findNns();
+        if (indent4 <= 3 && !blank && src.charCodeAt(nns) === fChar) {
+          let j10 = nns;
+          while (j10 < lineEnd2 && src.charCodeAt(j10) === fChar) {
+            j10++;
+          }
+          if (j10 - nns >= fLen && isBlankRange(j10, lineEnd2)) {
+            const node = leaf;
+            nEnd[node] = lineEnd2;
+            nC[node] = addSide(joinSegs(leafSeg0, segN));
+            leaf = -1;
+            leafKind = 0;
             return;
           }
-          while (++pos3 < length) {
-            if (values[pos3] === null || values[pos3] === void 0) {
-              values[pos3] = input[pos3];
-            }
+        }
+        let k10 = fIndent;
+        while (k10 > 0 && off < lineEnd2) {
+          const c8 = src.charCodeAt(off);
+          if (c8 !== 32 && c8 !== 9) {
+            break;
           }
-          input = values;
-          if (fn9) {
-            wrap(fn9, next).apply(null, input);
-          } else {
-            done.apply(null, [null].concat(input));
-          }
+          advanceOffset(1, true);
+          k10--;
         }
+        addLeafLine();
+        return;
       }
-      function use(fn9) {
-        if (typeof fn9 !== "function") {
-          throw new Error("Expected `fn` to be a function, not " + fn9);
-        }
-        fns.push(fn9);
-        return middleware;
+      findNns();
+      if (indent4 >= 4) {
+        advanceOffset(4, true);
+        addLeafLine();
+        codeSegEnd = segN;
+        return;
+      } else if (blank) {
+        advanceOffset(4, true);
+        addLeafLine();
+        return;
       }
-    }
-  }
-});
-
-// node_modules/unist-util-stringify-position/index.js
-var require_unist_util_stringify_position = __commonJS({
-  "node_modules/unist-util-stringify-position/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var own3 = {}.hasOwnProperty;
-    module.exports = stringify4;
-    function stringify4(value) {
-      if (!value || typeof value !== "object") {
-        return "";
-      }
-      if (own3.call(value, "position") || own3.call(value, "type")) {
-        return position(value.position);
-      }
-      if (own3.call(value, "start") || own3.call(value, "end")) {
-        return position(value);
-      }
-      if (own3.call(value, "line") || own3.call(value, "column")) {
-        return point(value);
-      }
-      return "";
-    }
-    function point(point2) {
-      if (!point2 || typeof point2 !== "object") {
-        point2 = {};
-      }
-      return index(point2.line) + ":" + index(point2.column);
-    }
-    function position(pos3) {
-      if (!pos3 || typeof pos3 !== "object") {
-        pos3 = {};
-      }
-      return point(pos3.start) + "-" + point(pos3.end);
-    }
-    function index(value) {
-      return value && typeof value === "number" ? value : 1;
-    }
-  }
-});
-
-// node_modules/vfile-message/index.js
-var require_vfile_message = __commonJS({
-  "node_modules/vfile-message/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var stringify4 = require_unist_util_stringify_position();
-    module.exports = VMessage;
-    function VMessagePrototype() {
-    }
-    VMessagePrototype.prototype = Error.prototype;
-    VMessage.prototype = new VMessagePrototype();
-    var proto = VMessage.prototype;
-    proto.file = "";
-    proto.name = "";
-    proto.reason = "";
-    proto.message = "";
-    proto.stack = "";
-    proto.fatal = null;
-    proto.column = null;
-    proto.line = null;
-    function VMessage(reason, position, origin) {
-      var parts;
-      var range2;
-      var location;
-      if (typeof position === "string") {
-        origin = position;
-        position = null;
-      }
-      parts = parseOrigin(origin);
-      range2 = stringify4(position) || "1:1";
-      location = {
-        start: { line: null, column: null },
-        end: { line: null, column: null }
-      };
-      if (position && position.position) {
-        position = position.position;
-      }
-      if (position) {
-        if (position.start) {
-          location = position;
-          position = position.start;
-        } else {
-          location.start = position;
-        }
-      }
-      if (reason.stack) {
-        this.stack = reason.stack;
-        reason = reason.message;
-      }
-      this.message = reason;
-      this.name = range2;
-      this.reason = reason;
-      this.line = position ? position.line : null;
-      this.column = position ? position.column : null;
-      this.location = location;
-      this.source = parts[0];
-      this.ruleId = parts[1];
-    }
-    function parseOrigin(origin) {
-      var result = [null, null];
-      var index;
-      if (typeof origin === "string") {
-        index = origin.indexOf(":");
-        if (index === -1) {
-          result[1] = origin;
-        } else {
-          result[0] = origin.slice(0, index);
-          result[1] = origin.slice(index + 1);
-        }
-      }
-      return result;
-    }
-  }
-});
-
-// node_modules/vfile/lib/minpath.js
-var require_minpath = __commonJS({
-  "node_modules/vfile/lib/minpath.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = __require("path");
-  }
-});
-
-// node_modules/vfile/lib/minproc.js
-var require_minproc = __commonJS({
-  "node_modules/vfile/lib/minproc.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = process;
-  }
-});
-
-// node_modules/vfile/node_modules/is-buffer/index.js
-var require_is_buffer2 = __commonJS({
-  "node_modules/vfile/node_modules/is-buffer/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = function isBuffer(obj) {
-      return obj != null && obj.constructor != null && typeof obj.constructor.isBuffer === "function" && obj.constructor.isBuffer(obj);
-    };
-  }
-});
-
-// node_modules/vfile/lib/core.js
-var require_core2 = __commonJS({
-  "node_modules/vfile/lib/core.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var p7 = require_minpath();
-    var proc = require_minproc();
-    var buffer3 = require_is_buffer2();
-    module.exports = VFile;
-    var own3 = {}.hasOwnProperty;
-    var order = ["history", "path", "basename", "stem", "extname", "dirname"];
-    VFile.prototype.toString = toString2;
-    Object.defineProperty(VFile.prototype, "path", { get: getPath, set: setPath });
-    Object.defineProperty(VFile.prototype, "dirname", {
-      get: getDirname,
-      set: setDirname
-    });
-    Object.defineProperty(VFile.prototype, "basename", {
-      get: getBasename,
-      set: setBasename
-    });
-    Object.defineProperty(VFile.prototype, "extname", {
-      get: getExtname,
-      set: setExtname
-    });
-    Object.defineProperty(VFile.prototype, "stem", { get: getStem, set: setStem });
-    function VFile(options7) {
-      var prop;
-      var index;
-      if (!options7) {
-        options7 = {};
-      } else if (typeof options7 === "string" || buffer3(options7)) {
-        options7 = { contents: options7 };
-      } else if ("message" in options7 && "messages" in options7) {
-        return options7;
-      }
-      if (!(this instanceof VFile)) {
-        return new VFile(options7);
-      }
-      this.data = {};
-      this.messages = [];
-      this.history = [];
-      this.cwd = proc.cwd();
-      index = -1;
-      while (++index < order.length) {
-        prop = order[index];
-        if (own3.call(options7, prop)) {
-          this[prop] = options7[prop];
-        }
-      }
-      for (prop in options7) {
-        if (order.indexOf(prop) < 0) {
-          this[prop] = options7[prop];
-        }
-      }
-    }
-    function getPath() {
-      return this.history[this.history.length - 1];
-    }
-    function setPath(path20) {
-      assertNonEmpty(path20, "path");
-      if (this.path !== path20) {
-        this.history.push(path20);
-      }
-    }
-    function getDirname() {
-      return typeof this.path === "string" ? p7.dirname(this.path) : void 0;
-    }
-    function setDirname(dirname5) {
-      assertPath(this.path, "dirname");
-      this.path = p7.join(dirname5 || "", this.basename);
-    }
-    function getBasename() {
-      return typeof this.path === "string" ? p7.basename(this.path) : void 0;
-    }
-    function setBasename(basename) {
-      assertNonEmpty(basename, "basename");
-      assertPart(basename, "basename");
-      this.path = p7.join(this.dirname || "", basename);
-    }
-    function getExtname() {
-      return typeof this.path === "string" ? p7.extname(this.path) : void 0;
-    }
-    function setExtname(extname2) {
-      assertPart(extname2, "extname");
-      assertPath(this.path, "extname");
-      if (extname2) {
-        if (extname2.charCodeAt(0) !== 46) {
-          throw new Error("`extname` must start with `.`");
-        }
-        if (extname2.indexOf(".", 1) > -1) {
-          throw new Error("`extname` cannot contain multiple dots");
-        }
-      }
-      this.path = p7.join(this.dirname, this.stem + (extname2 || ""));
-    }
-    function getStem() {
-      return typeof this.path === "string" ? p7.basename(this.path, this.extname) : void 0;
-    }
-    function setStem(stem) {
-      assertNonEmpty(stem, "stem");
-      assertPart(stem, "stem");
-      this.path = p7.join(this.dirname || "", stem + (this.extname || ""));
-    }
-    function toString2(encoding) {
-      return (this.contents || "").toString(encoding);
-    }
-    function assertPart(part, name) {
-      if (part && part.indexOf(p7.sep) > -1) {
-        throw new Error(
-          "`" + name + "` cannot be a path: did not expect `" + p7.sep + "`"
-        );
-      }
-    }
-    function assertNonEmpty(part, name) {
-      if (!part) {
-        throw new Error("`" + name + "` cannot be empty");
-      }
-    }
-    function assertPath(path20, name) {
-      if (!path20) {
-        throw new Error("Setting `" + name + "` requires `path` to be set too");
-      }
-    }
-  }
-});
-
-// node_modules/vfile/lib/index.js
-var require_lib2 = __commonJS({
-  "node_modules/vfile/lib/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var VMessage = require_vfile_message();
-    var VFile = require_core2();
-    module.exports = VFile;
-    VFile.prototype.message = message;
-    VFile.prototype.info = info;
-    VFile.prototype.fail = fail;
-    function message(reason, position, origin) {
-      var message2 = new VMessage(reason, position, origin);
-      if (this.path) {
-        message2.name = this.path + ":" + message2.name;
-        message2.file = this.path;
-      }
-      message2.fatal = false;
-      this.messages.push(message2);
-      return message2;
-    }
-    function fail() {
-      var message2 = this.message.apply(this, arguments);
-      message2.fatal = true;
-      throw message2;
-    }
-    function info() {
-      var message2 = this.message.apply(this, arguments);
-      message2.fatal = null;
-      return message2;
-    }
-  }
-});
-
-// node_modules/vfile/index.js
-var require_vfile = __commonJS({
-  "node_modules/vfile/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_lib2();
-  }
-});
-
-// node_modules/unified/index.js
-var require_unified = __commonJS({
-  "node_modules/unified/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var bail = require_bail();
-    var buffer3 = require_is_buffer();
-    var extend = require_extend();
-    var plain = require_is_plain_obj();
-    var trough = require_trough();
-    var vfile = require_vfile();
-    module.exports = unified().freeze();
-    var slice = [].slice;
-    var own3 = {}.hasOwnProperty;
-    var pipeline = trough().use(pipelineParse).use(pipelineRun).use(pipelineStringify);
-    function pipelineParse(p7, ctx) {
-      ctx.tree = p7.parse(ctx.file);
-    }
-    function pipelineRun(p7, ctx, next) {
-      p7.run(ctx.tree, ctx.file, done);
-      function done(error2, tree, file) {
-        if (error2) {
-          next(error2);
-        } else {
-          ctx.tree = tree;
-          ctx.file = file;
-          next();
-        }
-      }
-    }
-    function pipelineStringify(p7, ctx) {
-      var result = p7.stringify(ctx.tree, ctx.file);
-      if (result === void 0 || result === null) {
-      } else if (typeof result === "string" || buffer3(result)) {
-        if ("value" in ctx.file) {
-          ctx.file.value = result;
-        }
-        ctx.file.contents = result;
+      closeLeaf(0);
+    } else if (leafKind === HtmlBlock) {
+      findNns();
+      if (hType >= 6 && blank) {
+        closeLeaf(0);
       } else {
-        ctx.file.result = result;
+        addLeafLine();
+        if (hType <= 5 && htmlBlockEnds(src.slice(off, lineEnd2))) {
+          closeLeaf(0);
+        }
+        return;
       }
     }
-    function unified() {
-      var attachers = [];
-      var transformers = trough();
-      var namespace = {};
-      var freezeIndex = -1;
-      var frozen;
-      processor.data = data;
-      processor.freeze = freeze;
-      processor.attachers = attachers;
-      processor.use = use;
-      processor.parse = parse11;
-      processor.stringify = stringify4;
-      processor.run = run;
-      processor.runSync = runSync;
-      processor.process = process5;
-      processor.processSync = processSync;
-      return processor;
-      function processor() {
-        var destination = unified();
-        var index = -1;
-        while (++index < attachers.length) {
-          destination.use.apply(null, attachers[index]);
-        }
-        destination.data(extend(true, {}, namespace));
-        return destination;
+  }
+  for (; ; ) {
+    findNns();
+    const inParagraph = leafKind === Paragraph;
+    if (indent4 >= 4) {
+      if (!inParagraph && !blank) {
+        startBlock(matched, false);
+        const node = newNode(CodeBlock, ptab ? off + 1 : off, lineEnd2);
+        advanceOffset(4, true);
+        append(cNode[depth], node);
+        leaf = node;
+        leafKind = CodeBlock;
+        fenced = false;
+        leafSeg0 = segN;
+        leafContig = true;
+        addLeafLine();
+        codeSegEnd = segN;
+        return;
       }
-      function freeze() {
-        var values;
-        var transformer;
-        if (frozen) {
-          return processor;
+      break;
+    }
+    if (blank) {
+      break;
+    }
+    const c8 = src.charCodeAt(nns);
+    if (c8 === 62 && matched < MAX_NESTING) {
+      startBlock(matched, false, true);
+      advanceNns();
+      advanceOffset(1, false);
+      if (off < lineEnd2) {
+        const d4 = src.charCodeAt(off);
+        if (d4 === 32 || d4 === 9) {
+          advanceOffset(1, true);
         }
-        while (++freezeIndex < attachers.length) {
-          values = attachers[freezeIndex];
-          if (values[1] === false) {
+      }
+      pushContainer(newNode(BlockQuote, nns, lineEnd2), 0);
+      matched = depth;
+      interrupt = false;
+      continue;
+    }
+    if (c8 === 35) {
+      let j10 = nns;
+      while (j10 < lineEnd2 && src.charCodeAt(j10) === 35) {
+        j10++;
+      }
+      const level = j10 - nns;
+      if (level <= 6 && (j10 >= lineEnd2 || src.charCodeAt(j10) === 32 || src.charCodeAt(j10) === 9)) {
+        startBlock(matched, false);
+        let cs11 = j10;
+        while (cs11 < lineEnd2 && (src.charCodeAt(cs11) === 32 || src.charCodeAt(cs11) === 9)) {
+          cs11++;
+        }
+        let ce13 = lineEnd2;
+        while (ce13 > cs11 && (src.charCodeAt(ce13 - 1) === 32 || src.charCodeAt(ce13 - 1) === 9)) {
+          ce13--;
+        }
+        let k10 = ce13;
+        while (k10 > cs11 && src.charCodeAt(k10 - 1) === 35) {
+          k10--;
+        }
+        if (k10 < ce13 && (k10 === cs11 || src.charCodeAt(k10 - 1) === 32 || src.charCodeAt(k10 - 1) === 9)) {
+          ce13 = k10;
+          while (ce13 > cs11 && (src.charCodeAt(ce13 - 1) === 32 || src.charCodeAt(ce13 - 1) === 9)) {
+            ce13--;
+          }
+        }
+        const node = newNode(Header, nns, lineEnd2);
+        nA[node] = level;
+        if (ce13 > cs11) {
+          nC[node] = segN;
+          nD3[node] = 1;
+          pushSeg(cs11, ce13, 0);
+        } else {
+          nD3[node] = 0;
+        }
+        append(cNode[depth], node);
+        return;
+      }
+    } else if (c8 === 96 || c8 === 126) {
+      let j10 = nns;
+      while (j10 < lineEnd2 && src.charCodeAt(j10) === c8) {
+        j10++;
+      }
+      const size = j10 - nns;
+      let fence2 = size >= 3;
+      if (fence2 && c8 === 96) {
+        const tick = src.indexOf("`", j10);
+        fence2 = tick === -1 || tick >= lineEnd2;
+      }
+      if (fence2) {
+        startBlock(matched, false);
+        const node = newNode(CodeBlock, nns, lineEnd2);
+        let is10 = j10;
+        while (is10 < lineEnd2 && (src.charCodeAt(is10) === 32 || src.charCodeAt(is10) === 9)) {
+          is10++;
+        }
+        if (is10 < lineEnd2) {
+          let ie12 = is10;
+          while (ie12 < lineEnd2 && src.charCodeAt(ie12) !== 32 && src.charCodeAt(ie12) !== 9) {
+            ie12++;
+          }
+          nA[node] = addSide(decodeString(src.slice(is10, ie12)));
+          let ms10 = ie12;
+          while (ms10 < lineEnd2 && (src.charCodeAt(ms10) === 32 || src.charCodeAt(ms10) === 9)) {
+            ms10++;
+          }
+          if (ms10 < lineEnd2) {
+            nB2[node] = addSide(decodeString(src.slice(ms10, lineEnd2)));
+          }
+        }
+        append(cNode[depth], node);
+        leaf = node;
+        leafKind = CodeBlock;
+        fenced = true;
+        fChar = c8;
+        fLen = size;
+        fIndent = indent4;
+        leafSeg0 = segN;
+        leafContig = true;
+        return;
+      }
+    } else if (c8 === 60) {
+      const line4 = src.slice(nns, lineEnd2);
+      const type = htmlBlockType(line4, !inParagraph);
+      if (type !== 0) {
+        startBlock(matched, false);
+        const node = newNode(HtmlBlock, ptab ? off + 1 : off, lineEnd2);
+        append(cNode[depth], node);
+        leaf = node;
+        leafKind = HtmlBlock;
+        hType = type;
+        leafSeg0 = segN;
+        leafContig = true;
+        addLeafLine();
+        if (type <= 5 && htmlBlockEnds(line4)) {
+          closeLeaf(0);
+        }
+        return;
+      }
+    }
+    if (inParagraph && allMatched && matched === depth) {
+      if (c8 === 61 || c8 === 45) {
+        let j10 = nns;
+        while (j10 < lineEnd2 && src.charCodeAt(j10) === c8) {
+          j10++;
+        }
+        if (isBlankRange(j10, lineEnd2)) {
+          const paragraph3 = leaf;
+          if (resolveDefinitions(paragraph3)) {
+            nKind[paragraph3] = Header;
+            nA[paragraph3] = c8 === 61 ? 1 : 2;
+            nEnd[paragraph3] = lineEnd2;
+            nC[paragraph3] = leafSeg0;
+            nD3[paragraph3] = segN - leafSeg0;
+            leaf = -1;
+            leafKind = 0;
+            return;
+          }
+          leaf = -1;
+          leafKind = 0;
+        }
+      }
+    }
+    if (c8 === 42 || c8 === 45 || c8 === 95) {
+      let j10 = nns;
+      let count = 0;
+      while (j10 < lineEnd2) {
+        const d4 = src.charCodeAt(j10);
+        if (d4 === c8) {
+          count++;
+        } else if (d4 !== 32 && d4 !== 9) {
+          break;
+        }
+        j10++;
+      }
+      if (j10 >= lineEnd2 && count >= 3) {
+        startBlock(matched, false);
+        append(cNode[depth], newNode(HorizontalRule, nns, lineEnd2));
+        return;
+      }
+    }
+    let markerEnd = -1;
+    let ordered = 0;
+    let startNumber = -1;
+    let listType = c8;
+    if (c8 === 42 || c8 === 43 || c8 === 45) {
+      markerEnd = nns + 1;
+    } else if (c8 >= 48 && c8 <= 57) {
+      let j10 = nns;
+      let num = 0;
+      while (j10 < lineEnd2 && j10 - nns < 9) {
+        const d4 = src.charCodeAt(j10);
+        if (d4 < 48 || d4 > 57) {
+          break;
+        }
+        num = num * 10 + (d4 - 48);
+        j10++;
+      }
+      if (j10 < lineEnd2) {
+        const d4 = src.charCodeAt(j10);
+        if (d4 === 46 || d4 === 41) {
+          markerEnd = j10 + 1;
+          ordered = 1;
+          startNumber = num;
+          listType = d4;
+        }
+      }
+    }
+    if (markerEnd !== -1 && matched + 2 <= MAX_NESTING) {
+      const next = markerEnd < lineEnd2 ? src.charCodeAt(markerEnd) : -1;
+      if (next === -1 || next === 32 || next === 9) {
+        if (!(interrupt && (isBlankRange(markerEnd, lineEnd2) || ordered === 1 && (markerEnd - nns !== 2 || src.charCodeAt(nns) !== 49)))) {
+          const markerLinePos = off;
+          startBlock(matched, true, true);
+          const markerIndent = indent4;
+          const markerStart = nns;
+          advanceNns();
+          advanceOffset(markerEnd - markerStart, true);
+          const spacesStartCol = col;
+          const spacesStartOff = off;
+          const spacesStartPtab = ptab;
+          do {
+            advanceOffset(1, true);
+          } while (col - spacesStartCol < 5 && off < lineEnd2 && (src.charCodeAt(off) === 32 || src.charCodeAt(off) === 9));
+          const blankItem = off >= lineEnd2;
+          const spacesAfterMarker = col - spacesStartCol;
+          let padding;
+          if (spacesAfterMarker >= 5 || spacesAfterMarker < 1 || blankItem) {
+            padding = markerEnd - markerStart + 1;
+            col = spacesStartCol;
+            off = spacesStartOff;
+            ptab = spacesStartPtab;
+            if (off < lineEnd2 && (src.charCodeAt(off) === 32 || src.charCodeAt(off) === 9)) {
+              advanceOffset(1, true);
+            }
+          } else {
+            padding = markerEnd - markerStart + spacesAfterMarker;
+          }
+          let tip = cNode[depth];
+          if (nKind[tip] === List && (nA[tip] !== ordered || nC[tip] !== listType)) {
+            closePos = markerLinePos;
+            popContainer();
+            tip = cNode[depth];
+          }
+          if (nKind[tip] !== List) {
+            const list3 = newNode(List, markerStart, lineEnd2);
+            nA[list3] = ordered;
+            nB2[list3] = startNumber;
+            nC[list3] = listType;
+            pushContainer(list3, 0);
+          }
+          const item = newNode(ListItem, markerStart, lineEnd2);
+          nB2[item] = 0;
+          pushContainer(item, markerIndent + padding);
+          matched = depth;
+          interrupt = false;
+          continue;
+        }
+      }
+    }
+    if (leafKind === Paragraph && allMatched && matched === depth && (c8 === 124 || c8 === 45 || c8 === 58)) {
+      const cells = tableDelimiterCells(nns, lineEnd2);
+      if (cells > 0) {
+        const hs11 = segS[segN - 1];
+        const he14 = segE[segN - 1];
+        if (tableHeaderCells(hs11, he14) === cells) {
+          const paragraph3 = leaf;
+          segN--;
+          leaf = -1;
+          leafKind = 0;
+          if (segN === leafSeg0) {
+            unlink(paragraph3);
+          } else {
+            closeParagraph(paragraph3);
+          }
+          const table3 = newNode(Table, hs11, he14);
+          nA[table3] = addSide(tableAlign);
+          append(cNode[depth], table3);
+          addTableRow(table3, hs11, he14);
+          nEnd[table3] = lineEnd2;
+          leaf = table3;
+          leafKind = Table;
+          return;
+        }
+      }
+    }
+    if (c8 === 91 && src.charCodeAt(nns + 1) === 94 && matched < MAX_NESTING) {
+      let j10 = nns + 2;
+      let hasData = false;
+      while (j10 < lineEnd2) {
+        const d4 = src.charCodeAt(j10);
+        if (d4 === 93 || d4 === 91) {
+          break;
+        }
+        if (d4 !== 32 && d4 !== 9) {
+          hasData = true;
+        }
+        if (d4 === 92 && j10 + 1 < lineEnd2) {
+          const e4 = src.charCodeAt(j10 + 1);
+          if (e4 === 91 || e4 === 92 || e4 === 93) {
+            j10++;
+          }
+        }
+        j10++;
+      }
+      if (j10 < lineEnd2 && hasData && j10 - nns - 2 <= 999 && src.charCodeAt(j10) === 93 && src.charCodeAt(j10 + 1) === 58 && j10 + 1 < lineEnd2) {
+        startBlock(matched, false, true);
+        const label5 = src.slice(nns + 2, j10);
+        const node = newNode(FootnoteDefinition, nns, lineEnd2);
+        nA[node] = addSide(normalizeIdentifier2(label5).toLowerCase());
+        nB2[node] = addSide(decodeString(label5));
+        footnotes.add(normalizeIdentifier2(label5));
+        advanceNns();
+        advanceOffset(j10 + 2 - nns, false);
+        if (off < lineEnd2 && (src.charCodeAt(off) === 32 || src.charCodeAt(off) === 9)) {
+          advanceOffset(1, true);
+        }
+        pushContainer(node, 0);
+        matched = depth;
+        interrupt = false;
+        continue;
+      }
+    }
+    break;
+  }
+  if (matched < depth) {
+    if (!blank && leafKind === Paragraph) {
+      pushSeg(nns, lineEnd2, nns - off);
+      return;
+    }
+    closeLeaf(1);
+    while (depth > matched) {
+      popContainer();
+    }
+  }
+  if (blank) {
+    if (leaf !== -1) {
+      closeLeaf(0);
+    }
+    return;
+  }
+  if (leafKind === Paragraph) {
+    pushSeg(nns, lineEnd2, nns - off);
+    return;
+  }
+  if (leafKind === Table) {
+    addTableRow(leaf, nns, lineEnd2);
+    return;
+  }
+  while (nKind[cNode[depth]] === List) {
+    popContainer();
+  }
+  const paragraph2 = newNode(Paragraph, nns, lineEnd2);
+  append(cNode[depth], paragraph2);
+  leaf = paragraph2;
+  leafKind = Paragraph;
+  leafSeg0 = segN;
+  pDefsDone = false;
+  pushSeg(nns, lineEnd2, nns - off);
+}
+function parseFrontmatter() {
+  const c8 = src.charCodeAt(0);
+  if (c8 !== 45 && c8 !== 43 && c8 !== 59 && c8 !== 123) {
+    return 0;
+  }
+  const firstEnd = lineEndOf(0);
+  for (const [open, close, kind] of FRONTMATTERS) {
+    if (!src.startsWith(open) || !isBlankRange(open.length, firstEnd)) {
+      continue;
+    }
+    for (let li13 = 1; li13 < LN; li13++) {
+      const s = LS[li13];
+      if (s >= len && li13 > 1) {
+        break;
+      }
+      const e4 = lineEndOf(li13);
+      if (src.startsWith(close, s) && s + close.length <= e4 && isBlankRange(s + close.length, e4)) {
+        const node = newNode(kind, 0, e4);
+        nA[node] = addSide(li13 > 1 ? src.slice(LS[1], lineEndOf(li13 - 1)) : "");
+        append(0, node);
+        return li13 + 1;
+      }
+    }
+  }
+  return 0;
+}
+function parseBlocks() {
+  depth = 0;
+  cNode[0] = newNode(Document, 0, len);
+  leaf = -1;
+  leafKind = 0;
+  const lines = LN;
+  for (let li13 = parseFrontmatter(); li13 < lines; li13++) {
+    if (LS[li13] >= len) {
+      break;
+    }
+    processLine(li13);
+  }
+  curLine = lines > 1 && LS[lines - 1] >= len ? lines - 1 : lines;
+  lineStart = len;
+  closePos = len;
+  let eofMode = 2;
+  for (let i = 1; i <= depth; i++) {
+    if (nKind[cNode[i]] === BlockQuote) {
+      eofMode = 1;
+    }
+  }
+  closeLeaf(eofMode);
+  while (depth > 0) {
+    popContainer();
+  }
+}
+function setupBuf(s02, count, trim2) {
+  bSeg0 = s02;
+  vCache = 0;
+  parenTitleFrom = -1;
+  trailFrom = -1;
+  trailTo = -1;
+  noHtmlEnd = 0;
+  ticksScanned = false;
+  if (count === 1) {
+    bMulti = false;
+    buf = src;
+    bStart = segS[s02];
+    bEnd = segE[s02];
+    vLines = 1;
+  } else {
+    bMulti = true;
+    let text5 = "";
+    for (let k10 = 0; k10 < count; k10++) {
+      if (k10 > 0) {
+        text5 += "\n";
+      }
+      vStart[k10] = text5.length;
+      text5 += src.slice(segS[s02 + k10], segE[s02 + k10]);
+    }
+    buf = text5;
+    bStart = 0;
+    bEnd = text5.length;
+    vLines = count;
+  }
+  if (trim2) {
+    while (bEnd > bStart) {
+      const c8 = buf.charCodeAt(bEnd - 1);
+      if (c8 !== 32 && c8 !== 9) {
+        break;
+      }
+      bEnd--;
+    }
+  }
+}
+function vLineOf(p7) {
+  let k10 = vCache;
+  while (k10 > 0 && p7 < vStart[k10]) {
+    k10--;
+  }
+  while (k10 + 1 < vLines && p7 >= vStart[k10 + 1]) {
+    k10++;
+  }
+  return vCache = k10;
+}
+function mapPos(p7) {
+  if (!bMulti) {
+    return p7;
+  }
+  const k10 = vLineOf(p7);
+  return segS[bSeg0 + k10] + (p7 - vStart[k10]);
+}
+function mapEnd(p7) {
+  if (!bMulti) {
+    return p7;
+  }
+  const k10 = vLineOf(p7);
+  if (k10 > 0 && p7 === vStart[k10]) {
+    const e4 = segE[bSeg0 + k10 - 1];
+    return e4 + eolAt(e4).length;
+  }
+  return segS[bSeg0 + k10] + (p7 - vStart[k10]);
+}
+function eolOfBuf(p7) {
+  if (!hasCR) {
+    return "\n";
+  }
+  return eolAt(segE[bSeg0 + vLineOf(p7)]);
+}
+function entityAt(text5, i, e4) {
+  let j10 = i + 1;
+  if (j10 >= e4) {
+    return -1;
+  }
+  let c8 = text5.charCodeAt(j10);
+  if (c8 === 35) {
+    j10++;
+    c8 = text5.charCodeAt(j10);
+    let code19 = 0;
+    let digits = 0;
+    if (c8 === 120 || c8 === 88) {
+      j10++;
+      while (j10 < e4 && digits < 7) {
+        c8 = text5.charCodeAt(j10);
+        let d4;
+        if (c8 >= 48 && c8 <= 57) {
+          d4 = c8 - 48;
+        } else if (c8 >= 97 && c8 <= 102) {
+          d4 = c8 - 87;
+        } else if (c8 >= 65 && c8 <= 70) {
+          d4 = c8 - 55;
+        } else {
+          break;
+        }
+        code19 = code19 * 16 + d4;
+        digits++;
+        j10++;
+      }
+      if (digits === 0 || digits > 6) {
+        return -1;
+      }
+    } else {
+      while (j10 < e4 && digits < 8) {
+        c8 = text5.charCodeAt(j10);
+        if (c8 < 48 || c8 > 57) {
+          break;
+        }
+        code19 = code19 * 10 + (c8 - 48);
+        digits++;
+        j10++;
+      }
+      if (digits === 0 || digits > 7) {
+        return -1;
+      }
+    }
+    if (j10 >= e4 || text5.charCodeAt(j10) !== 59) {
+      return -1;
+    }
+    if (code19 < 9 || code19 === 11 || code19 > 13 && code19 < 32 || code19 > 126 && code19 < 160 || code19 > 55295 && code19 < 57344 || code19 > 64975 && code19 < 65008 || (code19 & 65535) === 65535 || (code19 & 65535) === 65534 || code19 > 1114111) {
+      entityValue = "\uFFFD";
+    } else {
+      entityValue = String.fromCodePoint(code19);
+    }
+    return j10 + 1;
+  }
+  while (j10 < e4 && j10 - i <= 32 && isAlnum(text5.charCodeAt(j10))) {
+    j10++;
+  }
+  if (j10 === i + 1 || j10 >= e4 || text5.charCodeAt(j10) !== 59) {
+    return -1;
+  }
+  const value = decodeNamedEntity(text5.slice(i + 1, j10));
+  if (value === void 0) {
+    return -1;
+  }
+  entityValue = value;
+  return j10 + 1;
+}
+function decodeString(value) {
+  if (value.indexOf("\\") === -1 && value.indexOf("&") === -1) {
+    return value;
+  }
+  const e4 = value.length;
+  let out = "";
+  let from = 0;
+  let i = 0;
+  while (i < e4) {
+    const c8 = value.charCodeAt(i);
+    if (c8 === 92) {
+      const n4 = value.charCodeAt(i + 1);
+      if (i + 1 < e4 && n4 < 128 && ASCII_PUNCT[n4]) {
+        out += value.slice(from, i);
+        from = i + 1;
+        i += 2;
+        continue;
+      }
+    } else if (c8 === 38) {
+      const end = entityAt(value, i, e4);
+      if (end !== -1) {
+        out += value.slice(from, i) + entityValue;
+        from = end;
+        i = end;
+        continue;
+      }
+    }
+    i++;
+  }
+  return out + value.slice(from);
+}
+function decodeText(s, e4, keepSpaces = false) {
+  let out = "";
+  let from = s;
+  let i = s;
+  while (i < e4) {
+    const c8 = buf.charCodeAt(i);
+    if (c8 === 92) {
+      const n4 = buf.charCodeAt(i + 1);
+      if (i + 1 < e4 && n4 < 128 && ASCII_PUNCT[n4]) {
+        out += buf.slice(from, i);
+        from = i + 1;
+        i += 2;
+        continue;
+      }
+    } else if (c8 === 38) {
+      const end = entityAt(buf, i, e4);
+      if (end !== -1) {
+        out += buf.slice(from, i) + entityValue;
+        from = end;
+        i = end;
+        continue;
+      }
+    } else if (c8 === 10 && bMulti) {
+      let j10 = i;
+      while (!keepSpaces && j10 > from) {
+        const d4 = buf.charCodeAt(j10 - 1);
+        if (d4 !== 32 && d4 !== 9) {
+          break;
+        }
+        j10--;
+      }
+      out += buf.slice(from, j10) + eolOfBuf(i);
+      from = i + 1;
+    }
+    i++;
+  }
+  return out + buf.slice(from, e4);
+}
+function sliceBufWithIndent(s, e4, skip2) {
+  if (!bMulti) {
+    return buf.slice(s, e4);
+  }
+  let out = "";
+  let from = s;
+  for (let i = s; i < e4; i++) {
+    if (buf.charCodeAt(i) === 10) {
+      const k10 = bSeg0 + vLineOf(i);
+      out += buf.slice(from, i) + eolAt(segE[k10]);
+      const lead = segL[k10 + 1] - skip2;
+      if (lead > 0) {
+        out += src.slice(segS[k10 + 1] - lead, segS[k10 + 1]);
+      }
+      from = i + 1;
+    }
+  }
+  return out + buf.slice(from, e4);
+}
+function scanLabel(p7, e4) {
+  let i = p7 + 1;
+  let seen = false;
+  while (i < e4) {
+    const c8 = buf.charCodeAt(i);
+    if (c8 === 93) {
+      return seen && i - p7 - 1 <= 999 ? i : -1;
+    }
+    if (c8 === 91) {
+      return -1;
+    }
+    if (c8 === 92) {
+      const d4 = buf.charCodeAt(i + 1);
+      if (i + 1 < e4 && (d4 === 91 || d4 === 92 || d4 === 93)) {
+        i++;
+      }
+      seen = true;
+    } else if (c8 !== 32 && c8 !== 9 && c8 !== 10) {
+      seen = true;
+    }
+    i++;
+  }
+  return -1;
+}
+function scanDestination(p7, e4) {
+  let i = p7;
+  if (i >= e4) {
+    return -1;
+  }
+  let c8 = buf.charCodeAt(i);
+  if (c8 === 60) {
+    i++;
+    while (i < e4) {
+      c8 = buf.charCodeAt(i);
+      if (c8 === 62) {
+        partStart = p7 + 1;
+        partEnd = i;
+        return i + 1;
+      }
+      if (c8 === 10 || c8 === 60) {
+        return -1;
+      }
+      if (c8 === 92 && i + 1 < e4) {
+        const d4 = buf.charCodeAt(i + 1);
+        if (d4 === 60 || d4 === 62 || d4 === 92) {
+          i++;
+        }
+      }
+      i++;
+    }
+    return -1;
+  }
+  let balance = 0;
+  while (i < e4) {
+    c8 = buf.charCodeAt(i);
+    if (c8 === 40) {
+      if (++balance > 32) {
+        return -1;
+      }
+    } else if (c8 === 41) {
+      if (balance === 0) {
+        break;
+      }
+      balance--;
+    } else if (c8 === 32 || c8 === 9 || c8 === 10) {
+      break;
+    } else if (c8 < 32 || c8 === 127) {
+      return -1;
+    } else if (c8 === 92 && i + 1 < e4) {
+      const d4 = buf.charCodeAt(i + 1);
+      if (d4 === 40 || d4 === 41 || d4 === 92) {
+        i++;
+      }
+    }
+    i++;
+  }
+  if (i === p7 || balance !== 0) {
+    return -1;
+  }
+  partStart = p7;
+  partEnd = i;
+  return i;
+}
+function scanTitle(p7, e4) {
+  const open = buf.charCodeAt(p7);
+  const close = open === 40 ? 41 : open;
+  if (open !== 34 && open !== 39 && open !== 40) {
+    return -1;
+  }
+  let i = p7 + 1;
+  if (open === 40 && parenTitleFrom !== -1 && i >= parenTitleFrom && (parenTitleEnd === -1 || i <= parenTitleEnd)) {
+    i = parenTitleEnd === -1 ? e4 : parenTitleEnd;
+  }
+  while (i < e4) {
+    const c8 = buf.charCodeAt(i);
+    if (c8 === close) {
+      if (open === 40) {
+        parenTitleFrom = p7 + 1;
+        parenTitleEnd = i;
+      }
+      partStart = p7 + 1;
+      partEnd = i;
+      return i + 1;
+    }
+    if (c8 === 92 && i + 1 < e4) {
+      const d4 = buf.charCodeAt(i + 1);
+      if (d4 === close || d4 === open || d4 === 92) {
+        i++;
+      }
+    }
+    i++;
+  }
+  if (open === 40) {
+    parenTitleFrom = p7 + 1;
+    parenTitleEnd = -1;
+  }
+  return -1;
+}
+function skipWhitespace2(p7, e4) {
+  while (p7 < e4) {
+    const c8 = buf.charCodeAt(p7);
+    if (c8 !== 32 && c8 !== 9 && c8 !== 10) {
+      break;
+    }
+    p7++;
+  }
+  return p7;
+}
+function skipSpaces2(p7, e4) {
+  while (p7 < e4) {
+    const c8 = buf.charCodeAt(p7);
+    if (c8 !== 32 && c8 !== 9) {
+      break;
+    }
+    p7++;
+  }
+  return p7;
+}
+function parseDefinition(p7) {
+  const e4 = bEnd;
+  const labelEnd2 = scanLabel(p7, e4);
+  if (labelEnd2 === -1 || buf.charCodeAt(labelEnd2 + 1) !== 58 || labelEnd2 + 1 >= e4) {
+    return -1;
+  }
+  let q10 = skipWhitespace2(labelEnd2 + 2, e4);
+  q10 = scanDestination(q10, e4);
+  if (q10 === -1) {
+    return -1;
+  }
+  defLabel = buf.slice(p7 + 1, labelEnd2);
+  defLabelRaw = sliceBufWithIndent(p7 + 1, labelEnd2, 0);
+  defUrl = decodeString(buf.slice(partStart, partEnd));
+  defTitle = null;
+  const t42 = skipWhitespace2(q10, e4);
+  if (t42 > q10 && t42 < e4) {
+    const titleEnd = scanTitle(t42, e4);
+    if (titleEnd !== -1) {
+      const u5 = skipSpaces2(titleEnd, e4);
+      if (u5 >= e4 || buf.charCodeAt(u5) === 10) {
+        defTitle = partEnd > partStart ? decodeText(partStart, partEnd, true) : null;
+        return u5;
+      }
+    }
+  }
+  const u4 = skipSpaces2(q10, e4);
+  if (u4 >= e4 || buf.charCodeAt(u4) === 10) {
+    return u4;
+  }
+  return -1;
+}
+function closeNote(p7) {
+  const i = --ntN;
+  const opener = ntNode[i];
+  resolveDelimiters(ntDelim[i]);
+  const height = heightBetween(opener, -1) + 1;
+  if (height > MAX_NESTING) {
+    ntN = 0;
+    return false;
+  }
+  const node = newNode(Footnote, nStart[opener], p7 + 1);
+  nD3[node] = height;
+  moveBetween(opener, -1, node);
+  insertAfter(opener, node);
+  unlink(opener);
+  if (brN > ntBr[i]) {
+    brN = ntBr[i];
+  }
+  return true;
+}
+function pushDelimiter(node, ch3, num, canOpen, canClose) {
+  const i = dN++;
+  dNode[i] = node;
+  dCh[i] = ch3;
+  dNum[i] = num;
+  dOpen[i] = canOpen;
+  dClose[i] = canClose;
+  dPrev[i] = dLast;
+  dNext[i] = -1;
+  if (dLast !== -1) {
+    dNext[dLast] = i;
+  }
+  dLast = i;
+}
+function removeDelimiter(i) {
+  const prev = dPrev[i];
+  const next = dNext[i];
+  if (prev !== -1) {
+    dNext[prev] = next;
+  }
+  if (next === -1) {
+    dLast = prev;
+  } else {
+    dPrev[next] = prev;
+  }
+}
+function removeDelimitersBetween(lo7, hi13) {
+  if (hi13 === -1) {
+    dLast = lo7;
+    if (lo7 !== -1) {
+      dNext[lo7] = -1;
+    }
+    return;
+  }
+  dPrev[hi13] = lo7;
+  if (lo7 !== -1) {
+    dNext[lo7] = hi13;
+  }
+}
+function firstDelimiterAfter(lo7) {
+  if (lo7 !== -1) {
+    return dNext[lo7];
+  }
+  let i = dLast;
+  if (i === -1) {
+    return -1;
+  }
+  while (dPrev[i] !== -1) {
+    i = dPrev[i];
+  }
+  return i;
+}
+function resolveDelimiters(lo7) {
+  let bottomAsterisk = lo7;
+  let bottomUnderscore = lo7;
+  let bottomTilde1 = lo7;
+  let bottomTilde2 = lo7;
+  let closer = firstDelimiterAfter(lo7);
+  while (closer !== -1) {
+    const ch3 = dCh[closer];
+    if (!dClose[closer]) {
+      closer = dNext[closer];
+      continue;
+    }
+    const tilde = ch3 === 126;
+    const bottom = tilde ? dNum[closer] === 1 ? bottomTilde1 : bottomTilde2 : ch3 === 42 ? bottomAsterisk : bottomUnderscore;
+    let opener = dPrev[closer];
+    let found = false;
+    let candidate = false;
+    while (opener !== -1 && opener !== lo7 && opener !== bottom) {
+      if (dCh[opener] === ch3 && dOpen[opener]) {
+        if (tilde) {
+          if (dNum[opener] === dNum[closer]) {
+            candidate = true;
+            found = true;
+            break;
+          }
+        } else {
+          candidate = true;
+          if (!((dClose[opener] || dOpen[closer]) && dNum[closer] % 3 !== 0 && (dNum[opener] + dNum[closer]) % 3 === 0)) {
+            found = true;
+            break;
+          }
+        }
+      }
+      opener = dPrev[opener];
+    }
+    let height = 0;
+    if (found) {
+      height = heightBetween(dNode[opener], dNode[closer]) + 1;
+      if (height > MAX_NESTING) {
+        found = false;
+        candidate = true;
+        if (bottomAsterisk < opener) {
+          bottomAsterisk = opener;
+        }
+        if (bottomUnderscore < opener) {
+          bottomUnderscore = opener;
+        }
+        if (bottomTilde1 < opener) {
+          bottomTilde1 = opener;
+        }
+        if (bottomTilde2 < opener) {
+          bottomTilde2 = opener;
+        }
+      }
+    }
+    if (found) {
+      const on11 = dNode[opener];
+      const cn9 = dNode[closer];
+      let use;
+      if (tilde) {
+        use = dNum[closer];
+        const node = newNode(Delete, nStart[on11], nEnd[cn9]);
+        nD3[node] = height;
+        moveBetween(on11, cn9, node);
+        insertAfter(on11, node);
+      } else {
+        use = dNum[closer] >= 2 && dNum[opener] >= 2 ? 2 : 1;
+        nEnd[on11] -= use;
+        nStart[cn9] += use;
+        const emphasis = newNode(use === 1 ? Emphasis : Strong, nEnd[on11], nStart[cn9]);
+        nD3[emphasis] = height;
+        moveBetween(on11, cn9, emphasis);
+        insertAfter(on11, emphasis);
+      }
+      dNum[opener] -= use;
+      dNum[closer] -= use;
+      removeDelimitersBetween(opener, closer);
+      if (bottomAsterisk > opener) {
+        bottomAsterisk = opener;
+      }
+      if (bottomUnderscore > opener) {
+        bottomUnderscore = opener;
+      }
+      if (bottomTilde1 > opener) {
+        bottomTilde1 = opener;
+      }
+      if (bottomTilde2 > opener) {
+        bottomTilde2 = opener;
+      }
+      if (dNum[opener] === 0) {
+        unlink(on11);
+        const prev = dPrev[opener];
+        if (bottomAsterisk === opener) {
+          bottomAsterisk = prev;
+        }
+        if (bottomUnderscore === opener) {
+          bottomUnderscore = prev;
+        }
+        if (bottomTilde1 === opener) {
+          bottomTilde1 = prev;
+        }
+        if (bottomTilde2 === opener) {
+          bottomTilde2 = prev;
+        }
+        removeDelimiter(opener);
+      }
+      if (dNum[closer] === 0) {
+        unlink(cn9);
+        const next = dNext[closer];
+        removeDelimiter(closer);
+        closer = next;
+      }
+    } else {
+      const old = closer;
+      const prev = dPrev[old];
+      closer = dNext[closer];
+      if (!candidate) {
+        if (!tilde) {
+          if (ch3 === 42) {
+            bottomAsterisk = prev;
+          } else {
+            bottomUnderscore = prev;
+          }
+        } else if (dNum[old] === 1) {
+          bottomTilde1 = prev;
+        } else {
+          bottomTilde2 = prev;
+        }
+      }
+      if (!dOpen[old]) {
+        if (bottomAsterisk === old) {
+          bottomAsterisk = prev;
+        }
+        if (bottomUnderscore === old) {
+          bottomUnderscore = prev;
+        }
+        if (bottomTilde1 === old) {
+          bottomTilde1 = prev;
+        }
+        if (bottomTilde2 === old) {
+          bottomTilde2 = prev;
+        }
+        removeDelimiter(old);
+      }
+    }
+  }
+  removeDelimitersBetween(lo7, -1);
+}
+function textOfChildren(node) {
+  let out = "";
+  let c8 = nFirst[node];
+  while (c8 !== -1) {
+    let descend = false;
+    switch (nKind[c8]) {
+      case Str:
+        out += decodeText(nStart[c8], nEnd[c8]);
+        break;
+      case Code:
+      case Html:
+        out += side[nA[c8]];
+        break;
+      case Image:
+        out += side[nC[c8]];
+        break;
+      case ImageReference:
+        out += side[nD3[c8]];
+        break;
+      case Break:
+      case FootnoteReference:
+        break;
+      default:
+        descend = nFirst[c8] !== -1;
+    }
+    if (descend) {
+      c8 = nFirst[c8];
+      continue;
+    }
+    while (nNext[c8] === -1) {
+      c8 = nParent[c8];
+      if (c8 === node) {
+        return out;
+      }
+    }
+    c8 = nNext[c8];
+  }
+  return out;
+}
+function scanTicks(p7, e4) {
+  ticksScanned = true;
+  tickLast.clear();
+  let i = p7;
+  for (; ; ) {
+    i = buf.indexOf("`", i);
+    if (i === -1 || i >= e4) {
+      return;
+    }
+    let j10 = i + 1;
+    while (j10 < e4 && buf.charCodeAt(j10) === 96) {
+      j10++;
+    }
+    tickLast.set(j10 - i, i);
+    i = j10;
+  }
+}
+function htmlTerminatorKind(p7) {
+  const c8 = buf.charCodeAt(p7 + 1);
+  if (c8 === 63) {
+    return 1;
+  }
+  if (c8 !== 33) {
+    return 0;
+  }
+  const d4 = buf.charCodeAt(p7 + 2);
+  if (d4 === 45) {
+    if (buf.charCodeAt(p7 + 3) !== 45) {
+      return 0;
+    }
+    const f4 = buf.charCodeAt(p7 + 4);
+    return f4 === 62 || f4 === 45 && buf.charCodeAt(p7 + 5) === 62 ? 0 : 2;
+  }
+  if (d4 === 91) {
+    return buf.startsWith("<![CDATA[", p7) ? 4 : 0;
+  }
+  return isAlpha2(d4) ? 8 : 0;
+}
+function scanLiteralDomain(p7, e4) {
+  let i = p7;
+  let underscoreInLastSegment = false;
+  let underscoreInLastLastSegment = false;
+  let seen = false;
+  while (i < e4) {
+    const c8 = buf.charCodeAt(i);
+    if (c8 === 46 || c8 === 95) {
+      if (isLiteralTrail(i, e4)) {
+        break;
+      }
+      if (c8 === 95) {
+        underscoreInLastSegment = true;
+      } else {
+        underscoreInLastLastSegment = underscoreInLastSegment;
+        underscoreInLastSegment = false;
+      }
+      i++;
+      continue;
+    }
+    const k10 = classify(c8);
+    if (k10 === 1 || c8 !== 45 && k10 === 2) {
+      break;
+    }
+    seen = true;
+    i++;
+  }
+  if (underscoreInLastLastSegment || underscoreInLastSegment || !seen) {
+    return -1;
+  }
+  return i;
+}
+function scanLiteralPath(p7, e4) {
+  let i = p7;
+  let sizeOpen = 0;
+  let sizeClose = 0;
+  while (i < e4) {
+    const c8 = buf.charCodeAt(i);
+    if (c8 === 40) {
+      sizeOpen++;
+      i++;
+      continue;
+    }
+    if (c8 === 41 && sizeClose < sizeOpen) {
+      sizeClose++;
+      i++;
+      continue;
+    }
+    if (c8 === 33 || c8 === 34 || c8 === 38 || c8 === 39 || c8 === 41 || c8 === 42 || c8 === 44 || c8 === 46 || c8 === 58 || c8 === 59 || c8 === 60 || c8 === 63 || c8 === 93 || c8 === 95 || c8 === 126) {
+      if (isLiteralTrail(i, e4)) {
+        break;
+      }
+      if (c8 === 41) {
+        sizeClose++;
+      }
+      i++;
+      continue;
+    }
+    if (classify(c8) === 1) {
+      break;
+    }
+    i++;
+  }
+  return i;
+}
+function isLiteralTrail(p7, e4) {
+  if (p7 >= trailFrom && p7 < trailTo && e4 === trailEnd) {
+    return trailResult;
+  }
+  const result = scanLiteralTrail(p7, e4);
+  trailFrom = p7;
+  trailEnd = e4;
+  trailResult = result;
+  return result;
+}
+function scanLiteralTrail(p7, e4) {
+  let i = p7;
+  trailTo = p7;
+  while (i < e4) {
+    const c8 = buf.charCodeAt(i);
+    if (c8 === 33 || c8 === 34 || c8 === 39 || c8 === 41 || c8 === 42 || c8 === 44 || c8 === 46 || c8 === 58 || c8 === 59 || c8 === 63 || c8 === 95 || c8 === 126) {
+      i++;
+      trailTo = i;
+      continue;
+    }
+    if (c8 === 38) {
+      let j10 = i + 1;
+      if (j10 >= e4 || !isAlpha2(buf.charCodeAt(j10))) {
+        return false;
+      }
+      while (j10 < e4 && isAlpha2(buf.charCodeAt(j10))) {
+        j10++;
+      }
+      if (j10 >= e4 || buf.charCodeAt(j10) !== 59) {
+        return false;
+      }
+      i = j10 + 1;
+      trailTo = i;
+      continue;
+    }
+    if (c8 === 93) {
+      i++;
+      if (i >= e4) {
+        return true;
+      }
+      const d4 = buf.charCodeAt(i);
+      if (d4 === 40 || d4 === 91 || classify(d4) === 1) {
+        return true;
+      }
+      trailTo = i;
+      continue;
+    }
+    return c8 === 60 || classify(c8) === 1;
+  }
+  return true;
+}
+function scanWwwAutolink(p7, e4) {
+  if (p7 + 4 > e4) {
+    return -1;
+  }
+  const c14 = buf.charCodeAt(p7 + 1);
+  const c23 = buf.charCodeAt(p7 + 2);
+  if (c14 !== 119 && c14 !== 87 || c23 !== 119 && c23 !== 87 || buf.charCodeAt(p7 + 3) !== 46 || p7 + 4 >= e4) {
+    return -1;
+  }
+  const d4 = scanLiteralDomain(p7, e4);
+  if (d4 === -1) {
+    return -1;
+  }
+  return scanLiteralPath(d4, e4);
+}
+function scanProtocolAutolink(p7, e4) {
+  let i = p7 + 1;
+  const t111 = buf.charCodeAt(i) | 32;
+  const t211 = buf.charCodeAt(i + 1) | 32;
+  const t310 = buf.charCodeAt(i + 2) | 32;
+  if (t111 !== 116 || t211 !== 116 || t310 !== 112) {
+    return -1;
+  }
+  i += 3;
+  if ((buf.charCodeAt(i) | 32) === 115) {
+    i++;
+  }
+  if (buf.charCodeAt(i) !== 58 || buf.charCodeAt(i + 1) !== 47 || buf.charCodeAt(i + 2) !== 47) {
+    return -1;
+  }
+  i += 3;
+  if (i >= e4) {
+    return -1;
+  }
+  const c8 = buf.charCodeAt(i);
+  if (c8 < 32 || c8 === 127 || classify(c8) !== 0) {
+    return -1;
+  }
+  const d4 = scanLiteralDomain(i, e4);
+  if (d4 === -1) {
+    return -1;
+  }
+  return scanLiteralPath(d4, e4);
+}
+function findEmail(p7, s02, e4) {
+  let at15 = p7;
+  for (; ; ) {
+    at15 = buf.indexOf("@", at15);
+    if (at15 === -1 || at15 >= e4) {
+      return 2147483647;
+    }
+    let s = at15;
+    while (s > p7 && isAtext(buf.charCodeAt(s - 1))) {
+      s--;
+    }
+    if (s < at15 && !(s > s02 && (buf.charCodeAt(s - 1) === 47 || s === p7 && isAtext(buf.charCodeAt(s - 1))))) {
+      let i = at15 + 1;
+      let dot = false;
+      let data = false;
+      while (i < e4) {
+        const c8 = buf.charCodeAt(i);
+        if (c8 === 46) {
+          if (i + 1 < e4 && isAlnum(buf.charCodeAt(i + 1))) {
+            dot = true;
+            i++;
             continue;
           }
-          if (values[1] === true) {
-            values[1] = void 0;
-          }
-          transformer = values[0].apply(processor, values.slice(1));
-          if (typeof transformer === "function") {
-            transformers.use(transformer);
-          }
+          break;
         }
-        frozen = true;
-        freezeIndex = Infinity;
-        return processor;
+        if (c8 === 45 || c8 === 95 || isAlnum(c8)) {
+          data = true;
+          i++;
+          continue;
+        }
+        break;
       }
-      function data(key3, value) {
-        if (typeof key3 === "string") {
-          if (arguments.length === 2) {
-            assertUnfrozen("data", frozen);
-            namespace[key3] = value;
-            return processor;
-          }
-          return own3.call(namespace, key3) && namespace[key3] || null;
-        }
-        if (key3) {
-          assertUnfrozen("data", frozen);
-          namespace = key3;
-          return processor;
-        }
-        return namespace;
+      if (data && dot && isAlpha2(buf.charCodeAt(i - 1))) {
+        literalEnd = i;
+        return s;
       }
-      function use(value) {
-        var settings;
-        assertUnfrozen("use", frozen);
-        if (value === null || value === void 0) {
-        } else if (typeof value === "function") {
-          addPlugin.apply(null, arguments);
-        } else if (typeof value === "object") {
-          if ("length" in value) {
-            addList(value);
-          } else {
-            addPreset(value);
+    }
+    at15++;
+  }
+}
+function nextEmail(p7, s02, e4) {
+  if (!bMulti) {
+    if (atCache !== -2 && atCache < p7) {
+      const at15 = src.indexOf("@", p7);
+      atCache = at15 === -1 ? -2 : at15;
+    }
+    if (atCache === -2 || atCache >= e4) {
+      return 2147483647;
+    }
+  }
+  return findEmail(p7, s02, e4);
+}
+function addText(parent, s, e4, complex) {
+  const node = newNode(Str, s, e4);
+  nA[node] = complex ? 1 : 0;
+  append(parent, node);
+  return node;
+}
+function parseInline(block2, kind) {
+  const count = nD3[block2];
+  if (count <= 0) {
+    return;
+  }
+  setupBuf(nC[block2], count, true);
+  const s02 = bStart;
+  const e4 = bEnd;
+  let p7 = s02;
+  if (p7 >= e4) {
+    return;
+  }
+  dN = 0;
+  dLast = -1;
+  brN = 0;
+  ntN = 0;
+  let textStart = p7;
+  let complex = false;
+  const inTable = kind === TableCell;
+  if (kind === Paragraph && buf.charCodeAt(p7) === 91 && buf.charCodeAt(p7 + 2) === 93 && p7 + 3 < e4) {
+    const item = nParent[block2];
+    if (nKind[item] === ListItem && nFirst[item] === block2) {
+      const c8 = buf.charCodeAt(p7 + 1);
+      const d4 = buf.charCodeAt(p7 + 3);
+      if ((c8 === 32 || c8 === 9 || c8 === 10 || c8 === 120 || c8 === 88) && (d4 === 32 || d4 === 9 || d4 === 10)) {
+        nA[item] = c8 === 120 || c8 === 88 ? 1 : 0;
+        let j10 = p7 + 3;
+        while (j10 < e4) {
+          const w8 = buf.charCodeAt(j10);
+          if (w8 !== 32 && w8 !== 9 && w8 !== 10) {
+            break;
           }
+          j10++;
+        }
+        p7 = j10;
+        textStart = p7;
+        nStart[block2] = mapPos(p7);
+      }
+    }
+  }
+  let emailStart = nextEmail(p7, s02, e4);
+  while (p7 < e4) {
+    if (p7 > emailStart) {
+      emailStart = nextEmail(p7, s02, e4);
+    }
+    const stop = emailStart < e4 ? emailStart : e4;
+    let c8 = 0;
+    while (p7 < stop) {
+      c8 = buf.charCodeAt(p7);
+      if (c8 < 128 && SPECIAL[c8] === 1) {
+        break;
+      }
+      p7++;
+    }
+    if (p7 >= e4) {
+      break;
+    }
+    if (p7 === emailStart) {
+      if (brN === 0) {
+        if (p7 > textStart) {
+          addText(block2, textStart, p7, complex);
+          complex = false;
+        }
+        const link2 = newNode(Link, p7, literalEnd);
+        nA[link2] = addSide(`mailto:${buf.slice(p7, literalEnd)}`);
+        append(block2, link2);
+        append(link2, newNode(Str, p7, literalEnd));
+        nA[nLast[link2]] = 0;
+        p7 = literalEnd;
+        textStart = p7;
+        emailStart = nextEmail(p7, s02, e4);
+        continue;
+      }
+      const at15 = buf.indexOf("@", p7);
+      emailStart = nextEmail(at15 + 1, s02, e4);
+      continue;
+    }
+    switch (c8) {
+      case 10: {
+        let ws10 = 0;
+        let tab = false;
+        while (p7 - ws10 > textStart) {
+          const d4 = buf.charCodeAt(p7 - ws10 - 1);
+          if (d4 === 9) {
+            tab = true;
+          } else if (d4 !== 32) {
+            break;
+          }
+          ws10++;
+        }
+        if (ws10 >= 2 && !tab) {
+          if (p7 - ws10 > textStart) {
+            addText(block2, textStart, p7 - ws10, complex);
+            complex = false;
+          }
+          append(block2, newNode(Break, p7 - ws10, p7 + 1));
+          p7++;
+          textStart = p7;
         } else {
-          throw new Error("Expected usable value, not `" + value + "`");
-        }
-        if (settings) {
-          namespace.settings = extend(namespace.settings || {}, settings);
-        }
-        return processor;
-        function addPreset(result) {
-          addList(result.plugins);
-          if (result.settings) {
-            settings = extend(settings || {}, result.settings);
+          if (p7 - ws10 === textStart) {
+            textStart = p7;
           }
+          complex = true;
+          p7++;
         }
-        function add(value2) {
-          if (typeof value2 === "function") {
-            addPlugin(value2);
-          } else if (typeof value2 === "object") {
-            if ("length" in value2) {
-              addPlugin.apply(null, value2);
-            } else {
-              addPreset(value2);
+        break;
+      }
+      case 92: {
+        const d4 = buf.charCodeAt(p7 + 1);
+        if (p7 + 1 < e4) {
+          if (d4 === 10) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
             }
-          } else {
-            throw new Error("Expected usable value, not `" + value2 + "`");
+            append(block2, newNode(Break, p7, p7 + 2));
+            p7 += 2;
+            textStart = p7;
+            break;
+          }
+          if (d4 < 128 && ASCII_PUNCT[d4] === 1) {
+            complex = true;
+            p7 += 2;
+            break;
           }
         }
-        function addList(plugins2) {
-          var index = -1;
-          if (plugins2 === null || plugins2 === void 0) {
-          } else if (typeof plugins2 === "object" && "length" in plugins2) {
-            while (++index < plugins2.length) {
-              add(plugins2[index]);
-            }
-          } else {
-            throw new Error("Expected a list of plugins, not `" + plugins2 + "`");
-          }
+        p7++;
+        break;
+      }
+      case 38: {
+        const end = entityAt(buf, p7, e4);
+        if (end !== -1) {
+          complex = true;
+          p7 = end;
+        } else {
+          p7++;
         }
-        function addPlugin(plugin, value2) {
-          var entry = find(plugin);
-          if (entry) {
-            if (plain(entry[1]) && plain(value2)) {
-              value2 = extend(true, entry[1], value2);
-            }
-            entry[1] = value2;
-          } else {
-            attachers.push(slice.call(arguments));
-          }
+        break;
+      }
+      case 96: {
+        let q10 = p7;
+        while (q10 < e4 && buf.charCodeAt(q10) === 96) {
+          q10++;
         }
-      }
-      function find(plugin) {
-        var index = -1;
-        while (++index < attachers.length) {
-          if (attachers[index][0] === plugin) {
-            return attachers[index];
-          }
+        const size = q10 - p7;
+        let closeStart = -1;
+        let closeEnd = -1;
+        if (!ticksScanned) {
+          scanTicks(p7, e4);
         }
-      }
-      function parse11(doc) {
-        var file = vfile(doc);
-        var Parser3;
-        freeze();
-        Parser3 = processor.Parser;
-        assertParser("parse", Parser3);
-        if (newable(Parser3, "parse")) {
-          return new Parser3(String(file), file).parse();
-        }
-        return Parser3(String(file), file);
-      }
-      function run(node, file, cb2) {
-        assertNode(node);
-        freeze();
-        if (!cb2 && typeof file === "function") {
-          cb2 = file;
-          file = null;
-        }
-        if (!cb2) {
-          return new Promise(executor);
-        }
-        executor(null, cb2);
-        function executor(resolve4, reject) {
-          transformers.run(node, vfile(file), done);
-          function done(error2, tree, file2) {
-            tree = tree || node;
-            if (error2) {
-              reject(error2);
-            } else if (resolve4) {
-              resolve4(tree);
-            } else {
-              cb2(null, tree, file2);
-            }
-          }
-        }
-      }
-      function runSync(node, file) {
-        var result;
-        var complete;
-        run(node, file, done);
-        assertDone("runSync", "run", complete);
-        return result;
-        function done(error2, tree) {
-          complete = true;
-          result = tree;
-          bail(error2);
-        }
-      }
-      function stringify4(node, doc) {
-        var file = vfile(doc);
-        var Compiler3;
-        freeze();
-        Compiler3 = processor.Compiler;
-        assertCompiler("stringify", Compiler3);
-        assertNode(node);
-        if (newable(Compiler3, "compile")) {
-          return new Compiler3(node, file).compile();
-        }
-        return Compiler3(node, file);
-      }
-      function process5(doc, cb2) {
-        freeze();
-        assertParser("process", processor.Parser);
-        assertCompiler("process", processor.Compiler);
-        if (!cb2) {
-          return new Promise(executor);
-        }
-        executor(null, cb2);
-        function executor(resolve4, reject) {
-          var file = vfile(doc);
-          pipeline.run(processor, { file }, done);
-          function done(error2) {
-            if (error2) {
-              reject(error2);
-            } else if (resolve4) {
-              resolve4(file);
-            } else {
-              cb2(null, file);
-            }
-          }
-        }
-      }
-      function processSync(doc) {
-        var file;
-        var complete;
-        freeze();
-        assertParser("processSync", processor.Parser);
-        assertCompiler("processSync", processor.Compiler);
-        file = vfile(doc);
-        process5(file, done);
-        assertDone("processSync", "process", complete);
-        return file;
-        function done(error2) {
-          complete = true;
-          bail(error2);
-        }
-      }
-    }
-    function newable(value, name) {
-      return typeof value === "function" && value.prototype && // A function with keys in its prototype is probably a constructor.
-      // Classes’ prototype methods are not enumerable, so we check if some value
-      // exists in the prototype.
-      (keys(value.prototype) || name in value.prototype);
-    }
-    function keys(value) {
-      var key3;
-      for (key3 in value) {
-        return true;
-      }
-      return false;
-    }
-    function assertParser(name, Parser3) {
-      if (typeof Parser3 !== "function") {
-        throw new Error("Cannot `" + name + "` without `Parser`");
-      }
-    }
-    function assertCompiler(name, Compiler3) {
-      if (typeof Compiler3 !== "function") {
-        throw new Error("Cannot `" + name + "` without `Compiler`");
-      }
-    }
-    function assertUnfrozen(name, frozen) {
-      if (frozen) {
-        throw new Error(
-          "Cannot invoke `" + name + "` on a frozen processor.\nCreate a new processor first, by invoking it: use `processor()` instead of `processor`."
-        );
-      }
-    }
-    function assertNode(node) {
-      if (!node || typeof node.type !== "string") {
-        throw new Error("Expected node, got `" + node + "`");
-      }
-    }
-    function assertDone(name, asyncName, complete) {
-      if (!complete) {
-        throw new Error(
-          "`" + name + "` finished async. Use `" + asyncName + "` instead"
-        );
-      }
-    }
-  }
-});
-
-// node_modules/ccount/index.js
-var require_ccount = __commonJS({
-  "node_modules/ccount/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = ccount;
-    function ccount(source3, character) {
-      var value = String(source3);
-      var count = 0;
-      var index;
-      if (typeof character !== "string") {
-        throw new Error("Expected character");
-      }
-      index = value.indexOf(character);
-      while (index !== -1) {
-        count++;
-        index = value.indexOf(character, index + character.length);
-      }
-      return count;
-    }
-  }
-});
-
-// node_modules/unist-util-is/convert.js
-var require_convert = __commonJS({
-  "node_modules/unist-util-is/convert.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = convert;
-    function convert(test) {
-      if (test == null) {
-        return ok2;
-      }
-      if (typeof test === "string") {
-        return typeFactory(test);
-      }
-      if (typeof test === "object") {
-        return "length" in test ? anyFactory(test) : allFactory(test);
-      }
-      if (typeof test === "function") {
-        return test;
-      }
-      throw new Error("Expected function, string, or object as test");
-    }
-    function allFactory(test) {
-      return all;
-      function all(node) {
-        var key3;
-        for (key3 in test) {
-          if (node[key3] !== test[key3]) return false;
-        }
-        return true;
-      }
-    }
-    function anyFactory(tests) {
-      var checks = [];
-      var index = -1;
-      while (++index < tests.length) {
-        checks[index] = convert(tests[index]);
-      }
-      return any;
-      function any() {
-        var index2 = -1;
-        while (++index2 < checks.length) {
-          if (checks[index2].apply(this, arguments)) {
-            return true;
-          }
-        }
-        return false;
-      }
-    }
-    function typeFactory(test) {
-      return type;
-      function type(node) {
-        return Boolean(node && node.type === test);
-      }
-    }
-    function ok2() {
-      return true;
-    }
-  }
-});
-
-// node_modules/unist-util-visit-parents/color.js
-var require_color = __commonJS({
-  "node_modules/unist-util-visit-parents/color.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = color;
-    function color(d4) {
-      return "\x1B[33m" + d4 + "\x1B[39m";
-    }
-  }
-});
-
-// node_modules/unist-util-visit-parents/index.js
-var require_unist_util_visit_parents = __commonJS({
-  "node_modules/unist-util-visit-parents/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = visitParents;
-    var convert = require_convert();
-    var color = require_color();
-    var CONTINUE = true;
-    var SKIP = "skip";
-    var EXIT = false;
-    visitParents.CONTINUE = CONTINUE;
-    visitParents.SKIP = SKIP;
-    visitParents.EXIT = EXIT;
-    function visitParents(tree, test, visitor, reverse) {
-      var step;
-      var is10;
-      if (typeof test === "function" && typeof visitor !== "function") {
-        reverse = visitor;
-        visitor = test;
-        test = null;
-      }
-      is10 = convert(test);
-      step = reverse ? -1 : 1;
-      factory(tree, null, [])();
-      function factory(node, index, parents) {
-        var value = typeof node === "object" && node !== null ? node : {};
-        var name;
-        if (typeof value.type === "string") {
-          name = typeof value.tagName === "string" ? value.tagName : typeof value.name === "string" ? value.name : void 0;
-          visit2.displayName = "node (" + color(value.type + (name ? "<" + name + ">" : "")) + ")";
-        }
-        return visit2;
-        function visit2() {
-          var grandparents = parents.concat(node);
-          var result = [];
-          var subresult;
-          var offset;
-          if (!test || is10(node, index, parents[parents.length - 1] || null)) {
-            result = toResult(visitor(node, parents));
-            if (result[0] === EXIT) {
-              return result;
-            }
-          }
-          if (node.children && result[0] !== SKIP) {
-            offset = (reverse ? node.children.length : -1) + step;
-            while (offset > -1 && offset < node.children.length) {
-              subresult = factory(node.children[offset], offset, grandparents)();
-              if (subresult[0] === EXIT) {
-                return subresult;
-              }
-              offset = typeof subresult[1] === "number" ? subresult[1] : offset + step;
-            }
-          }
-          return result;
-        }
-      }
-    }
-    function toResult(value) {
-      if (value !== null && typeof value === "object" && "length" in value) {
-        return value;
-      }
-      if (typeof value === "number") {
-        return [CONTINUE, value];
-      }
-      return [value];
-    }
-  }
-});
-
-// node_modules/escape-string-regexp/index.js
-var require_escape_string_regexp = __commonJS({
-  "node_modules/escape-string-regexp/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = (string3) => {
-      if (typeof string3 !== "string") {
-        throw new TypeError("Expected a string");
-      }
-      return string3.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&").replace(/-/g, "\\x2d");
-    };
-  }
-});
-
-// node_modules/mdast-util-find-and-replace/index.js
-var require_mdast_util_find_and_replace = __commonJS({
-  "node_modules/mdast-util-find-and-replace/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = findAndReplace;
-    var visit2 = require_unist_util_visit_parents();
-    var convert = require_convert();
-    var escape5 = require_escape_string_regexp();
-    var splice2 = [].splice;
-    function findAndReplace(tree, find, replace2, options7) {
-      var settings;
-      var schema;
-      if (typeof find === "string" || find && typeof find.exec === "function") {
-        schema = [[find, replace2]];
-      } else {
-        schema = find;
-        options7 = replace2;
-      }
-      settings = options7 || {};
-      search2(tree, settings, handlerFactory(toPairs(schema)));
-      return tree;
-      function handlerFactory(pairs) {
-        var pair2 = pairs[0];
-        return handler;
-        function handler(node, parent) {
-          var find2 = pair2[0];
-          var replace3 = pair2[1];
-          var nodes = [];
-          var start = 0;
-          var index = parent.children.indexOf(node);
-          var position;
-          var match2;
-          var subhandler;
-          var value;
-          find2.lastIndex = 0;
-          match2 = find2.exec(node.value);
-          while (match2) {
-            position = match2.index;
-            value = replace3.apply(
-              null,
-              [].concat(match2, { index: match2.index, input: match2.input })
-            );
-            if (value !== false) {
-              if (start !== position) {
-                nodes.push({ type: "text", value: node.value.slice(start, position) });
-              }
-              if (typeof value === "string" && value.length > 0) {
-                value = { type: "text", value };
-              }
-              if (value) {
-                nodes = [].concat(nodes, value);
-              }
-              start = position + match2[0].length;
-            }
-            if (!find2.global) {
+        const lastTick = tickLast.get(size);
+        if (lastTick !== void 0 && lastTick >= q10) {
+          let i = q10;
+          while (i < e4) {
+            i = buf.indexOf("`", i);
+            if (i === -1 || i >= e4) {
               break;
             }
-            match2 = find2.exec(node.value);
-          }
-          if (position === void 0) {
-            nodes = [node];
-            index--;
-          } else {
-            if (start < node.value.length) {
-              nodes.push({ type: "text", value: node.value.slice(start) });
+            let j10 = i;
+            while (j10 < e4 && buf.charCodeAt(j10) === 96) {
+              j10++;
             }
-            nodes.unshift(index, 1);
-            splice2.apply(parent.children, nodes);
-          }
-          if (pairs.length > 1) {
-            subhandler = handlerFactory(pairs.slice(1));
-            position = -1;
-            while (++position < nodes.length) {
-              node = nodes[position];
-              if (node.type === "text") {
-                subhandler(node, parent);
-              } else {
-                search2(node, settings, subhandler);
-              }
+            if (j10 - i === size) {
+              closeStart = i;
+              closeEnd = j10;
+              break;
             }
+            i = j10;
           }
-          return index + nodes.length + 1;
         }
-      }
-    }
-    function search2(tree, settings, handler) {
-      var ignored = convert(settings.ignore || []);
-      var result = [];
-      visit2(tree, "text", visitor);
-      return result;
-      function visitor(node, parents) {
-        var index = -1;
-        var parent;
-        var grandparent;
-        while (++index < parents.length) {
-          parent = parents[index];
-          if (ignored(
-            parent,
-            grandparent ? grandparent.children.indexOf(parent) : void 0,
-            grandparent
-          )) {
-            return;
-          }
-          grandparent = parent;
+        if (closeStart === -1) {
+          p7 = q10;
+          break;
         }
-        return handler(node, grandparent);
-      }
-    }
-    function toPairs(schema) {
-      var result = [];
-      var key3;
-      var index;
-      if (typeof schema !== "object") {
-        throw new Error("Expected array or object as schema");
-      }
-      if ("length" in schema) {
-        index = -1;
-        while (++index < schema.length) {
-          result.push([
-            toExpression(schema[index][0]),
-            toFunction(schema[index][1])
-          ]);
+        if (p7 > textStart) {
+          addText(block2, textStart, p7, complex);
+          complex = false;
         }
-      } else {
-        for (key3 in schema) {
-          result.push([toExpression(key3), toFunction(schema[key3])]);
-        }
-      }
-      return result;
-    }
-    function toExpression(find) {
-      return typeof find === "string" ? new RegExp(escape5(find), "g") : find;
-    }
-    function toFunction(replace2) {
-      return typeof replace2 === "function" ? replace2 : returner;
-      function returner() {
-        return replace2;
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/constant/unicode-punctuation-regex.js
-var require_unicode_punctuation_regex = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/constant/unicode-punctuation-regex.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuation2 = /[!-\/:-@\[-`\{-~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u09FD\u0A76\u0AF0\u0C77\u0C84\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E4F\u2E52\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]/;
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/constant/from-char-code.js
-var require_from_char_code = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/constant/from-char-code.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = String.fromCharCode;
-    module.exports = fromCharCode;
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/util/regex-check.js
-var require_regex_check = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/util/regex-check.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = require_from_char_code();
-    function regexCheck2(regex2) {
-      return check2;
-      function check2(code19) {
-        return regex2.test(fromCharCode(code19));
-      }
-    }
-    module.exports = regexCheck2;
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/character/unicode-punctuation.js
-var require_unicode_punctuation = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/character/unicode-punctuation.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuationRegex = require_unicode_punctuation_regex();
-    var regexCheck2 = require_regex_check();
-    var unicodePunctuation2 = regexCheck2(unicodePunctuationRegex);
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/character/unicode-whitespace.js
-var require_unicode_whitespace = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/node_modules/micromark/dist/character/unicode-whitespace.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check();
-    var unicodeWhitespace2 = regexCheck2(/\s/);
-    module.exports = unicodeWhitespace2;
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/from-markdown.js
-var require_from_markdown = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/from-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var ccount = require_ccount();
-    var findAndReplace = require_mdast_util_find_and_replace();
-    var unicodePunctuation2 = require_unicode_punctuation();
-    var unicodeWhitespace2 = require_unicode_whitespace();
-    exports.transforms = [transformGfmAutolinkLiterals];
-    exports.enter = {
-      literalAutolink: enterLiteralAutolink,
-      literalAutolinkEmail: enterLiteralAutolinkValue,
-      literalAutolinkHttp: enterLiteralAutolinkValue,
-      literalAutolinkWww: enterLiteralAutolinkValue
-    };
-    exports.exit = {
-      literalAutolink: exitLiteralAutolink,
-      literalAutolinkEmail: exitLiteralAutolinkEmail,
-      literalAutolinkHttp: exitLiteralAutolinkHttp,
-      literalAutolinkWww: exitLiteralAutolinkWww
-    };
-    function enterLiteralAutolink(token3) {
-      this.enter({ type: "link", title: null, url: "", children: [] }, token3);
-    }
-    function enterLiteralAutolinkValue(token3) {
-      this.config.enter.autolinkProtocol.call(this, token3);
-    }
-    function exitLiteralAutolinkHttp(token3) {
-      this.config.exit.autolinkProtocol.call(this, token3);
-    }
-    function exitLiteralAutolinkWww(token3) {
-      this.config.exit.data.call(this, token3);
-      this.stack[this.stack.length - 1].url = "http://" + this.sliceSerialize(token3);
-    }
-    function exitLiteralAutolinkEmail(token3) {
-      this.config.exit.autolinkEmail.call(this, token3);
-    }
-    function exitLiteralAutolink(token3) {
-      this.exit(token3);
-    }
-    function transformGfmAutolinkLiterals(tree) {
-      findAndReplace(
-        tree,
-        [
-          [/(https?:\/\/|www(?=\.))([-.\w]+)([^ \t\r\n]*)/i, findUrl],
-          [/([-.\w+]+)@([-\w]+(?:\.[-\w]+)+)/, findEmail]
-        ],
-        { ignore: ["link", "linkReference"] }
-      );
-    }
-    function findUrl($0, protocol, domain2, path20, match2) {
-      var prefix2 = "";
-      var parts;
-      var result;
-      if (!previous4(match2)) {
-        return false;
-      }
-      if (/^w/i.test(protocol)) {
-        domain2 = protocol + domain2;
-        protocol = "";
-        prefix2 = "http://";
-      }
-      if (!isCorrectDomain(domain2)) {
-        return false;
-      }
-      parts = splitUrl(domain2 + path20);
-      if (!parts[0]) return false;
-      result = {
-        type: "link",
-        title: null,
-        url: prefix2 + protocol + parts[0],
-        children: [{ type: "text", value: protocol + parts[0] }]
-      };
-      if (parts[1]) {
-        result = [result, { type: "text", value: parts[1] }];
-      }
-      return result;
-    }
-    function findEmail($0, atext, label5, match2) {
-      if (!previous4(match2, true) || /[_-]$/.test(label5)) {
-        return false;
-      }
-      return {
-        type: "link",
-        title: null,
-        url: "mailto:" + atext + "@" + label5,
-        children: [{ type: "text", value: atext + "@" + label5 }]
-      };
-    }
-    function isCorrectDomain(domain2) {
-      var parts = domain2.split(".");
-      if (parts.length < 2 || parts[parts.length - 1] && (/_/.test(parts[parts.length - 1]) || !/[a-zA-Z\d]/.test(parts[parts.length - 1])) || parts[parts.length - 2] && (/_/.test(parts[parts.length - 2]) || !/[a-zA-Z\d]/.test(parts[parts.length - 2]))) {
-        return false;
-      }
-      return true;
-    }
-    function splitUrl(url3) {
-      var trail2 = /[!"&'),.:;<>?\]}]+$/.exec(url3);
-      var closingParenIndex;
-      var openingParens;
-      var closingParens;
-      if (trail2) {
-        url3 = url3.slice(0, trail2.index);
-        trail2 = trail2[0];
-        closingParenIndex = trail2.indexOf(")");
-        openingParens = ccount(url3, "(");
-        closingParens = ccount(url3, ")");
-        while (closingParenIndex !== -1 && openingParens > closingParens) {
-          url3 += trail2.slice(0, closingParenIndex + 1);
-          trail2 = trail2.slice(closingParenIndex + 1);
-          closingParenIndex = trail2.indexOf(")");
-          closingParens++;
-        }
-      }
-      return [url3, trail2];
-    }
-    function previous4(match2, email) {
-      var code19 = match2.input.charCodeAt(match2.index - 1);
-      return (code19 !== code19 || unicodeWhitespace2(code19) || unicodePunctuation2(code19)) && (!email || code19 !== 47);
-    }
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/has-own-property.js
-var require_has_own_property = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/has-own-property.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var own3 = {}.hasOwnProperty;
-    module.exports = own3;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/splice.js
-var require_splice = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = [].splice;
-    module.exports = splice2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/chunked-splice.js
-var require_chunked_splice = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/chunked-splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = require_splice();
-    function chunkedSplice(list3, start, remove, items) {
-      var end = list3.length;
-      var chunkStart = 0;
-      var parameters;
-      if (start < 0) {
-        start = -start > end ? 0 : end + start;
-      } else {
-        start = start > end ? end : start;
-      }
-      remove = remove > 0 ? remove : 0;
-      if (items.length < 1e4) {
-        parameters = Array.from(items);
-        parameters.unshift(start, remove);
-        splice2.apply(list3, parameters);
-      } else {
-        if (remove) splice2.apply(list3, [start, remove]);
-        while (chunkStart < items.length) {
-          parameters = items.slice(chunkStart, chunkStart + 1e4);
-          parameters.unshift(start, 0);
-          splice2.apply(list3, parameters);
-          chunkStart += 1e4;
-          start += 1e4;
-        }
-      }
-    }
-    module.exports = chunkedSplice;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/miniflat.js
-var require_miniflat = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/miniflat.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function miniflat(value) {
-      return value === null || value === void 0 ? [] : "length" in value ? value : [value];
-    }
-    module.exports = miniflat;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/combine-extensions.js
-var require_combine_extensions = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/combine-extensions.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var hasOwnProperty4 = require_has_own_property();
-    var chunkedSplice = require_chunked_splice();
-    var miniflat = require_miniflat();
-    function combineExtensions2(extensions) {
-      var all = {};
-      var index = -1;
-      while (++index < extensions.length) {
-        extension(all, extensions[index]);
-      }
-      return all;
-    }
-    function extension(all, extension2) {
-      var hook;
-      var left;
-      var right;
-      var code19;
-      for (hook in extension2) {
-        left = hasOwnProperty4.call(all, hook) ? all[hook] : all[hook] = {};
-        right = extension2[hook];
-        for (code19 in right) {
-          left[code19] = constructs2(
-            miniflat(right[code19]),
-            hasOwnProperty4.call(left, code19) ? left[code19] : []
-          );
-        }
-      }
-    }
-    function constructs2(list3, existing) {
-      var index = -1;
-      var before = [];
-      while (++index < list3.length) {
-        ;
-        (list3[index].add === "after" ? existing : before).push(list3[index]);
-      }
-      chunkedSplice(existing, 0, 0, before);
-      return existing;
-    }
-    module.exports = combineExtensions2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/from-char-code.js
-var require_from_char_code2 = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/from-char-code.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = String.fromCharCode;
-    module.exports = fromCharCode;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/regex-check.js
-var require_regex_check2 = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/util/regex-check.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = require_from_char_code2();
-    function regexCheck2(regex2) {
-      return check2;
-      function check2(code19) {
-        return regex2.test(fromCharCode(code19));
-      }
-    }
-    module.exports = regexCheck2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/ascii-alpha.js
-var require_ascii_alpha = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/ascii-alpha.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check2();
-    var asciiAlpha2 = regexCheck2(/[A-Za-z]/);
-    module.exports = asciiAlpha2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/ascii-alphanumeric.js
-var require_ascii_alphanumeric = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/ascii-alphanumeric.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check2();
-    var asciiAlphanumeric2 = regexCheck2(/[\dA-Za-z]/);
-    module.exports = asciiAlphanumeric2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/ascii-control.js
-var require_ascii_control = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/ascii-control.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function asciiControl2(code19) {
-      return (
-        // Special whitespace codes (which have negative values), C0 and Control
-        // character DEL
-        code19 < 32 || code19 === 127
-      );
-    }
-    module.exports = asciiControl2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/markdown-line-ending.js
-var require_markdown_line_ending = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/markdown-line-ending.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownLineEnding2(code19) {
-      return code19 < -2;
-    }
-    module.exports = markdownLineEnding2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/unicode-punctuation-regex.js
-var require_unicode_punctuation_regex2 = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/constant/unicode-punctuation-regex.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuation2 = /[!-\/:-@\[-`\{-~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u09FD\u0A76\u0AF0\u0C77\u0C84\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E4F\u2E52\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]/;
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/unicode-punctuation.js
-var require_unicode_punctuation2 = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/unicode-punctuation.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuationRegex = require_unicode_punctuation_regex2();
-    var regexCheck2 = require_regex_check2();
-    var unicodePunctuation2 = regexCheck2(unicodePunctuationRegex);
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/unicode-whitespace.js
-var require_unicode_whitespace2 = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/unicode-whitespace.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check2();
-    var unicodeWhitespace2 = regexCheck2(/\s/);
-    module.exports = unicodeWhitespace2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-autolink-literal/syntax.js
-var require_syntax = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-autolink-literal/syntax.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiAlpha2 = require_ascii_alpha();
-    var asciiAlphanumeric2 = require_ascii_alphanumeric();
-    var asciiControl2 = require_ascii_control();
-    var markdownLineEnding2 = require_markdown_line_ending();
-    var unicodePunctuation2 = require_unicode_punctuation2();
-    var unicodeWhitespace2 = require_unicode_whitespace2();
-    var www = { tokenize: tokenizeWww, partial: true };
-    var domain2 = { tokenize: tokenizeDomain2, partial: true };
-    var path20 = { tokenize: tokenizePath2, partial: true };
-    var punctuation2 = { tokenize: tokenizePunctuation, partial: true };
-    var namedCharacterReference = {
-      tokenize: tokenizeNamedCharacterReference,
-      partial: true
-    };
-    var wwwAutolink2 = { tokenize: tokenizeWwwAutolink2, previous: previousWww2 };
-    var httpAutolink = { tokenize: tokenizeHttpAutolink, previous: previousHttp };
-    var emailAutolink2 = { tokenize: tokenizeEmailAutolink2, previous: previousEmail2 };
-    var text5 = {};
-    exports.text = text5;
-    var code19 = 48;
-    while (code19 < 123) {
-      text5[code19] = emailAutolink2;
-      code19++;
-      if (code19 === 58) code19 = 65;
-      else if (code19 === 91) code19 = 97;
-    }
-    text5[43] = emailAutolink2;
-    text5[45] = emailAutolink2;
-    text5[46] = emailAutolink2;
-    text5[95] = emailAutolink2;
-    text5[72] = [emailAutolink2, httpAutolink];
-    text5[104] = [emailAutolink2, httpAutolink];
-    text5[87] = [emailAutolink2, wwwAutolink2];
-    text5[119] = [emailAutolink2, wwwAutolink2];
-    function tokenizeEmailAutolink2(effects, ok2, nok) {
-      var self = this;
-      var hasDot;
-      return start;
-      function start(code20) {
-        if (!gfmAtext2(code20) || !previousEmail2(self.previous) || previous4(self.events)) {
-          return nok(code20);
-        }
-        effects.enter("literalAutolink");
-        effects.enter("literalAutolinkEmail");
-        return atext(code20);
-      }
-      function atext(code20) {
-        if (gfmAtext2(code20)) {
-          effects.consume(code20);
-          return atext;
-        }
-        if (code20 === 64) {
-          effects.consume(code20);
-          return label5;
-        }
-        return nok(code20);
-      }
-      function label5(code20) {
-        if (code20 === 46) {
-          return effects.check(punctuation2, done, dotContinuation)(code20);
-        }
-        if (
-          // `-`
-          code20 === 45 || // `_`
-          code20 === 95
-        ) {
-          return effects.check(punctuation2, nok, dashOrUnderscoreContinuation)(code20);
-        }
-        if (asciiAlphanumeric2(code20)) {
-          effects.consume(code20);
-          return label5;
-        }
-        return done(code20);
-      }
-      function dotContinuation(code20) {
-        effects.consume(code20);
-        hasDot = true;
-        return label5;
-      }
-      function dashOrUnderscoreContinuation(code20) {
-        effects.consume(code20);
-        return afterDashOrUnderscore;
-      }
-      function afterDashOrUnderscore(code20) {
-        if (code20 === 46) {
-          return effects.check(punctuation2, nok, dotContinuation)(code20);
-        }
-        return label5(code20);
-      }
-      function done(code20) {
-        if (hasDot) {
-          effects.exit("literalAutolinkEmail");
-          effects.exit("literalAutolink");
-          return ok2(code20);
-        }
-        return nok(code20);
-      }
-    }
-    function tokenizeWwwAutolink2(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code20) {
-        if (code20 !== 87 && code20 - 32 !== 87 || !previousWww2(self.previous) || previous4(self.events)) {
-          return nok(code20);
-        }
-        effects.enter("literalAutolink");
-        effects.enter("literalAutolinkWww");
-        return effects.check(
-          www,
-          effects.attempt(domain2, effects.attempt(path20, done), nok),
-          nok
-        )(code20);
-      }
-      function done(code20) {
-        effects.exit("literalAutolinkWww");
-        effects.exit("literalAutolink");
-        return ok2(code20);
-      }
-    }
-    function tokenizeHttpAutolink(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code20) {
-        if (code20 !== 72 && code20 - 32 !== 72 || !previousHttp(self.previous) || previous4(self.events)) {
-          return nok(code20);
-        }
-        effects.enter("literalAutolink");
-        effects.enter("literalAutolinkHttp");
-        effects.consume(code20);
-        return t111;
-      }
-      function t111(code20) {
-        if (code20 === 84 || code20 - 32 === 84) {
-          effects.consume(code20);
-          return t211;
-        }
-        return nok(code20);
-      }
-      function t211(code20) {
-        if (code20 === 84 || code20 - 32 === 84) {
-          effects.consume(code20);
-          return p7;
-        }
-        return nok(code20);
-      }
-      function p7(code20) {
-        if (code20 === 80 || code20 - 32 === 80) {
-          effects.consume(code20);
-          return s;
-        }
-        return nok(code20);
-      }
-      function s(code20) {
-        if (code20 === 83 || code20 - 32 === 83) {
-          effects.consume(code20);
-          return colon;
-        }
-        return colon(code20);
-      }
-      function colon(code20) {
-        if (code20 === 58) {
-          effects.consume(code20);
-          return slash1;
-        }
-        return nok(code20);
-      }
-      function slash1(code20) {
-        if (code20 === 47) {
-          effects.consume(code20);
-          return slash22;
-        }
-        return nok(code20);
-      }
-      function slash22(code20) {
-        if (code20 === 47) {
-          effects.consume(code20);
-          return after;
-        }
-        return nok(code20);
-      }
-      function after(code20) {
-        return asciiControl2(code20) || unicodeWhitespace2(code20) || unicodePunctuation2(code20) ? nok(code20) : effects.attempt(domain2, effects.attempt(path20, done), nok)(code20);
-      }
-      function done(code20) {
-        effects.exit("literalAutolinkHttp");
-        effects.exit("literalAutolink");
-        return ok2(code20);
-      }
-    }
-    function tokenizeWww(effects, ok2, nok) {
-      return start;
-      function start(code20) {
-        effects.consume(code20);
-        return w23;
-      }
-      function w23(code20) {
-        if (code20 === 87 || code20 - 32 === 87) {
-          effects.consume(code20);
-          return w33;
-        }
-        return nok(code20);
-      }
-      function w33(code20) {
-        if (code20 === 87 || code20 - 32 === 87) {
-          effects.consume(code20);
-          return dot;
-        }
-        return nok(code20);
-      }
-      function dot(code20) {
-        if (code20 === 46) {
-          effects.consume(code20);
-          return after;
-        }
-        return nok(code20);
-      }
-      function after(code20) {
-        return code20 === null || markdownLineEnding2(code20) ? nok(code20) : ok2(code20);
-      }
-    }
-    function tokenizeDomain2(effects, ok2, nok) {
-      var hasUnderscoreInLastSegment;
-      var hasUnderscoreInLastLastSegment;
-      return domain3;
-      function domain3(code20) {
-        if (code20 === 38) {
-          return effects.check(
-            namedCharacterReference,
-            done,
-            punctuationContinuation
-          )(code20);
-        }
-        if (code20 === 46 || code20 === 95) {
-          return effects.check(punctuation2, done, punctuationContinuation)(code20);
-        }
-        if (asciiControl2(code20) || unicodeWhitespace2(code20) || code20 !== 45 && unicodePunctuation2(code20)) {
-          return done(code20);
-        }
-        effects.consume(code20);
-        return domain3;
-      }
-      function punctuationContinuation(code20) {
-        if (code20 === 46) {
-          hasUnderscoreInLastLastSegment = hasUnderscoreInLastSegment;
-          hasUnderscoreInLastSegment = void 0;
-          effects.consume(code20);
-          return domain3;
-        }
-        if (code20 === 95) hasUnderscoreInLastSegment = true;
-        effects.consume(code20);
-        return domain3;
-      }
-      function done(code20) {
-        if (!hasUnderscoreInLastLastSegment && !hasUnderscoreInLastSegment) {
-          return ok2(code20);
-        }
-        return nok(code20);
-      }
-    }
-    function tokenizePath2(effects, ok2) {
-      var balance = 0;
-      return inPath;
-      function inPath(code20) {
-        if (code20 === 38) {
-          return effects.check(
-            namedCharacterReference,
-            ok2,
-            continuedPunctuation
-          )(code20);
-        }
-        if (code20 === 40) {
-          balance++;
-        }
-        if (code20 === 41) {
-          return effects.check(
-            punctuation2,
-            parenAtPathEnd,
-            continuedPunctuation
-          )(code20);
-        }
-        if (pathEnd(code20)) {
-          return ok2(code20);
-        }
-        if (trailingPunctuation(code20)) {
-          return effects.check(punctuation2, ok2, continuedPunctuation)(code20);
-        }
-        effects.consume(code20);
-        return inPath;
-      }
-      function continuedPunctuation(code20) {
-        effects.consume(code20);
-        return inPath;
-      }
-      function parenAtPathEnd(code20) {
-        balance--;
-        return balance < 0 ? ok2(code20) : continuedPunctuation(code20);
-      }
-    }
-    function tokenizeNamedCharacterReference(effects, ok2, nok) {
-      return start;
-      function start(code20) {
-        effects.consume(code20);
-        return inside;
-      }
-      function inside(code20) {
-        if (asciiAlpha2(code20)) {
-          effects.consume(code20);
-          return inside;
-        }
-        if (code20 === 59) {
-          effects.consume(code20);
-          return after;
-        }
-        return nok(code20);
-      }
-      function after(code20) {
-        return pathEnd(code20) ? ok2(code20) : nok(code20);
-      }
-    }
-    function tokenizePunctuation(effects, ok2, nok) {
-      return start;
-      function start(code20) {
-        effects.consume(code20);
-        return after;
-      }
-      function after(code20) {
-        if (trailingPunctuation(code20)) {
-          effects.consume(code20);
-          return after;
-        }
-        return pathEnd(code20) ? ok2(code20) : nok(code20);
-      }
-    }
-    function trailingPunctuation(code20) {
-      return (
-        // `!`
-        code20 === 33 || // `"`
-        code20 === 34 || // `'`
-        code20 === 39 || // `)`
-        code20 === 41 || // `*`
-        code20 === 42 || // `,`
-        code20 === 44 || // `.`
-        code20 === 46 || // `:`
-        code20 === 58 || // `;`
-        code20 === 59 || // `<`
-        code20 === 60 || // `?`
-        code20 === 63 || // `_`.
-        code20 === 95 || // `~`
-        code20 === 126
-      );
-    }
-    function pathEnd(code20) {
-      return (
-        // EOF.
-        code20 === null || // CR, LF, CRLF, HT, VS.
-        code20 < 0 || // Space.
-        code20 === 32 || // `<`
-        code20 === 60
-      );
-    }
-    function gfmAtext2(code20) {
-      return code20 === 43 || code20 === 45 || code20 === 46 || code20 === 95 || asciiAlphanumeric2(code20);
-    }
-    function previousWww2(code20) {
-      return code20 === null || code20 < 0 || code20 === 32 || code20 === 40 || code20 === 42 || code20 === 95 || code20 === 126;
-    }
-    function previousHttp(code20) {
-      return code20 === null || !asciiAlpha2(code20);
-    }
-    function previousEmail2(code20) {
-      return code20 !== 47 && previousHttp(code20);
-    }
-    function previous4(events) {
-      var index = events.length;
-      while (index--) {
-        if ((events[index][1].type === "labelLink" || events[index][1].type === "labelImage") && !events[index][1]._balanced) {
-          return true;
-        }
-      }
-    }
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-autolink-literal/index.js
-var require_micromark_extension_gfm_autolink_literal = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-autolink-literal/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_syntax();
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/character/markdown-line-ending-or-space.js
-var require_markdown_line_ending_or_space = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/character/markdown-line-ending-or-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownLineEndingOrSpace2(code19) {
-      return code19 < 0 || code19 === 32;
-    }
-    module.exports = markdownLineEndingOrSpace2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/unicode-punctuation-regex.js
-var require_unicode_punctuation_regex3 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/unicode-punctuation-regex.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuation2 = /[!-\/:-@\[-`\{-~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u09FD\u0A76\u0AF0\u0C77\u0C84\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E4F\u2E52\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]/;
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/from-char-code.js
-var require_from_char_code3 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/from-char-code.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = String.fromCharCode;
-    module.exports = fromCharCode;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/regex-check.js
-var require_regex_check3 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/regex-check.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = require_from_char_code3();
-    function regexCheck2(regex2) {
-      return check2;
-      function check2(code19) {
-        return regex2.test(fromCharCode(code19));
-      }
-    }
-    module.exports = regexCheck2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/character/unicode-punctuation.js
-var require_unicode_punctuation3 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/character/unicode-punctuation.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuationRegex = require_unicode_punctuation_regex3();
-    var regexCheck2 = require_regex_check3();
-    var unicodePunctuation2 = regexCheck2(unicodePunctuationRegex);
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/character/unicode-whitespace.js
-var require_unicode_whitespace3 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/character/unicode-whitespace.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check3();
-    var unicodeWhitespace2 = regexCheck2(/\s/);
-    module.exports = unicodeWhitespace2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/classify-character.js
-var require_classify_character = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/classify-character.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space();
-    var unicodePunctuation2 = require_unicode_punctuation3();
-    var unicodeWhitespace2 = require_unicode_whitespace3();
-    function classifyCharacter2(code19) {
-      if (code19 === null || markdownLineEndingOrSpace2(code19) || unicodeWhitespace2(code19)) {
-        return 1;
-      }
-      if (unicodePunctuation2(code19)) {
-        return 2;
-      }
-    }
-    module.exports = classifyCharacter2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/splice.js
-var require_splice2 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = [].splice;
-    module.exports = splice2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/chunked-splice.js
-var require_chunked_splice2 = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/chunked-splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = require_splice2();
-    function chunkedSplice(list3, start, remove, items) {
-      var end = list3.length;
-      var chunkStart = 0;
-      var parameters;
-      if (start < 0) {
-        start = -start > end ? 0 : end + start;
-      } else {
-        start = start > end ? end : start;
-      }
-      remove = remove > 0 ? remove : 0;
-      if (items.length < 1e4) {
-        parameters = Array.from(items);
-        parameters.unshift(start, remove);
-        splice2.apply(list3, parameters);
-      } else {
-        if (remove) splice2.apply(list3, [start, remove]);
-        while (chunkStart < items.length) {
-          parameters = items.slice(chunkStart, chunkStart + 1e4);
-          parameters.unshift(start, 0);
-          splice2.apply(list3, parameters);
-          chunkStart += 1e4;
-          start += 1e4;
-        }
-      }
-    }
-    module.exports = chunkedSplice;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/resolve-all.js
-var require_resolve_all = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/resolve-all.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function resolveAll2(constructs2, events, context) {
-      var called = [];
-      var index = -1;
-      var resolve4;
-      while (++index < constructs2.length) {
-        resolve4 = constructs2[index].resolveAll;
-        if (resolve4 && called.indexOf(resolve4) < 0) {
-          events = resolve4(events, context);
-          called.push(resolve4);
-        }
-      }
-      return events;
-    }
-    module.exports = resolveAll2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/assign.js
-var require_assign = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/constant/assign.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = Object.assign;
-    module.exports = assign;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/shallow.js
-var require_shallow = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/node_modules/micromark/dist/util/shallow.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = require_assign();
-    function shallow(object) {
-      return assign({}, object);
-    }
-    module.exports = shallow;
-  }
-});
-
-// node_modules/micromark-extension-gfm-strikethrough/index.js
-var require_micromark_extension_gfm_strikethrough = __commonJS({
-  "node_modules/micromark-extension-gfm-strikethrough/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = create;
-    var classifyCharacter2 = require_classify_character();
-    var chunkedSplice = require_chunked_splice2();
-    var resolveAll2 = require_resolve_all();
-    var shallow = require_shallow();
-    function create(options7) {
-      var settings = options7 || {};
-      var single = settings.singleTilde;
-      var tokenizer = {
-        tokenize: tokenizeStrikethrough,
-        resolveAll: resolveAllStrikethrough
-      };
-      if (single === null || single === void 0) {
-        single = true;
-      }
-      return { text: { 126: tokenizer }, insideSpan: { null: tokenizer } };
-      function resolveAllStrikethrough(events, context) {
-        var index = -1;
-        var strikethrough;
-        var text5;
-        var open;
-        var nextEvents;
-        while (++index < events.length) {
-          if (events[index][0] === "enter" && events[index][1].type === "strikethroughSequenceTemporary" && events[index][1]._close) {
-            open = index;
-            while (open--) {
-              if (events[open][0] === "exit" && events[open][1].type === "strikethroughSequenceTemporary" && events[open][1]._open && // If the sizes are the same:
-              events[index][1].end.offset - events[index][1].start.offset === events[open][1].end.offset - events[open][1].start.offset) {
-                events[index][1].type = "strikethroughSequence";
-                events[open][1].type = "strikethroughSequence";
-                strikethrough = {
-                  type: "strikethrough",
-                  start: shallow(events[open][1].start),
-                  end: shallow(events[index][1].end)
-                };
-                text5 = {
-                  type: "strikethroughText",
-                  start: shallow(events[open][1].end),
-                  end: shallow(events[index][1].start)
-                };
-                nextEvents = [
-                  ["enter", strikethrough, context],
-                  ["enter", events[open][1], context],
-                  ["exit", events[open][1], context],
-                  ["enter", text5, context]
-                ];
-                chunkedSplice(
-                  nextEvents,
-                  nextEvents.length,
-                  0,
-                  resolveAll2(
-                    context.parser.constructs.insideSpan.null,
-                    events.slice(open + 1, index),
-                    context
-                  )
-                );
-                chunkedSplice(nextEvents, nextEvents.length, 0, [
-                  ["exit", text5, context],
-                  ["enter", events[index][1], context],
-                  ["exit", events[index][1], context],
-                  ["exit", strikethrough, context]
-                ]);
-                chunkedSplice(events, open - 1, index - open + 3, nextEvents);
-                index = open + nextEvents.length - 2;
+        let value = sliceBufWithIndent(q10, closeStart, 0);
+        const n4 = value.length;
+        if (n4 > 1) {
+          const head = value.charCodeAt(0);
+          const tail = value.charCodeAt(n4 - 1);
+          if ((head === 32 || head === 10 || head === 13) && (tail === 32 || tail === 10 || tail === 13)) {
+            let data = false;
+            for (let i = 1; i < n4 - 1; i++) {
+              const d4 = value.charCodeAt(i);
+              if (d4 !== 32 && d4 !== 10 && d4 !== 13) {
+                data = true;
                 break;
               }
             }
+            if (data) {
+              const hs11 = head === 13 && value.charCodeAt(1) === 10 ? 2 : 1;
+              const ts11 = tail === 10 && value.charCodeAt(n4 - 2) === 13 ? 2 : 1;
+              value = value.slice(hs11, n4 - ts11);
+            }
           }
         }
-        return removeRemainingSequences(events);
+        if (inTable && value.indexOf("\\") !== -1) {
+          value = value.replace(/\\\|/g, "|");
+        }
+        const node = newNode(Code, p7, closeEnd);
+        nA[node] = addSide(value);
+        append(block2, node);
+        p7 = closeEnd;
+        textStart = p7;
+        break;
       }
-      function removeRemainingSequences(events) {
-        var index = -1;
-        var length = events.length;
-        while (++index < length) {
-          if (events[index][1].type === "strikethroughSequenceTemporary") {
-            events[index][1].type = "data";
+      case 60: {
+        const rest = bMulti ? p7 === 0 ? buf : buf.slice(p7) : buf.slice(p7, e4);
+        const next = buf.charCodeAt(p7 + 1);
+        let m5 = null;
+        if (isAlpha2(next)) {
+          m5 = RE_AUTOLINK.exec(rest);
+          let email = false;
+          if (m5 === null) {
+            m5 = RE_EMAIL_AUTOLINK.exec(rest);
+            email = m5 !== null;
           }
-        }
-        return events;
-      }
-      function tokenizeStrikethrough(effects, ok2, nok) {
-        var previous4 = this.previous;
-        var events = this.events;
-        var size = 0;
-        return start;
-        function start(code19) {
-          if (code19 !== 126 || previous4 === 126 && events[events.length - 1][1].type !== "characterEscape") {
-            return nok(code19);
+          if (m5 !== null) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
+            }
+            const end = p7 + m5[0].length;
+            const link2 = newNode(Link, p7, end);
+            nA[link2] = addSide(email ? `mailto:${m5[1]}` : m5[1]);
+            append(block2, link2);
+            const text5 = newNode(Str, p7 + 1, end - 1);
+            nA[text5] = 0;
+            append(link2, text5);
+            p7 = end;
+            textStart = p7;
+            break;
           }
-          effects.enter("strikethroughSequenceTemporary");
-          return more(code19);
-        }
-        function more(code19) {
-          var before = classifyCharacter2(previous4);
-          var token3;
-          var after;
-          if (code19 === 126) {
-            if (size > 1) return nok(code19);
-            effects.consume(code19);
-            size++;
-            return more;
-          }
-          if (size < 2 && !single) return nok(code19);
-          token3 = effects.exit("strikethroughSequenceTemporary");
-          after = classifyCharacter2(code19);
-          token3._open = !after || after === 2 && before;
-          token3._close = !before || before === 2 && after;
-          return ok2(code19);
-        }
-      }
-    }
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/markdown-space.js
-var require_markdown_space = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/character/markdown-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownSpace2(code19) {
-      return code19 === -2 || code19 === -1 || code19 === 32;
-    }
-    module.exports = markdownSpace2;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark/dist/tokenize/factory-space.js
-var require_factory_space = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark/dist/tokenize/factory-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownSpace2 = require_markdown_space();
-    function spaceFactory(effects, ok2, type, max) {
-      var limit = max ? max - 1 : Infinity;
-      var size = 0;
-      return start;
-      function start(code19) {
-        if (markdownSpace2(code19)) {
-          effects.enter(type);
-          return prefix2(code19);
-        }
-        return ok2(code19);
-      }
-      function prefix2(code19) {
-        if (markdownSpace2(code19) && size++ < limit) {
-          effects.consume(code19);
-          return prefix2;
-        }
-        effects.exit(type);
-        return ok2(code19);
-      }
-    }
-    module.exports = spaceFactory;
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-table/syntax.js
-var require_syntax2 = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-table/syntax.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    exports.flow = {
-      null: { tokenize: tokenizeTable2, resolve: resolveTable2, interruptible: true }
-    };
-    var createSpace = require_factory_space();
-    var setextUnderlineMini = { tokenize: tokenizeSetextUnderlineMini, partial: true };
-    var nextPrefixedOrBlank = { tokenize: tokenizeNextPrefixedOrBlank, partial: true };
-    function resolveTable2(events, context) {
-      var length = events.length;
-      var index = -1;
-      var token3;
-      var inHead;
-      var inDelimiterRow;
-      var inRow;
-      var cell;
-      var content3;
-      var text5;
-      var contentStart;
-      var contentEnd;
-      var cellStart;
-      while (++index < length) {
-        token3 = events[index][1];
-        if (inRow) {
-          if (token3.type === "temporaryTableCellContent") {
-            contentStart = contentStart || index;
-            contentEnd = index;
-          }
-          if (
-            // Combine separate content parts into one.
-            (token3.type === "tableCellDivider" || token3.type === "tableRow") && contentEnd
-          ) {
-            content3 = {
-              type: "tableContent",
-              start: events[contentStart][1].start,
-              end: events[contentEnd][1].end
-            };
-            text5 = {
-              type: "chunkText",
-              start: content3.start,
-              end: content3.end,
-              contentType: "text"
-            };
-            events.splice(
-              contentStart,
-              contentEnd - contentStart + 1,
-              ["enter", content3, context],
-              ["enter", text5, context],
-              ["exit", text5, context],
-              ["exit", content3, context]
-            );
-            index -= contentEnd - contentStart - 3;
-            length = events.length;
-            contentStart = void 0;
-            contentEnd = void 0;
-          }
-        }
-        if (events[index][0] === "exit" && cellStart && cellStart + 1 < index && (token3.type === "tableCellDivider" || token3.type === "tableRow" && (cellStart + 3 < index || events[cellStart][1].type !== "whitespace"))) {
-          cell = {
-            type: inDelimiterRow ? "tableDelimiter" : inHead ? "tableHeader" : "tableData",
-            start: events[cellStart][1].start,
-            end: events[index][1].end
-          };
-          events.splice(index + (token3.type === "tableCellDivider" ? 1 : 0), 0, [
-            "exit",
-            cell,
-            context
-          ]);
-          events.splice(cellStart, 0, ["enter", cell, context]);
-          index += 2;
-          length = events.length;
-          cellStart = index + 1;
-        }
-        if (token3.type === "tableRow") {
-          inRow = events[index][0] === "enter";
-          if (inRow) {
-            cellStart = index + 1;
-          }
-        }
-        if (token3.type === "tableDelimiterRow") {
-          inDelimiterRow = events[index][0] === "enter";
-          if (inDelimiterRow) {
-            cellStart = index + 1;
-          }
-        }
-        if (token3.type === "tableHead") {
-          inHead = events[index][0] === "enter";
-        }
-      }
-      return events;
-    }
-    function tokenizeTable2(effects, ok2, nok) {
-      var align2 = [];
-      var tableHeaderCount = 0;
-      var seenDelimiter;
-      var hasDash;
-      return start;
-      function start(code19) {
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3) {
-          return nok(code19);
-        }
-        effects.enter("table")._align = align2;
-        effects.enter("tableHead");
-        effects.enter("tableRow");
-        if (code19 === 124) {
-          return cellDividerHead(code19);
-        }
-        tableHeaderCount++;
-        effects.enter("temporaryTableCellContent");
-        return inCellContentHead(code19);
-      }
-      function cellDividerHead(code19) {
-        effects.enter("tableCellDivider");
-        effects.consume(code19);
-        effects.exit("tableCellDivider");
-        seenDelimiter = true;
-        return cellBreakHead;
-      }
-      function cellBreakHead(code19) {
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3) {
-          return atRowEndHead(code19);
-        }
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.enter("whitespace");
-          effects.consume(code19);
-          return inWhitespaceHead;
-        }
-        if (seenDelimiter) {
-          seenDelimiter = void 0;
-          tableHeaderCount++;
-        }
-        if (code19 === 124) {
-          return cellDividerHead(code19);
-        }
-        effects.enter("temporaryTableCellContent");
-        return inCellContentHead(code19);
-      }
-      function inWhitespaceHead(code19) {
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.consume(code19);
-          return inWhitespaceHead;
-        }
-        effects.exit("whitespace");
-        return cellBreakHead(code19);
-      }
-      function inCellContentHead(code19) {
-        if (code19 === null || code19 < 0 || code19 === 32 || code19 === 124) {
-          effects.exit("temporaryTableCellContent");
-          return cellBreakHead(code19);
-        }
-        effects.consume(code19);
-        return code19 === 92 ? inCellContentEscapeHead : inCellContentHead;
-      }
-      function inCellContentEscapeHead(code19) {
-        if (code19 === 92 || code19 === 124) {
-          effects.consume(code19);
-          return inCellContentHead;
-        }
-        return inCellContentHead(code19);
-      }
-      function atRowEndHead(code19) {
-        if (code19 === null) {
-          return nok(code19);
-        }
-        effects.exit("tableRow");
-        effects.exit("tableHead");
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return effects.check(
-          setextUnderlineMini,
-          nok,
-          // Support an indent before the delimiter row.
-          createSpace(effects, rowStartDelimiter, "linePrefix", 4)
-        );
-      }
-      function rowStartDelimiter(code19) {
-        if (code19 === null || code19 < 0 || code19 === 32) {
-          return nok(code19);
-        }
-        effects.enter("tableDelimiterRow");
-        return atDelimiterRowBreak(code19);
-      }
-      function atDelimiterRowBreak(code19) {
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3) {
-          return rowEndDelimiter(code19);
-        }
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.enter("whitespace");
-          effects.consume(code19);
-          return inWhitespaceDelimiter;
-        }
-        if (code19 === 45) {
-          effects.enter("tableDelimiterFiller");
-          effects.consume(code19);
-          hasDash = true;
-          align2.push(null);
-          return inFillerDelimiter;
-        }
-        if (code19 === 58) {
-          effects.enter("tableDelimiterAlignment");
-          effects.consume(code19);
-          effects.exit("tableDelimiterAlignment");
-          align2.push("left");
-          return afterLeftAlignment;
-        }
-        if (code19 === 124) {
-          effects.enter("tableCellDivider");
-          effects.consume(code19);
-          effects.exit("tableCellDivider");
-          return atDelimiterRowBreak;
-        }
-        return nok(code19);
-      }
-      function inWhitespaceDelimiter(code19) {
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.consume(code19);
-          return inWhitespaceDelimiter;
-        }
-        effects.exit("whitespace");
-        return atDelimiterRowBreak(code19);
-      }
-      function inFillerDelimiter(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return inFillerDelimiter;
-        }
-        effects.exit("tableDelimiterFiller");
-        if (code19 === 58) {
-          effects.enter("tableDelimiterAlignment");
-          effects.consume(code19);
-          effects.exit("tableDelimiterAlignment");
-          align2[align2.length - 1] = align2[align2.length - 1] === "left" ? "center" : "right";
-          return afterRightAlignment;
-        }
-        return atDelimiterRowBreak(code19);
-      }
-      function afterLeftAlignment(code19) {
-        if (code19 === 45) {
-          effects.enter("tableDelimiterFiller");
-          effects.consume(code19);
-          hasDash = true;
-          return inFillerDelimiter;
-        }
-        return nok(code19);
-      }
-      function afterRightAlignment(code19) {
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3) {
-          return rowEndDelimiter(code19);
-        }
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.enter("whitespace");
-          effects.consume(code19);
-          return inWhitespaceDelimiter;
-        }
-        if (code19 === 124) {
-          effects.enter("tableCellDivider");
-          effects.consume(code19);
-          effects.exit("tableCellDivider");
-          return atDelimiterRowBreak;
-        }
-        return nok(code19);
-      }
-      function rowEndDelimiter(code19) {
-        effects.exit("tableDelimiterRow");
-        if (!hasDash || tableHeaderCount !== align2.length) {
-          return nok(code19);
-        }
-        if (code19 === null) {
-          return tableClose(code19);
-        }
-        return effects.check(nextPrefixedOrBlank, tableClose, tableContinue)(code19);
-      }
-      function tableClose(code19) {
-        effects.exit("table");
-        return ok2(code19);
-      }
-      function tableContinue(code19) {
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return createSpace(effects, bodyStart, "linePrefix", 4);
-      }
-      function bodyStart(code19) {
-        effects.enter("tableBody");
-        return rowStartBody(code19);
-      }
-      function rowStartBody(code19) {
-        effects.enter("tableRow");
-        if (code19 === 124) {
-          return cellDividerBody(code19);
-        }
-        effects.enter("temporaryTableCellContent");
-        return inCellContentBody(code19);
-      }
-      function cellDividerBody(code19) {
-        effects.enter("tableCellDivider");
-        effects.consume(code19);
-        effects.exit("tableCellDivider");
-        return cellBreakBody;
-      }
-      function cellBreakBody(code19) {
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3) {
-          return atRowEndBody(code19);
-        }
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.enter("whitespace");
-          effects.consume(code19);
-          return inWhitespaceBody;
-        }
-        if (code19 === 124) {
-          return cellDividerBody(code19);
-        }
-        effects.enter("temporaryTableCellContent");
-        return inCellContentBody(code19);
-      }
-      function inWhitespaceBody(code19) {
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.consume(code19);
-          return inWhitespaceBody;
-        }
-        effects.exit("whitespace");
-        return cellBreakBody(code19);
-      }
-      function inCellContentBody(code19) {
-        if (code19 === null || code19 < 0 || code19 === 32 || code19 === 124) {
-          effects.exit("temporaryTableCellContent");
-          return cellBreakBody(code19);
-        }
-        effects.consume(code19);
-        return code19 === 92 ? inCellContentEscapeBody : inCellContentBody;
-      }
-      function inCellContentEscapeBody(code19) {
-        if (code19 === 92 || code19 === 124) {
-          effects.consume(code19);
-          return inCellContentBody;
-        }
-        return inCellContentBody(code19);
-      }
-      function atRowEndBody(code19) {
-        effects.exit("tableRow");
-        if (code19 === null) {
-          return tableBodyClose(code19);
-        }
-        return effects.check(
-          nextPrefixedOrBlank,
-          tableBodyClose,
-          tableBodyContinue
-        )(code19);
-      }
-      function tableBodyClose(code19) {
-        effects.exit("tableBody");
-        return tableClose(code19);
-      }
-      function tableBodyContinue(code19) {
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return createSpace(effects, rowStartBody, "linePrefix", 4);
-      }
-    }
-    function tokenizeSetextUnderlineMini(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        if (code19 !== 45) {
-          return nok(code19);
-        }
-        effects.enter("setextUnderline");
-        return sequence(code19);
-      }
-      function sequence(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return sequence;
-        }
-        return whitespace(code19);
-      }
-      function whitespace(code19) {
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.consume(code19);
-          return whitespace;
-        }
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3) {
-          return ok2(code19);
-        }
-        return nok(code19);
-      }
-    }
-    function tokenizeNextPrefixedOrBlank(effects, ok2, nok) {
-      var size = 0;
-      return start;
-      function start(code19) {
-        effects.enter("check");
-        effects.consume(code19);
-        return whitespace;
-      }
-      function whitespace(code19) {
-        if (code19 === -1 || code19 === 32) {
-          effects.consume(code19);
-          size++;
-          return size === 4 ? ok2 : whitespace;
-        }
-        if (code19 === null || code19 < 0) {
-          return ok2(code19);
-        }
-        return nok(code19);
-      }
-    }
-  }
-});
-
-// node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-table/index.js
-var require_micromark_extension_gfm_table = __commonJS({
-  "node_modules/micromark-extension-gfm/node_modules/micromark-extension-gfm-table/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_syntax2();
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/character/markdown-line-ending-or-space.js
-var require_markdown_line_ending_or_space2 = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/character/markdown-line-ending-or-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownLineEndingOrSpace2(code19) {
-      return code19 < 0 || code19 === 32;
-    }
-    module.exports = markdownLineEndingOrSpace2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/character/markdown-space.js
-var require_markdown_space2 = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/character/markdown-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownSpace2(code19) {
-      return code19 === -2 || code19 === -1 || code19 === 32;
-    }
-    module.exports = markdownSpace2;
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/tokenize/factory-space.js
-var require_factory_space2 = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/tokenize/factory-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownSpace2 = require_markdown_space2();
-    function spaceFactory(effects, ok2, type, max) {
-      var limit = max ? max - 1 : Infinity;
-      var size = 0;
-      return start;
-      function start(code19) {
-        if (markdownSpace2(code19)) {
-          effects.enter(type);
-          return prefix2(code19);
-        }
-        return ok2(code19);
-      }
-      function prefix2(code19) {
-        if (markdownSpace2(code19) && size++ < limit) {
-          effects.consume(code19);
-          return prefix2;
-        }
-        effects.exit(type);
-        return ok2(code19);
-      }
-    }
-    module.exports = spaceFactory;
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/util/size-chunks.js
-var require_size_chunks = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/util/size-chunks.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function sizeChunks(chunks) {
-      var index = -1;
-      var size = 0;
-      while (++index < chunks.length) {
-        size += typeof chunks[index] === "string" ? chunks[index].length : 1;
-      }
-      return size;
-    }
-    module.exports = sizeChunks;
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/util/prefix-size.js
-var require_prefix_size = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/node_modules/micromark/dist/util/prefix-size.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var sizeChunks = require_size_chunks();
-    function prefixSize(events, type) {
-      var tail = events[events.length - 1];
-      if (!tail || tail[1].type !== type) return 0;
-      return sizeChunks(tail[2].sliceStream(tail[1]));
-    }
-    module.exports = prefixSize;
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/syntax.js
-var require_syntax3 = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/syntax.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space2();
-    var spaceFactory = require_factory_space2();
-    var prefixSize = require_prefix_size();
-    var tasklistCheck = { tokenize: tokenizeTasklistCheck };
-    exports.text = { 91: tasklistCheck };
-    function tokenizeTasklistCheck(effects, ok2, nok) {
-      var self = this;
-      return open;
-      function open(code19) {
-        if (
-          // Exit if not `[`.
-          code19 !== 91 || // Exit if there’s stuff before.
-          self.previous !== null || // Exit if not in the first content that is the first child of a list
-          // item.
-          !self._gfmTasklistFirstContentOfListItem
-        ) {
-          return nok(code19);
-        }
-        effects.enter("taskListCheck");
-        effects.enter("taskListCheckMarker");
-        effects.consume(code19);
-        effects.exit("taskListCheckMarker");
-        return inside;
-      }
-      function inside(code19) {
-        if (code19 === -2 || code19 === 32) {
-          effects.enter("taskListCheckValueUnchecked");
-          effects.consume(code19);
-          effects.exit("taskListCheckValueUnchecked");
-          return close;
-        }
-        if (code19 === 88 || code19 === 120) {
-          effects.enter("taskListCheckValueChecked");
-          effects.consume(code19);
-          effects.exit("taskListCheckValueChecked");
-          return close;
-        }
-        return nok(code19);
-      }
-      function close(code19) {
-        if (code19 === 93) {
-          effects.enter("taskListCheckMarker");
-          effects.consume(code19);
-          effects.exit("taskListCheckMarker");
-          effects.exit("taskListCheck");
-          return effects.check({ tokenize: spaceThenNonSpace }, ok2, nok);
-        }
-        return nok(code19);
-      }
-    }
-    function spaceThenNonSpace(effects, ok2, nok) {
-      var self = this;
-      return spaceFactory(effects, after, "whitespace");
-      function after(code19) {
-        return prefixSize(self.events, "whitespace") && code19 !== null && !markdownLineEndingOrSpace2(code19) ? ok2(code19) : nok(code19);
-      }
-    }
-  }
-});
-
-// node_modules/micromark-extension-gfm-task-list-item/index.js
-var require_micromark_extension_gfm_task_list_item = __commonJS({
-  "node_modules/micromark-extension-gfm-task-list-item/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_syntax3();
-  }
-});
-
-// node_modules/micromark-extension-gfm/syntax.js
-var require_syntax4 = __commonJS({
-  "node_modules/micromark-extension-gfm/syntax.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var combine3 = require_combine_extensions();
-    var autolink3 = require_micromark_extension_gfm_autolink_literal();
-    var strikethrough = require_micromark_extension_gfm_strikethrough();
-    var table2 = require_micromark_extension_gfm_table();
-    var tasklist = require_micromark_extension_gfm_task_list_item();
-    module.exports = create;
-    function create(options7) {
-      return combine3([autolink3, strikethrough(options7), table2, tasklist]);
-    }
-  }
-});
-
-// node_modules/micromark-extension-gfm/index.js
-var require_micromark_extension_gfm = __commonJS({
-  "node_modules/micromark-extension-gfm/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_syntax4();
-  }
-});
-
-// node_modules/mdast-util-gfm-strikethrough/from-markdown.js
-var require_from_markdown2 = __commonJS({
-  "node_modules/mdast-util-gfm-strikethrough/from-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    exports.canContainEols = ["delete"];
-    exports.enter = { strikethrough: enterStrikethrough };
-    exports.exit = { strikethrough: exitStrikethrough };
-    function enterStrikethrough(token3) {
-      this.enter({ type: "delete", children: [] }, token3);
-    }
-    function exitStrikethrough(token3) {
-      this.exit(token3);
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-table/from-markdown.js
-var require_from_markdown3 = __commonJS({
-  "node_modules/mdast-util-gfm-table/from-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    exports.enter = {
-      table: enterTable,
-      tableData: enterCell,
-      tableHeader: enterCell,
-      tableRow: enterRow
-    };
-    exports.exit = {
-      codeText: exitCodeText,
-      table: exitTable,
-      tableData: exit2,
-      tableHeader: exit2,
-      tableRow: exit2
-    };
-    function enterTable(token3) {
-      this.enter({ type: "table", align: token3._align, children: [] }, token3);
-      this.setData("inTable", true);
-    }
-    function exitTable(token3) {
-      this.exit(token3);
-      this.setData("inTable");
-    }
-    function enterRow(token3) {
-      this.enter({ type: "tableRow", children: [] }, token3);
-    }
-    function exit2(token3) {
-      this.exit(token3);
-    }
-    function enterCell(token3) {
-      this.enter({ type: "tableCell", children: [] }, token3);
-    }
-    function exitCodeText(token3) {
-      var value = this.resume();
-      if (this.getData("inTable")) {
-        value = value.replace(/\\([\\|])/g, replace2);
-      }
-      this.stack[this.stack.length - 1].value = value;
-      this.exit(token3);
-    }
-    function replace2($0, $12) {
-      return $12 === "|" ? $12 : $0;
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-task-list-item/from-markdown.js
-var require_from_markdown4 = __commonJS({
-  "node_modules/mdast-util-gfm-task-list-item/from-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    exports.exit = {
-      taskListCheckValueChecked: exitCheck,
-      taskListCheckValueUnchecked: exitCheck,
-      paragraph: exitParagraphWithTaskListItem
-    };
-    function exitCheck(token3) {
-      this.stack[this.stack.length - 2].checked = token3.type === "taskListCheckValueChecked";
-    }
-    function exitParagraphWithTaskListItem(token3) {
-      var parent = this.stack[this.stack.length - 2];
-      var node = this.stack[this.stack.length - 1];
-      var siblings = parent.children;
-      var head = node.children[0];
-      var index = -1;
-      var firstParaghraph;
-      if (parent && parent.type === "listItem" && typeof parent.checked === "boolean" && head && head.type === "text") {
-        while (++index < siblings.length) {
-          if (siblings[index].type === "paragraph") {
-            firstParaghraph = siblings[index];
+        } else if (next !== 60 && next !== 62 && next !== 64 && next > 32) {
+          m5 = RE_EMAIL_AUTOLINK.exec(rest);
+          if (m5 !== null) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
+            }
+            const end = p7 + m5[0].length;
+            const link2 = newNode(Link, p7, end);
+            nA[link2] = addSide(`mailto:${m5[1]}`);
+            append(block2, link2);
+            const text5 = newNode(Str, p7 + 1, end - 1);
+            nA[text5] = 0;
+            append(link2, text5);
+            p7 = end;
+            textStart = p7;
             break;
           }
         }
-        if (firstParaghraph === node) {
-          head.value = head.value.slice(1);
-          if (head.value.length === 0) {
-            node.children.shift();
+        const terminator = next === 33 || next === 63 ? htmlTerminatorKind(p7) : 0;
+        if ((isAlpha2(next) || next === 47 || next === 33 || next === 63) && (noHtmlEnd & terminator) === 0) {
+          m5 = RE_HTML_INLINE.exec(rest);
+          if (m5 === null) {
+            noHtmlEnd |= terminator;
+          }
+          if (m5 !== null && p7 + m5[0].length <= e4) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
+            }
+            const end = p7 + m5[0].length;
+            const node = newNode(Html, p7, end);
+            nA[node] = addSide(sliceBufWithIndent(p7, end, 3));
+            append(block2, node);
+            p7 = end;
+            textStart = p7;
+            break;
+          }
+        }
+        p7++;
+        break;
+      }
+      case 42:
+      case 95: {
+        let q10 = p7 + 1;
+        while (q10 < e4 && buf.charCodeAt(q10) === c8) {
+          q10++;
+        }
+        const prev = p7 > s02 ? buf.charCodeAt(p7 - 1) : -1;
+        const next = q10 < e4 ? buf.charCodeAt(q10) : -1;
+        let before;
+        let after;
+        let cjk = false;
+        if (cjkFriendly) {
+          scanCjkFlank(p7, q10, s02, e4, c8 === 42);
+          before = cjkBefore;
+          after = cjkAfter;
+          cjk = cjkEither;
+        } else {
+          before = classify(prev);
+          after = classify(next);
+        }
+        const open = after === 0 || after === 2 && (before !== 0 || cjk) || next === 126 || next === 42 || next === 95;
+        const close = before === 0 || before === 2 && (after !== 0 || cjk) || prev === 126 || prev === 42 || prev === 95;
+        const canOpen = c8 === 42 ? open : open && (before !== 0 || !close);
+        const canClose = c8 === 42 ? close : close && (after !== 0 || !open);
+        if (canOpen || canClose) {
+          if (p7 > textStart) {
+            addText(block2, textStart, p7, complex);
+            complex = false;
+          }
+          pushDelimiter(addText(block2, p7, q10, false), c8, q10 - p7, canOpen, canClose);
+          textStart = q10;
+        }
+        p7 = q10;
+        break;
+      }
+      case 126: {
+        let q10 = p7 + 1;
+        while (q10 < e4 && buf.charCodeAt(q10) === 126) {
+          q10++;
+        }
+        if (q10 - p7 <= 2) {
+          let before;
+          let after;
+          let cjk = false;
+          if (cjkFriendly) {
+            scanCjkFlank(p7, q10, s02, e4, true);
+            before = cjkBefore;
+            after = cjkAfter;
+            cjk = cjkEither;
           } else {
-            head.position.start.column++;
-            head.position.start.offset++;
-            node.position.start = Object.assign({}, head.position.start);
+            before = classify(p7 > s02 ? buf.charCodeAt(p7 - 1) : -1);
+            after = classify(q10 < e4 ? buf.charCodeAt(q10) : -1);
           }
-        }
-      }
-      this.exit(token3);
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm/from-markdown.js
-var require_from_markdown5 = __commonJS({
-  "node_modules/mdast-util-gfm/from-markdown.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var autolinkLiteral = require_from_markdown();
-    var strikethrough = require_from_markdown2();
-    var table2 = require_from_markdown3();
-    var taskListItem = require_from_markdown4();
-    var own3 = {}.hasOwnProperty;
-    module.exports = configure([
-      autolinkLiteral,
-      strikethrough,
-      table2,
-      taskListItem
-    ]);
-    function configure(extensions) {
-      var config2 = { transforms: [], canContainEols: [] };
-      var length = extensions.length;
-      var index = -1;
-      while (++index < length) {
-        extension(config2, extensions[index]);
-      }
-      return config2;
-    }
-    function extension(config2, extension2) {
-      var key3;
-      var left;
-      var right;
-      for (key3 in extension2) {
-        left = own3.call(config2, key3) ? config2[key3] : config2[key3] = {};
-        right = extension2[key3];
-        if (key3 === "canContainEols" || key3 === "transforms") {
-          config2[key3] = [].concat(left, right);
-        } else {
-          Object.assign(left, right);
-        }
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-autolink-literal/to-markdown.js
-var require_to_markdown = __commonJS({
-  "node_modules/mdast-util-gfm-autolink-literal/to-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var inConstruct = "phrasing";
-    var notInConstruct = ["autolink", "link", "image", "label"];
-    exports.unsafe = [
-      {
-        character: "@",
-        before: "[+\\-.\\w]",
-        after: "[\\-.\\w]",
-        inConstruct,
-        notInConstruct
-      },
-      {
-        character: ".",
-        before: "[Ww]",
-        after: "[\\-.\\w]",
-        inConstruct,
-        notInConstruct
-      },
-      {
-        character: ":",
-        before: "[ps]",
-        after: "\\/",
-        inConstruct,
-        notInConstruct
-      }
-    ];
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/container-phrasing.js
-var require_container_phrasing = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/container-phrasing.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = phrasing;
-    function phrasing(parent, context, safeOptions) {
-      var children = parent.children || [];
-      var results = [];
-      var index = -1;
-      var before = safeOptions.before;
-      var after;
-      var handle;
-      var child;
-      while (++index < children.length) {
-        child = children[index];
-        if (index + 1 < children.length) {
-          handle = context.handle.handlers[children[index + 1].type];
-          if (handle && handle.peek) handle = handle.peek;
-          after = handle ? handle(children[index + 1], parent, context, {
-            before: "",
-            after: ""
-          }).charAt(0) : "";
-        } else {
-          after = safeOptions.after;
-        }
-        if (results.length > 0 && (before === "\r" || before === "\n") && child.type === "html") {
-          results[results.length - 1] = results[results.length - 1].replace(
-            /(\r?\n|\r)$/,
-            " "
-          );
-          before = " ";
-        }
-        results.push(
-          context.handle(child, parent, context, {
-            before,
-            after
-          })
-        );
-        before = results[results.length - 1].slice(-1);
-      }
-      return results.join("");
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-strikethrough/to-markdown.js
-var require_to_markdown2 = __commonJS({
-  "node_modules/mdast-util-gfm-strikethrough/to-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var phrasing = require_container_phrasing();
-    exports.unsafe = [{ character: "~", inConstruct: "phrasing" }];
-    exports.handlers = { delete: handleDelete };
-    handleDelete.peek = peekDelete;
-    function handleDelete(node, _10, context) {
-      var exit2 = context.enter("emphasis");
-      var value = phrasing(node, context, { before: "~", after: "~" });
-      exit2();
-      return "~~" + value + "~~";
-    }
-    function peekDelete() {
-      return "~";
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/pattern-compile.js
-var require_pattern_compile = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/pattern-compile.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = patternCompile;
-    function patternCompile(pattern2) {
-      var before;
-      var after;
-      if (!pattern2._compiled) {
-        before = pattern2.before ? "(?:" + pattern2.before + ")" : "";
-        after = pattern2.after ? "(?:" + pattern2.after + ")" : "";
-        if (pattern2.atBreak) {
-          before = "[\\r\\n][\\t ]*" + before;
-        }
-        pattern2._compiled = new RegExp(
-          (before ? "(" + before + ")" : "") + (/[|\\{}()[\]^$+*?.-]/.test(pattern2.character) ? "\\" : "") + pattern2.character + (after || ""),
-          "g"
-        );
-      }
-      return pattern2._compiled;
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/handle/inline-code.js
-var require_inline_code = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/handle/inline-code.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = inlineCode;
-    inlineCode.peek = inlineCodePeek;
-    var patternCompile = require_pattern_compile();
-    function inlineCode(node, parent, context) {
-      var value = node.value || "";
-      var sequence = "`";
-      var index = -1;
-      var pattern2;
-      var expression;
-      var match2;
-      var position;
-      while (new RegExp("(^|[^`])" + sequence + "([^`]|$)").test(value)) {
-        sequence += "`";
-      }
-      if (/[^ \r\n]/.test(value) && (/[ \r\n`]/.test(value.charAt(0)) || /[ \r\n`]/.test(value.charAt(value.length - 1)))) {
-        value = " " + value + " ";
-      }
-      while (++index < context.unsafe.length) {
-        pattern2 = context.unsafe[index];
-        if (!pattern2.atBreak) continue;
-        expression = patternCompile(pattern2);
-        while (match2 = expression.exec(value)) {
-          position = match2.index;
-          if (value.charCodeAt(position) === 10 && value.charCodeAt(position - 1) === 13) {
-            position--;
-          }
-          value = value.slice(0, position) + " " + value.slice(match2.index + 1);
-        }
-      }
-      return sequence + value + sequence;
-    }
-    function inlineCodePeek() {
-      return "`";
-    }
-  }
-});
-
-// node_modules/repeat-string/index.js
-var require_repeat_string = __commonJS({
-  "node_modules/repeat-string/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var res = "";
-    var cache5;
-    module.exports = repeat;
-    function repeat(str, num) {
-      if (typeof str !== "string") {
-        throw new TypeError("expected a string");
-      }
-      if (num === 1) return str;
-      if (num === 2) return str + str;
-      var max = str.length * num;
-      if (cache5 !== str || typeof cache5 === "undefined") {
-        cache5 = str;
-        res = "";
-      } else if (res.length >= max) {
-        return res.substr(0, max);
-      }
-      while (max > res.length && num > 1) {
-        if (num & 1) {
-          res += str;
-        }
-        num >>= 1;
-        str += str;
-      }
-      res += str;
-      res = res.substr(0, max);
-      return res;
-    }
-  }
-});
-
-// node_modules/markdown-table/index.js
-var require_markdown_table = __commonJS({
-  "node_modules/markdown-table/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var repeat = require_repeat_string();
-    module.exports = markdownTable;
-    var trailingWhitespace = / +$/;
-    var space = " ";
-    var lineFeed = "\n";
-    var dash = "-";
-    var colon = ":";
-    var verticalBar = "|";
-    var x7 = 0;
-    var C9 = 67;
-    var L10 = 76;
-    var R12 = 82;
-    var c8 = 99;
-    var l5 = 108;
-    var r8 = 114;
-    function markdownTable(table2, options7) {
-      var settings = options7 || {};
-      var padding = settings.padding !== false;
-      var start = settings.delimiterStart !== false;
-      var end = settings.delimiterEnd !== false;
-      var align2 = (settings.align || []).concat();
-      var alignDelimiters = settings.alignDelimiters !== false;
-      var alignments = [];
-      var stringLength = settings.stringLength || defaultStringLength;
-      var rowIndex = -1;
-      var rowLength = table2.length;
-      var cellMatrix = [];
-      var sizeMatrix = [];
-      var row = [];
-      var sizes = [];
-      var longestCellByColumn = [];
-      var mostCellsPerRow = 0;
-      var cells;
-      var columnIndex;
-      var columnLength;
-      var largest;
-      var size;
-      var cell;
-      var lines;
-      var line4;
-      var before;
-      var after;
-      var code19;
-      while (++rowIndex < rowLength) {
-        cells = table2[rowIndex];
-        columnIndex = -1;
-        columnLength = cells.length;
-        row = [];
-        sizes = [];
-        if (columnLength > mostCellsPerRow) {
-          mostCellsPerRow = columnLength;
-        }
-        while (++columnIndex < columnLength) {
-          cell = serialize(cells[columnIndex]);
-          if (alignDelimiters === true) {
-            size = stringLength(cell);
-            sizes[columnIndex] = size;
-            largest = longestCellByColumn[columnIndex];
-            if (largest === void 0 || size > largest) {
-              longestCellByColumn[columnIndex] = size;
+          const canOpen = after === 0 || after === 2 && (before !== 0 || cjk);
+          const canClose = before === 0 || before === 2 && (after !== 0 || cjk);
+          if (canOpen || canClose) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
             }
-          }
-          row.push(cell);
-        }
-        cellMatrix[rowIndex] = row;
-        sizeMatrix[rowIndex] = sizes;
-      }
-      columnIndex = -1;
-      columnLength = mostCellsPerRow;
-      if (typeof align2 === "object" && "length" in align2) {
-        while (++columnIndex < columnLength) {
-          alignments[columnIndex] = toAlignment(align2[columnIndex]);
-        }
-      } else {
-        code19 = toAlignment(align2);
-        while (++columnIndex < columnLength) {
-          alignments[columnIndex] = code19;
-        }
-      }
-      columnIndex = -1;
-      columnLength = mostCellsPerRow;
-      row = [];
-      sizes = [];
-      while (++columnIndex < columnLength) {
-        code19 = alignments[columnIndex];
-        before = "";
-        after = "";
-        if (code19 === l5) {
-          before = colon;
-        } else if (code19 === r8) {
-          after = colon;
-        } else if (code19 === c8) {
-          before = colon;
-          after = colon;
-        }
-        size = alignDelimiters ? Math.max(
-          1,
-          longestCellByColumn[columnIndex] - before.length - after.length
-        ) : 1;
-        cell = before + repeat(dash, size) + after;
-        if (alignDelimiters === true) {
-          size = before.length + size + after.length;
-          if (size > longestCellByColumn[columnIndex]) {
-            longestCellByColumn[columnIndex] = size;
-          }
-          sizes[columnIndex] = size;
-        }
-        row[columnIndex] = cell;
-      }
-      cellMatrix.splice(1, 0, row);
-      sizeMatrix.splice(1, 0, sizes);
-      rowIndex = -1;
-      rowLength = cellMatrix.length;
-      lines = [];
-      while (++rowIndex < rowLength) {
-        row = cellMatrix[rowIndex];
-        sizes = sizeMatrix[rowIndex];
-        columnIndex = -1;
-        columnLength = mostCellsPerRow;
-        line4 = [];
-        while (++columnIndex < columnLength) {
-          cell = row[columnIndex] || "";
-          before = "";
-          after = "";
-          if (alignDelimiters === true) {
-            size = longestCellByColumn[columnIndex] - (sizes[columnIndex] || 0);
-            code19 = alignments[columnIndex];
-            if (code19 === r8) {
-              before = repeat(space, size);
-            } else if (code19 === c8) {
-              if (size % 2 === 0) {
-                before = repeat(space, size / 2);
-                after = before;
-              } else {
-                before = repeat(space, size / 2 + 0.5);
-                after = repeat(space, size / 2 - 0.5);
-              }
-            } else {
-              after = repeat(space, size);
-            }
-          }
-          if (start === true && columnIndex === 0) {
-            line4.push(verticalBar);
-          }
-          if (padding === true && // Don’t add the opening space if we’re not aligning and the cell is
-          // empty: there will be a closing space.
-          !(alignDelimiters === false && cell === "") && (start === true || columnIndex !== 0)) {
-            line4.push(space);
-          }
-          if (alignDelimiters === true) {
-            line4.push(before);
-          }
-          line4.push(cell);
-          if (alignDelimiters === true) {
-            line4.push(after);
-          }
-          if (padding === true) {
-            line4.push(space);
-          }
-          if (end === true || columnIndex !== columnLength - 1) {
-            line4.push(verticalBar);
+            pushDelimiter(addText(block2, p7, q10, false), 126, q10 - p7, canOpen, canClose);
+            textStart = q10;
           }
         }
-        line4 = line4.join("");
-        if (end === false) {
-          line4 = line4.replace(trailingWhitespace, "");
-        }
-        lines.push(line4);
+        p7 = q10;
+        break;
       }
-      return lines.join(lineFeed);
-    }
-    function serialize(value) {
-      return value === null || value === void 0 ? "" : String(value);
-    }
-    function defaultStringLength(value) {
-      return value.length;
-    }
-    function toAlignment(value) {
-      var code19 = typeof value === "string" ? value.charCodeAt(0) : x7;
-      return code19 === L10 || code19 === l5 ? l5 : code19 === R12 || code19 === r8 ? r8 : code19 === C9 || code19 === c8 ? c8 : x7;
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-table/to-markdown.js
-var require_to_markdown3 = __commonJS({
-  "node_modules/mdast-util-gfm-table/to-markdown.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var phrasing = require_container_phrasing();
-    var defaultInlineCode = require_inline_code();
-    var markdownTable = require_markdown_table();
-    module.exports = toMarkdown;
-    function toMarkdown(options7) {
-      var settings = options7 || {};
-      var padding = settings.tableCellPadding;
-      var alignDelimiters = settings.tablePipeAlign;
-      var stringLength = settings.stringLength;
-      var around = padding ? " " : "|";
-      return {
-        unsafe: [
-          { character: "\r", inConstruct: "tableCell" },
-          { character: "\n", inConstruct: "tableCell" },
-          // A pipe, when followed by a tab or space (padding), or a dash or colon
-          // (unpadded delimiter row), could result in a table.
-          { atBreak: true, character: "|", after: "[	 :-]" },
-          // A pipe in a cell must be encoded.
-          { character: "|", inConstruct: "tableCell" },
-          // A colon must be followed by a dash, in which case it could start a
-          // delimiter row.
-          { atBreak: true, character: ":", after: "-" },
-          // A delimiter row can also start with a dash, when followed by more
-          // dashes, a colon, or a pipe.
-          // This is a stricter version than the built in check for lists, thematic
-          // breaks, and setex heading underlines though:
-          // <https://github.com/syntax-tree/mdast-util-to-markdown/blob/51a2038/lib/unsafe.js#L57>
-          { atBreak: true, character: "-", after: "[:|-]" }
-        ],
-        handlers: {
-          table: handleTable,
-          tableRow: handleTableRow,
-          tableCell: handleTableCell,
-          inlineCode: inlineCodeWithTable
-        }
-      };
-      function handleTable(node, _10, context) {
-        return serializeData(handleTableAsData(node, context), node.align);
-      }
-      function handleTableRow(node, _10, context) {
-        var row = handleTableRowAsData(node, context);
-        var value = serializeData([row]);
-        return value.slice(0, value.indexOf("\n"));
-      }
-      function handleTableCell(node, _10, context) {
-        var exit2 = context.enter("tableCell");
-        var value = phrasing(node, context, { before: around, after: around });
-        exit2();
-        return value;
-      }
-      function serializeData(matrix, align2) {
-        return markdownTable(matrix, {
-          align: align2,
-          alignDelimiters,
-          padding,
-          stringLength
-        });
-      }
-      function handleTableAsData(node, context) {
-        var children = node.children;
-        var index = -1;
-        var length = children.length;
-        var result = [];
-        var subexit = context.enter("table");
-        while (++index < length) {
-          result[index] = handleTableRowAsData(children[index], context);
-        }
-        subexit();
-        return result;
-      }
-      function handleTableRowAsData(node, context) {
-        var children = node.children;
-        var index = -1;
-        var length = children.length;
-        var result = [];
-        var subexit = context.enter("tableRow");
-        while (++index < length) {
-          result[index] = handleTableCell(children[index], node, context);
-        }
-        subexit();
-        return result;
-      }
-      function inlineCodeWithTable(node, parent, context) {
-        var value = defaultInlineCode(node, parent, context);
-        if (context.stack.indexOf("tableCell") !== -1) {
-          value = value.replace(/\|/g, "\\$&");
-        }
-        return value;
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/check-bullet.js
-var require_check_bullet = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/check-bullet.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = checkBullet;
-    function checkBullet(context) {
-      var marker = context.options.bullet || "*";
-      if (marker !== "*" && marker !== "+" && marker !== "-") {
-        throw new Error(
-          "Cannot serialize items with `" + marker + "` for `options.bullet`, expected `*`, `+`, or `-`"
-        );
-      }
-      return marker;
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/check-list-item-indent.js
-var require_check_list_item_indent = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/check-list-item-indent.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = checkListItemIndent;
-    function checkListItemIndent(context) {
-      var style = context.options.listItemIndent || "tab";
-      if (style === 1 || style === "1") {
-        return "one";
-      }
-      if (style !== "tab" && style !== "one" && style !== "mixed") {
-        throw new Error(
-          "Cannot serialize items with `" + style + "` for `options.listItemIndent`, expected `tab`, `one`, or `mixed`"
-        );
-      }
-      return style;
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/container-flow.js
-var require_container_flow = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/container-flow.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = flow3;
-    var repeat = require_repeat_string();
-    function flow3(parent, context) {
-      var children = parent.children || [];
-      var results = [];
-      var index = -1;
-      var child;
-      while (++index < children.length) {
-        child = children[index];
-        results.push(
-          context.handle(child, parent, context, { before: "\n", after: "\n" })
-        );
-        if (index + 1 < children.length) {
-          results.push(between(child, children[index + 1]));
-        }
-      }
-      return results.join("");
-      function between(left, right) {
-        var index2 = -1;
-        var result;
-        while (++index2 < context.join.length) {
-          result = context.join[index2](left, right, parent, context);
-          if (result === true || result === 1) {
-            break;
+      case 94: {
+        if (buf.charCodeAt(p7 + 1) === 91 && p7 + 1 < e4) {
+          if (p7 > textStart) {
+            addText(block2, textStart, p7, complex);
+            complex = false;
           }
-          if (typeof result === "number") {
-            return repeat("\n", 1 + Number(result));
-          }
-          if (result === false) {
-            return "\n\n<!---->\n\n";
-          }
-        }
-        return "\n\n";
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/indent-lines.js
-var require_indent_lines = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/indent-lines.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = indentLines;
-    var eol = /\r?\n|\r/g;
-    function indentLines(value, map3) {
-      var result = [];
-      var start = 0;
-      var line4 = 0;
-      var match2;
-      while (match2 = eol.exec(value)) {
-        one(value.slice(start, match2.index));
-        result.push(match2[0]);
-        start = match2.index + match2[0].length;
-        line4++;
-      }
-      one(value.slice(start));
-      return result.join("");
-      function one(value2) {
-        result.push(map3(value2, line4, !value2));
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/handle/list-item.js
-var require_list_item = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/handle/list-item.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = listItem;
-    var repeat = require_repeat_string();
-    var checkBullet = require_check_bullet();
-    var checkListItemIndent = require_check_list_item_indent();
-    var flow3 = require_container_flow();
-    var indentLines = require_indent_lines();
-    function listItem(node, parent, context) {
-      var bullet = checkBullet(context);
-      var listItemIndent = checkListItemIndent(context);
-      var size;
-      var value;
-      var exit2;
-      if (parent && parent.ordered) {
-        bullet = (parent.start > -1 ? parent.start : 1) + (context.options.incrementListMarker === false ? 0 : parent.children.indexOf(node)) + ".";
-      }
-      size = bullet.length + 1;
-      if (listItemIndent === "tab" || listItemIndent === "mixed" && (parent && parent.spread || node.spread)) {
-        size = Math.ceil(size / 4) * 4;
-      }
-      exit2 = context.enter("listItem");
-      value = indentLines(flow3(node, context), map3);
-      exit2();
-      return value;
-      function map3(line4, index, blank) {
-        if (index) {
-          return (blank ? "" : repeat(" ", size)) + line4;
-        }
-        return (blank ? bullet : bullet + repeat(" ", size - bullet.length)) + line4;
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm-task-list-item/to-markdown.js
-var require_to_markdown4 = __commonJS({
-  "node_modules/mdast-util-gfm-task-list-item/to-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var defaultListItem = require_list_item();
-    exports.unsafe = [{ atBreak: true, character: "-", after: "[:|-]" }];
-    exports.handlers = {
-      listItem: listItemWithTaskListItem
-    };
-    function listItemWithTaskListItem(node, parent, context) {
-      var value = defaultListItem(node, parent, context);
-      var head = node.children[0];
-      if (typeof node.checked === "boolean" && head && head.type === "paragraph") {
-        value = value.replace(/^(?:[*+-]|\d+\.)([\r\n]| {1,3})/, check2);
-      }
-      return value;
-      function check2($0) {
-        return $0 + "[" + (node.checked ? "x" : " ") + "] ";
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/configure.js
-var require_configure = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/configure.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = configure;
-    function configure(base2, extension) {
-      var index = -1;
-      var key3;
-      if (extension.extensions) {
-        while (++index < extension.extensions.length) {
-          configure(base2, extension.extensions[index]);
-        }
-      }
-      for (key3 in extension) {
-        if (key3 === "extensions") {
-        } else if (key3 === "unsafe" || key3 === "join") {
-          base2[key3] = base2[key3].concat(extension[key3] || []);
-        } else if (key3 === "handlers") {
-          base2[key3] = Object.assign(base2[key3], extension[key3] || {});
+          const i = ntN++;
+          ntNode[i] = addText(block2, p7, p7 + 2, false);
+          ntDelim[i] = dLast;
+          ntBr[i] = brN;
+          p7 += 2;
+          textStart = p7;
         } else {
-          base2.options[key3] = extension[key3];
+          p7++;
         }
+        break;
       }
-      return base2;
-    }
-  }
-});
-
-// node_modules/mdast-util-gfm/to-markdown.js
-var require_to_markdown5 = __commonJS({
-  "node_modules/mdast-util-gfm/to-markdown.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var autolinkLiteral = require_to_markdown();
-    var strikethrough = require_to_markdown2();
-    var table2 = require_to_markdown3();
-    var taskListItem = require_to_markdown4();
-    var configure = require_configure();
-    module.exports = toMarkdown;
-    function toMarkdown(options7) {
-      var config2 = configure(
-        { handlers: {}, join: [], unsafe: [], options: {} },
-        {
-          extensions: [autolinkLiteral, strikethrough, table2(options7), taskListItem]
-        }
-      );
-      return Object.assign(config2.options, {
-        handlers: config2.handlers,
-        join: config2.join,
-        unsafe: config2.unsafe
-      });
-    }
-  }
-});
-
-// node_modules/remark-gfm/index.js
-var require_remark_gfm = __commonJS({
-  "node_modules/remark-gfm/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var syntax = require_micromark_extension_gfm();
-    var fromMarkdown = require_from_markdown5();
-    var toMarkdown = require_to_markdown5();
-    var warningIssued;
-    module.exports = gfm;
-    function gfm(options7) {
-      var data = this.data();
-      if (!warningIssued && (this.Parser && this.Parser.prototype && this.Parser.prototype.blockTokenizers || this.Compiler && this.Compiler.prototype && this.Compiler.prototype.visitors)) {
-        warningIssued = true;
-        console.warn(
-          "[remark-gfm] Warning: please upgrade to remark 13 to use this plugin"
-        );
-      }
-      add("micromarkExtensions", syntax(options7));
-      add("fromMarkdownExtensions", fromMarkdown);
-      add("toMarkdownExtensions", toMarkdown(options7));
-      function add(field, value) {
-        if (data[field]) data[field].push(value);
-        else data[field] = [value];
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-to-string/index.js
-var require_mdast_util_to_string = __commonJS({
-  "node_modules/mdast-util-to-string/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = toString2;
-    function toString2(node) {
-      return node && (node.value || node.alt || node.title || "children" in node && all(node.children) || "length" in node && all(node)) || "";
-    }
-    function all(values) {
-      var result = [];
-      var index = -1;
-      while (++index < values.length) {
-        result[index] = toString2(values[index]);
-      }
-      return result.join("");
-    }
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/assign.js
-var require_assign2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/assign.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = Object.assign;
-    module.exports = assign;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/has-own-property.js
-var require_has_own_property2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/has-own-property.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var own3 = {}.hasOwnProperty;
-    module.exports = own3;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/normalize-identifier.js
-var require_normalize_identifier = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/normalize-identifier.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function normalizeIdentifier2(value) {
-      return value.replace(/[\t\n\r ]+/g, " ").replace(/^ | $/g, "").toLowerCase().toUpperCase();
-    }
-    module.exports = normalizeIdentifier2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/from-char-code.js
-var require_from_char_code4 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/from-char-code.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = String.fromCharCode;
-    module.exports = fromCharCode;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/safe-from-int.js
-var require_safe_from_int = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/safe-from-int.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = require_from_char_code4();
-    function safeFromInt(value, base2) {
-      var code19 = parseInt(value, base2);
-      if (
-        // C0 except for HT, LF, FF, CR, space
-        code19 < 9 || code19 === 11 || code19 > 13 && code19 < 32 || // Control character (DEL) of the basic block and C1 controls.
-        code19 > 126 && code19 < 160 || // Lone high surrogates and low surrogates.
-        code19 > 55295 && code19 < 57344 || // Noncharacters.
-        code19 > 64975 && code19 < 65008 || (code19 & 65535) === 65535 || (code19 & 65535) === 65534 || // Out of range
-        code19 > 1114111
-      ) {
-        return "\uFFFD";
-      }
-      return fromCharCode(code19);
-    }
-    module.exports = safeFromInt;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/markdown-line-ending.js
-var require_markdown_line_ending2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/markdown-line-ending.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownLineEnding2(code19) {
-      return code19 < -2;
-    }
-    module.exports = markdownLineEnding2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/markdown-space.js
-var require_markdown_space3 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/markdown-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownSpace2(code19) {
-      return code19 === -2 || code19 === -1 || code19 === 32;
-    }
-    module.exports = markdownSpace2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-space.js
-var require_factory_space3 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownSpace2 = require_markdown_space3();
-    function spaceFactory(effects, ok2, type, max) {
-      var limit = max ? max - 1 : Infinity;
-      var size = 0;
-      return start;
-      function start(code19) {
-        if (markdownSpace2(code19)) {
-          effects.enter(type);
-          return prefix2(code19);
-        }
-        return ok2(code19);
-      }
-      function prefix2(code19) {
-        if (markdownSpace2(code19) && size++ < limit) {
-          effects.consume(code19);
-          return prefix2;
-        }
-        effects.exit(type);
-        return ok2(code19);
-      }
-    }
-    module.exports = spaceFactory;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/content.js
-var require_content = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/content.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var factorySpace2 = require_factory_space3();
-    var tokenize4 = initializeContent2;
-    function initializeContent2(effects) {
-      var contentStart = effects.attempt(
-        this.parser.constructs.contentInitial,
-        afterContentStartConstruct,
-        paragraphInitial
-      );
-      var previous4;
-      return contentStart;
-      function afterContentStartConstruct(code19) {
-        if (code19 === null) {
-          effects.consume(code19);
-          return;
-        }
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return factorySpace2(effects, contentStart, "linePrefix");
-      }
-      function paragraphInitial(code19) {
-        effects.enter("paragraph");
-        return lineStart(code19);
-      }
-      function lineStart(code19) {
-        var token3 = effects.enter("chunkText", {
-          contentType: "text",
-          previous: previous4
-        });
-        if (previous4) {
-          previous4.next = token3;
-        }
-        previous4 = token3;
-        return data(code19);
-      }
-      function data(code19) {
-        if (code19 === null) {
-          effects.exit("chunkText");
-          effects.exit("paragraph");
-          effects.consume(code19);
-          return;
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.consume(code19);
-          effects.exit("chunkText");
-          return lineStart;
-        }
-        effects.consume(code19);
-        return data;
-      }
-    }
-    exports.tokenize = tokenize4;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/partial-blank-line.js
-var require_partial_blank_line = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/partial-blank-line.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var factorySpace2 = require_factory_space3();
-    var partialBlankLine = {
-      tokenize: tokenizePartialBlankLine,
-      partial: true
-    };
-    function tokenizePartialBlankLine(effects, ok2, nok) {
-      return factorySpace2(effects, afterWhitespace, "linePrefix");
-      function afterWhitespace(code19) {
-        return code19 === null || markdownLineEnding2(code19) ? ok2(code19) : nok(code19);
-      }
-    }
-    module.exports = partialBlankLine;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/document.js
-var require_document = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/document.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var factorySpace2 = require_factory_space3();
-    var partialBlankLine = require_partial_blank_line();
-    var tokenize4 = initializeDocument2;
-    var containerConstruct2 = {
-      tokenize: tokenizeContainer2
-    };
-    var lazyFlowConstruct = {
-      tokenize: tokenizeLazyFlow
-    };
-    function initializeDocument2(effects) {
-      var self = this;
-      var stack3 = [];
-      var continued = 0;
-      var inspectConstruct = {
-        tokenize: tokenizeInspect,
-        partial: true
-      };
-      var inspectResult;
-      var childFlow;
-      var childToken;
-      return start;
-      function start(code19) {
-        if (continued < stack3.length) {
-          self.containerState = stack3[continued][1];
-          return effects.attempt(
-            stack3[continued][0].continuation,
-            documentContinue,
-            documentContinued
-          )(code19);
-        }
-        return documentContinued(code19);
-      }
-      function documentContinue(code19) {
-        continued++;
-        return start(code19);
-      }
-      function documentContinued(code19) {
-        if (inspectResult && inspectResult.flowContinue) {
-          return flowStart(code19);
-        }
-        self.interrupt = childFlow && childFlow.currentConstruct && childFlow.currentConstruct.interruptible;
-        self.containerState = {};
-        return effects.attempt(
-          containerConstruct2,
-          containerContinue,
-          flowStart
-        )(code19);
-      }
-      function containerContinue(code19) {
-        stack3.push([self.currentConstruct, self.containerState]);
-        self.containerState = void 0;
-        return documentContinued(code19);
-      }
-      function flowStart(code19) {
-        if (code19 === null) {
-          exitContainers(0, true);
-          effects.consume(code19);
-          return;
-        }
-        childFlow = childFlow || self.parser.flow(self.now());
-        effects.enter("chunkFlow", {
-          contentType: "flow",
-          previous: childToken,
-          _tokenizer: childFlow
-        });
-        return flowContinue(code19);
-      }
-      function flowContinue(code19) {
-        if (code19 === null) {
-          continueFlow(effects.exit("chunkFlow"));
-          return flowStart(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.consume(code19);
-          continueFlow(effects.exit("chunkFlow"));
-          return effects.check(inspectConstruct, documentAfterPeek);
-        }
-        effects.consume(code19);
-        return flowContinue;
-      }
-      function documentAfterPeek(code19) {
-        exitContainers(
-          inspectResult.continued,
-          inspectResult && inspectResult.flowEnd
-        );
-        continued = 0;
-        return start(code19);
-      }
-      function continueFlow(token3) {
-        if (childToken) childToken.next = token3;
-        childToken = token3;
-        childFlow.lazy = inspectResult && inspectResult.lazy;
-        childFlow.defineSkip(token3.start);
-        childFlow.write(self.sliceStream(token3));
-      }
-      function exitContainers(size, end) {
-        var index = stack3.length;
-        if (childFlow && end) {
-          childFlow.write([null]);
-          childToken = childFlow = void 0;
-        }
-        while (index-- > size) {
-          self.containerState = stack3[index][1];
-          stack3[index][0].exit.call(self, effects);
-        }
-        stack3.length = size;
-      }
-      function tokenizeInspect(effects2, ok2) {
-        var subcontinued = 0;
-        inspectResult = {};
-        return inspectStart;
-        function inspectStart(code19) {
-          if (subcontinued < stack3.length) {
-            self.containerState = stack3[subcontinued][1];
-            return effects2.attempt(
-              stack3[subcontinued][0].continuation,
-              inspectContinue,
-              inspectLess
-            )(code19);
+      case 33: {
+        if (buf.charCodeAt(p7 + 1) === 91 && p7 + 1 < e4 && buf.charCodeAt(p7 + 2) !== 94) {
+          if (p7 > textStart) {
+            addText(block2, textStart, p7, complex);
+            complex = false;
           }
-          if (childFlow.currentConstruct && childFlow.currentConstruct.concrete) {
-            inspectResult.flowContinue = true;
-            return inspectDone(code19);
-          }
-          self.interrupt = childFlow.currentConstruct && childFlow.currentConstruct.interruptible;
-          self.containerState = {};
-          return effects2.attempt(
-            containerConstruct2,
-            inspectFlowEnd,
-            inspectDone
-          )(code19);
+          const i = brN++;
+          brNode[i] = addText(block2, p7, p7 + 2, false);
+          brImage[i] = true;
+          brActive[i] = true;
+          brDelim[i] = dLast;
+          brTextStart[i] = p7 + 2;
+          p7 += 2;
+          textStart = p7;
+        } else {
+          p7++;
         }
-        function inspectContinue(code19) {
-          subcontinued++;
-          return self.containerState._closeFlow ? inspectFlowEnd(code19) : inspectStart(code19);
-        }
-        function inspectLess(code19) {
-          if (childFlow.currentConstruct && childFlow.currentConstruct.lazy) {
-            self.containerState = {};
-            return effects2.attempt(
-              containerConstruct2,
-              inspectFlowEnd,
-              // Maybe flow, or a blank line?
-              effects2.attempt(
-                lazyFlowConstruct,
-                inspectFlowEnd,
-                effects2.check(partialBlankLine, inspectFlowEnd, inspectLazy)
-              )
-            )(code19);
-          }
-          return inspectFlowEnd(code19);
-        }
-        function inspectLazy(code19) {
-          subcontinued = stack3.length;
-          inspectResult.lazy = true;
-          inspectResult.flowContinue = true;
-          return inspectDone(code19);
-        }
-        function inspectFlowEnd(code19) {
-          inspectResult.flowEnd = true;
-          return inspectDone(code19);
-        }
-        function inspectDone(code19) {
-          inspectResult.continued = subcontinued;
-          self.interrupt = self.containerState = void 0;
-          return ok2(code19);
-        }
+        break;
       }
-    }
-    function tokenizeContainer2(effects, ok2, nok) {
-      return factorySpace2(
-        effects,
-        effects.attempt(this.parser.constructs.document, ok2, nok),
-        "linePrefix",
-        this.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4
-      );
-    }
-    function tokenizeLazyFlow(effects, ok2, nok) {
-      return factorySpace2(
-        effects,
-        effects.lazy(this.parser.constructs.flow, ok2, nok),
-        "linePrefix",
-        this.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4
-      );
-    }
-    exports.tokenize = tokenize4;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/size-chunks.js
-var require_size_chunks2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/size-chunks.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function sizeChunks(chunks) {
-      var index = -1;
-      var size = 0;
-      while (++index < chunks.length) {
-        size += typeof chunks[index] === "string" ? chunks[index].length : 1;
-      }
-      return size;
-    }
-    module.exports = sizeChunks;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/prefix-size.js
-var require_prefix_size2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/prefix-size.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var sizeChunks = require_size_chunks2();
-    function prefixSize(events, type) {
-      var tail = events[events.length - 1];
-      if (!tail || tail[1].type !== type) return 0;
-      return sizeChunks(tail[2].sliceStream(tail[1]));
-    }
-    module.exports = prefixSize;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/splice.js
-var require_splice3 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = [].splice;
-    module.exports = splice2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/chunked-splice.js
-var require_chunked_splice3 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/chunked-splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = require_splice3();
-    function chunkedSplice(list3, start, remove, items) {
-      var end = list3.length;
-      var chunkStart = 0;
-      var parameters;
-      if (start < 0) {
-        start = -start > end ? 0 : end + start;
-      } else {
-        start = start > end ? end : start;
-      }
-      remove = remove > 0 ? remove : 0;
-      if (items.length < 1e4) {
-        parameters = Array.from(items);
-        parameters.unshift(start, remove);
-        splice2.apply(list3, parameters);
-      } else {
-        if (remove) splice2.apply(list3, [start, remove]);
-        while (chunkStart < items.length) {
-          parameters = items.slice(chunkStart, chunkStart + 1e4);
-          parameters.unshift(start, 0);
-          splice2.apply(list3, parameters);
-          chunkStart += 1e4;
-          start += 1e4;
-        }
-      }
-    }
-    module.exports = chunkedSplice;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/shallow.js
-var require_shallow2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/shallow.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = require_assign2();
-    function shallow(object) {
-      return assign({}, object);
-    }
-    module.exports = shallow;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/subtokenize.js
-var require_subtokenize = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/subtokenize.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = require_assign2();
-    var chunkedSplice = require_chunked_splice3();
-    var shallow = require_shallow2();
-    function subtokenize2(events) {
-      var jumps = {};
-      var index = -1;
-      var event;
-      var lineIndex;
-      var otherIndex;
-      var otherEvent;
-      var parameters;
-      var subevents;
-      var more;
-      while (++index < events.length) {
-        while (index in jumps) {
-          index = jumps[index];
-        }
-        event = events[index];
-        if (index && event[1].type === "chunkFlow" && events[index - 1][1].type === "listItemPrefix") {
-          subevents = event[1]._tokenizer.events;
-          otherIndex = 0;
-          if (otherIndex < subevents.length && subevents[otherIndex][1].type === "lineEndingBlank") {
-            otherIndex += 2;
-          }
-          if (otherIndex < subevents.length && subevents[otherIndex][1].type === "content") {
-            while (++otherIndex < subevents.length) {
-              if (subevents[otherIndex][1].type === "content") {
-                break;
-              }
-              if (subevents[otherIndex][1].type === "chunkText") {
-                subevents[otherIndex][1].isInFirstContentOfListItem = true;
-                otherIndex++;
-              }
-            }
-          }
-        }
-        if (event[0] === "enter") {
-          if (event[1].contentType) {
-            assign(jumps, subcontent2(events, index));
-            index = jumps[index];
-            more = true;
-          }
-        } else if (event[1]._container || event[1]._movePreviousLineEndings) {
-          otherIndex = index;
-          lineIndex = void 0;
-          while (otherIndex--) {
-            otherEvent = events[otherIndex];
-            if (otherEvent[1].type === "lineEnding" || otherEvent[1].type === "lineEndingBlank") {
-              if (otherEvent[0] === "enter") {
-                if (lineIndex) {
-                  events[lineIndex][1].type = "lineEndingBlank";
-                }
-                otherEvent[1].type = "lineEnding";
-                lineIndex = otherIndex;
-              }
-            } else {
+      case 91: {
+        if (buf.charCodeAt(p7 + 1) === 94 && footnotes.size > 0) {
+          let j10 = p7 + 2;
+          while (j10 < e4) {
+            const d4 = buf.charCodeAt(j10);
+            if (d4 === 93 || d4 === 91) {
               break;
             }
-          }
-          if (lineIndex) {
-            event[1].end = shallow(events[lineIndex][1].start);
-            parameters = events.slice(lineIndex, index);
-            parameters.unshift(event);
-            chunkedSplice(events, lineIndex, index - lineIndex + 1, parameters);
-          }
-        }
-      }
-      return !more;
-    }
-    function subcontent2(events, eventIndex) {
-      var token3 = events[eventIndex][1];
-      var context = events[eventIndex][2];
-      var startPosition = eventIndex - 1;
-      var startPositions = [];
-      var tokenizer = token3._tokenizer || context.parser[token3.contentType](token3.start);
-      var childEvents = tokenizer.events;
-      var jumps = [];
-      var gaps = {};
-      var stream;
-      var previous4;
-      var index;
-      var entered;
-      var end;
-      var adjust;
-      while (token3) {
-        while (events[++startPosition][1] !== token3) {
-        }
-        startPositions.push(startPosition);
-        if (!token3._tokenizer) {
-          stream = context.sliceStream(token3);
-          if (!token3.next) {
-            stream.push(null);
-          }
-          if (previous4) {
-            tokenizer.defineSkip(token3.start);
-          }
-          if (token3.isInFirstContentOfListItem) {
-            tokenizer._gfmTasklistFirstContentOfListItem = true;
-          }
-          tokenizer.write(stream);
-          if (token3.isInFirstContentOfListItem) {
-            tokenizer._gfmTasklistFirstContentOfListItem = void 0;
-          }
-        }
-        previous4 = token3;
-        token3 = token3.next;
-      }
-      token3 = previous4;
-      index = childEvents.length;
-      while (index--) {
-        if (childEvents[index][0] === "enter") {
-          entered = true;
-        } else if (
-          // Find a void token that includes a break.
-          entered && childEvents[index][1].type === childEvents[index - 1][1].type && childEvents[index][1].start.line !== childEvents[index][1].end.line
-        ) {
-          add(childEvents.slice(index + 1, end));
-          token3._tokenizer = token3.next = void 0;
-          token3 = token3.previous;
-          end = index + 1;
-        }
-      }
-      tokenizer.events = token3._tokenizer = token3.next = void 0;
-      add(childEvents.slice(0, end));
-      index = -1;
-      adjust = 0;
-      while (++index < jumps.length) {
-        gaps[adjust + jumps[index][0]] = adjust + jumps[index][1];
-        adjust += jumps[index][1] - jumps[index][0] - 1;
-      }
-      return gaps;
-      function add(slice) {
-        var start = startPositions.pop();
-        jumps.unshift([start, start + slice.length - 1]);
-        chunkedSplice(events, start, 2, slice);
-      }
-    }
-    module.exports = subtokenize2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/content.js
-var require_content2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/content.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var prefixSize = require_prefix_size2();
-    var subtokenize2 = require_subtokenize();
-    var factorySpace2 = require_factory_space3();
-    var content3 = {
-      tokenize: tokenizeContent2,
-      resolve: resolveContent2,
-      interruptible: true,
-      lazy: true
-    };
-    var continuationConstruct2 = {
-      tokenize: tokenizeContinuation2,
-      partial: true
-    };
-    function resolveContent2(events) {
-      subtokenize2(events);
-      return events;
-    }
-    function tokenizeContent2(effects, ok2) {
-      var previous4;
-      return start;
-      function start(code19) {
-        effects.enter("content");
-        previous4 = effects.enter("chunkContent", {
-          contentType: "content"
-        });
-        return data(code19);
-      }
-      function data(code19) {
-        if (code19 === null) {
-          return contentEnd(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          return effects.check(
-            continuationConstruct2,
-            contentContinue,
-            contentEnd
-          )(code19);
-        }
-        effects.consume(code19);
-        return data;
-      }
-      function contentEnd(code19) {
-        effects.exit("chunkContent");
-        effects.exit("content");
-        return ok2(code19);
-      }
-      function contentContinue(code19) {
-        effects.consume(code19);
-        effects.exit("chunkContent");
-        previous4 = previous4.next = effects.enter("chunkContent", {
-          contentType: "content",
-          previous: previous4
-        });
-        return data;
-      }
-    }
-    function tokenizeContinuation2(effects, ok2, nok) {
-      var self = this;
-      return startLookahead;
-      function startLookahead(code19) {
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return factorySpace2(effects, prefixed, "linePrefix");
-      }
-      function prefixed(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          return nok(code19);
-        }
-        if (self.parser.constructs.disable.null.indexOf("codeIndented") > -1 || prefixSize(self.events, "linePrefix") < 4) {
-          return effects.interrupt(self.parser.constructs.flow, nok, ok2)(code19);
-        }
-        return ok2(code19);
-      }
-    }
-    module.exports = content3;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/flow.js
-var require_flow = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/flow.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    var content3 = require_content2();
-    var factorySpace2 = require_factory_space3();
-    var partialBlankLine = require_partial_blank_line();
-    var tokenize4 = initializeFlow2;
-    function initializeFlow2(effects) {
-      var self = this;
-      var initial = effects.attempt(
-        // Try to parse a blank line.
-        partialBlankLine,
-        atBlankEnding,
-        // Try to parse initial flow (essentially, only code).
-        effects.attempt(
-          this.parser.constructs.flowInitial,
-          afterConstruct,
-          factorySpace2(
-            effects,
-            effects.attempt(
-              this.parser.constructs.flow,
-              afterConstruct,
-              effects.attempt(content3, afterConstruct)
-            ),
-            "linePrefix"
-          )
-        )
-      );
-      return initial;
-      function atBlankEnding(code19) {
-        if (code19 === null) {
-          effects.consume(code19);
-          return;
-        }
-        effects.enter("lineEndingBlank");
-        effects.consume(code19);
-        effects.exit("lineEndingBlank");
-        self.currentConstruct = void 0;
-        return initial;
-      }
-      function afterConstruct(code19) {
-        if (code19 === null) {
-          effects.consume(code19);
-          return;
-        }
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        self.currentConstruct = void 0;
-        return initial;
-      }
-    }
-    exports.tokenize = tokenize4;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/text.js
-var require_text = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/initialize/text.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    var assign = require_assign2();
-    var shallow = require_shallow2();
-    var text5 = initializeFactory2("text");
-    var string3 = initializeFactory2("string");
-    var resolver2 = {
-      resolveAll: createResolver2()
-    };
-    function initializeFactory2(field) {
-      return {
-        tokenize: initializeText,
-        resolveAll: createResolver2(
-          field === "text" ? resolveAllLineSuffixes2 : void 0
-        )
-      };
-      function initializeText(effects) {
-        var self = this;
-        var constructs2 = this.parser.constructs[field];
-        var text6 = effects.attempt(constructs2, start, notText);
-        return start;
-        function start(code19) {
-          return atBreak(code19) ? text6(code19) : notText(code19);
-        }
-        function notText(code19) {
-          if (code19 === null) {
-            effects.consume(code19);
-            return;
-          }
-          effects.enter("data");
-          effects.consume(code19);
-          return data;
-        }
-        function data(code19) {
-          if (atBreak(code19)) {
-            effects.exit("data");
-            return text6(code19);
-          }
-          effects.consume(code19);
-          return data;
-        }
-        function atBreak(code19) {
-          var list3 = constructs2[code19];
-          var index = -1;
-          if (code19 === null) {
-            return true;
-          }
-          if (list3) {
-            while (++index < list3.length) {
-              if (!list3[index].previous || list3[index].previous.call(self, self.previous)) {
-                return true;
+            if (d4 === 92 && j10 + 1 < e4) {
+              const f4 = buf.charCodeAt(j10 + 1);
+              if (f4 === 91 || f4 === 92 || f4 === 93) {
+                j10++;
               }
             }
+            j10++;
           }
-        }
-      }
-    }
-    function createResolver2(extraResolver) {
-      return resolveAllText;
-      function resolveAllText(events, context) {
-        var index = -1;
-        var enter;
-        while (++index <= events.length) {
-          if (enter === void 0) {
-            if (events[index] && events[index][1].type === "data") {
-              enter = index;
-              index++;
-            }
-          } else if (!events[index] || events[index][1].type !== "data") {
-            if (index !== enter + 2) {
-              events[enter][1].end = events[index - 1][1].end;
-              events.splice(enter + 2, index - enter - 2);
-              index = enter + 2;
-            }
-            enter = void 0;
-          }
-        }
-        return extraResolver ? extraResolver(events, context) : events;
-      }
-    }
-    function resolveAllLineSuffixes2(events, context) {
-      var eventIndex = -1;
-      var chunks;
-      var data;
-      var chunk;
-      var index;
-      var bufferIndex;
-      var size;
-      var tabs;
-      var token3;
-      while (++eventIndex <= events.length) {
-        if ((eventIndex === events.length || events[eventIndex][1].type === "lineEnding") && events[eventIndex - 1][1].type === "data") {
-          data = events[eventIndex - 1][1];
-          chunks = context.sliceStream(data);
-          index = chunks.length;
-          bufferIndex = -1;
-          size = 0;
-          tabs = void 0;
-          while (index--) {
-            chunk = chunks[index];
-            if (typeof chunk === "string") {
-              bufferIndex = chunk.length;
-              while (chunk.charCodeAt(bufferIndex - 1) === 32) {
-                size++;
-                bufferIndex--;
+          if (j10 < e4 && j10 > p7 + 2 && buf.charCodeAt(j10) === 93) {
+            const label5 = buf.slice(p7 + 2, j10);
+            if (footnotes.has(normalizeIdentifier2(label5))) {
+              if (p7 > textStart) {
+                addText(block2, textStart, p7, complex);
+                complex = false;
               }
-              if (bufferIndex) break;
-              bufferIndex = -1;
-            } else if (chunk === -2) {
-              tabs = true;
-              size++;
-            } else if (chunk === -1) ;
-            else {
-              index++;
-              break;
-            }
-          }
-          if (size) {
-            token3 = {
-              type: eventIndex === events.length || tabs || size < 2 ? "lineSuffix" : "hardBreakTrailing",
-              start: {
-                line: data.end.line,
-                column: data.end.column - size,
-                offset: data.end.offset - size,
-                _index: data.start._index + index,
-                _bufferIndex: index ? bufferIndex : data.start._bufferIndex + bufferIndex
-              },
-              end: shallow(data.end)
-            };
-            data.end = shallow(token3.start);
-            if (data.start.offset === data.end.offset) {
-              assign(data, token3);
-            } else {
-              events.splice(
-                eventIndex,
-                0,
-                ["enter", token3, context],
-                ["exit", token3, context]
-              );
-              eventIndex += 2;
-            }
-          }
-          eventIndex++;
-        }
-      }
-      return events;
-    }
-    exports.resolver = resolver2;
-    exports.string = string3;
-    exports.text = text5;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/miniflat.js
-var require_miniflat2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/miniflat.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function miniflat(value) {
-      return value === null || value === void 0 ? [] : "length" in value ? value : [value];
-    }
-    module.exports = miniflat;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/combine-extensions.js
-var require_combine_extensions2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/combine-extensions.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var hasOwnProperty4 = require_has_own_property2();
-    var chunkedSplice = require_chunked_splice3();
-    var miniflat = require_miniflat2();
-    function combineExtensions2(extensions) {
-      var all = {};
-      var index = -1;
-      while (++index < extensions.length) {
-        extension(all, extensions[index]);
-      }
-      return all;
-    }
-    function extension(all, extension2) {
-      var hook;
-      var left;
-      var right;
-      var code19;
-      for (hook in extension2) {
-        left = hasOwnProperty4.call(all, hook) ? all[hook] : all[hook] = {};
-        right = extension2[hook];
-        for (code19 in right) {
-          left[code19] = constructs2(
-            miniflat(right[code19]),
-            hasOwnProperty4.call(left, code19) ? left[code19] : []
-          );
-        }
-      }
-    }
-    function constructs2(list3, existing) {
-      var index = -1;
-      var before = [];
-      while (++index < list3.length) {
-        ;
-        (list3[index].add === "after" ? existing : before).push(list3[index]);
-      }
-      chunkedSplice(existing, 0, 0, before);
-      return existing;
-    }
-    module.exports = combineExtensions2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/chunked-push.js
-var require_chunked_push = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/chunked-push.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var chunkedSplice = require_chunked_splice3();
-    function chunkedPush2(list3, items) {
-      if (list3.length) {
-        chunkedSplice(list3, list3.length, 0, items);
-        return list3;
-      }
-      return items;
-    }
-    module.exports = chunkedPush2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/resolve-all.js
-var require_resolve_all2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/resolve-all.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function resolveAll2(constructs2, events, context) {
-      var called = [];
-      var index = -1;
-      var resolve4;
-      while (++index < constructs2.length) {
-        resolve4 = constructs2[index].resolveAll;
-        if (resolve4 && called.indexOf(resolve4) < 0) {
-          events = resolve4(events, context);
-          called.push(resolve4);
-        }
-      }
-      return events;
-    }
-    module.exports = resolveAll2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/serialize-chunks.js
-var require_serialize_chunks = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/serialize-chunks.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = require_from_char_code4();
-    function serializeChunks2(chunks) {
-      var index = -1;
-      var result = [];
-      var chunk;
-      var value;
-      var atTab;
-      while (++index < chunks.length) {
-        chunk = chunks[index];
-        if (typeof chunk === "string") {
-          value = chunk;
-        } else if (chunk === -5) {
-          value = "\r";
-        } else if (chunk === -4) {
-          value = "\n";
-        } else if (chunk === -3) {
-          value = "\r\n";
-        } else if (chunk === -2) {
-          value = "	";
-        } else if (chunk === -1) {
-          if (atTab) continue;
-          value = " ";
-        } else {
-          value = fromCharCode(chunk);
-        }
-        atTab = chunk === -2;
-        result.push(value);
-      }
-      return result.join("");
-    }
-    module.exports = serializeChunks2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/slice-chunks.js
-var require_slice_chunks = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/slice-chunks.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function sliceChunks2(chunks, token3) {
-      var startIndex = token3.start._index;
-      var startBufferIndex = token3.start._bufferIndex;
-      var endIndex2 = token3.end._index;
-      var endBufferIndex = token3.end._bufferIndex;
-      var view;
-      if (startIndex === endIndex2) {
-        view = [chunks[startIndex].slice(startBufferIndex, endBufferIndex)];
-      } else {
-        view = chunks.slice(startIndex, endIndex2);
-        if (startBufferIndex > -1) {
-          view[0] = view[0].slice(startBufferIndex);
-        }
-        if (endBufferIndex > 0) {
-          view.push(chunks[endIndex2].slice(0, endBufferIndex));
-        }
-      }
-      return view;
-    }
-    module.exports = sliceChunks2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/create-tokenizer.js
-var require_create_tokenizer = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/create-tokenizer.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = require_assign2();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var chunkedPush2 = require_chunked_push();
-    var chunkedSplice = require_chunked_splice3();
-    var miniflat = require_miniflat2();
-    var resolveAll2 = require_resolve_all2();
-    var serializeChunks2 = require_serialize_chunks();
-    var shallow = require_shallow2();
-    var sliceChunks2 = require_slice_chunks();
-    function createTokenizer2(parser, initialize2, from) {
-      var point = from ? shallow(from) : {
-        line: 1,
-        column: 1,
-        offset: 0
-      };
-      var columnStart = {};
-      var resolveAllConstructs = [];
-      var chunks = [];
-      var stack3 = [];
-      var effects = {
-        consume,
-        enter,
-        exit: exit2,
-        attempt: constructFactory(onsuccessfulconstruct),
-        check: constructFactory(onsuccessfulcheck),
-        interrupt: constructFactory(onsuccessfulcheck, {
-          interrupt: true
-        }),
-        lazy: constructFactory(onsuccessfulcheck, {
-          lazy: true
-        })
-      };
-      var context = {
-        previous: null,
-        events: [],
-        parser,
-        sliceStream,
-        sliceSerialize,
-        now,
-        defineSkip: skip2,
-        write
-      };
-      var state = initialize2.tokenize.call(context, effects);
-      if (initialize2.resolveAll) {
-        resolveAllConstructs.push(initialize2);
-      }
-      point._index = 0;
-      point._bufferIndex = -1;
-      return context;
-      function write(slice) {
-        chunks = chunkedPush2(chunks, slice);
-        main2();
-        if (chunks[chunks.length - 1] !== null) {
-          return [];
-        }
-        addResult(initialize2, 0);
-        context.events = resolveAll2(resolveAllConstructs, context.events, context);
-        return context.events;
-      }
-      function sliceSerialize(token3) {
-        return serializeChunks2(sliceStream(token3));
-      }
-      function sliceStream(token3) {
-        return sliceChunks2(chunks, token3);
-      }
-      function now() {
-        return shallow(point);
-      }
-      function skip2(value) {
-        columnStart[value.line] = value.column;
-        accountForPotentialSkip();
-      }
-      function main2() {
-        var chunkIndex;
-        var chunk;
-        while (point._index < chunks.length) {
-          chunk = chunks[point._index];
-          if (typeof chunk === "string") {
-            chunkIndex = point._index;
-            if (point._bufferIndex < 0) {
-              point._bufferIndex = 0;
-            }
-            while (point._index === chunkIndex && point._bufferIndex < chunk.length) {
-              go7(chunk.charCodeAt(point._bufferIndex));
-            }
-          } else {
-            go7(chunk);
-          }
-        }
-      }
-      function go7(code19) {
-        state = state(code19);
-      }
-      function consume(code19) {
-        if (markdownLineEnding2(code19)) {
-          point.line++;
-          point.column = 1;
-          point.offset += code19 === -3 ? 2 : 1;
-          accountForPotentialSkip();
-        } else if (code19 !== -1) {
-          point.column++;
-          point.offset++;
-        }
-        if (point._bufferIndex < 0) {
-          point._index++;
-        } else {
-          point._bufferIndex++;
-          if (point._bufferIndex === chunks[point._index].length) {
-            point._bufferIndex = -1;
-            point._index++;
-          }
-        }
-        context.previous = code19;
-      }
-      function enter(type, fields) {
-        var token3 = fields || {};
-        token3.type = type;
-        token3.start = now();
-        context.events.push(["enter", token3, context]);
-        stack3.push(token3);
-        return token3;
-      }
-      function exit2(type) {
-        var token3 = stack3.pop();
-        token3.end = now();
-        context.events.push(["exit", token3, context]);
-        return token3;
-      }
-      function onsuccessfulconstruct(construct, info) {
-        addResult(construct, info.from);
-      }
-      function onsuccessfulcheck(construct, info) {
-        info.restore();
-      }
-      function constructFactory(onreturn, fields) {
-        return hook;
-        function hook(constructs2, returnState, bogusState) {
-          var listOfConstructs;
-          var constructIndex;
-          var currentConstruct;
-          var info;
-          return constructs2.tokenize || "length" in constructs2 ? handleListOfConstructs(miniflat(constructs2)) : handleMapOfConstructs;
-          function handleMapOfConstructs(code19) {
-            if (code19 in constructs2 || null in constructs2) {
-              return handleListOfConstructs(
-                constructs2.null ? (
-                  /* c8 ignore next */
-                  miniflat(constructs2[code19]).concat(miniflat(constructs2.null))
-                ) : constructs2[code19]
-              )(code19);
-            }
-            return bogusState(code19);
-          }
-          function handleListOfConstructs(list3) {
-            listOfConstructs = list3;
-            constructIndex = 0;
-            return handleConstruct(list3[constructIndex]);
-          }
-          function handleConstruct(construct) {
-            return start;
-            function start(code19) {
-              info = store();
-              currentConstruct = construct;
-              if (!construct.partial) {
-                context.currentConstruct = construct;
-              }
-              if (construct.name && context.parser.constructs.disable.null.indexOf(construct.name) > -1) {
-                return nok();
-              }
-              return construct.tokenize.call(
-                fields ? assign({}, context, fields) : context,
-                effects,
-                ok2,
-                nok
-              )(code19);
-            }
-          }
-          function ok2(code19) {
-            onreturn(currentConstruct, info);
-            return returnState;
-          }
-          function nok(code19) {
-            info.restore();
-            if (++constructIndex < listOfConstructs.length) {
-              return handleConstruct(listOfConstructs[constructIndex]);
-            }
-            return bogusState;
-          }
-        }
-      }
-      function addResult(construct, from2) {
-        if (construct.resolveAll && resolveAllConstructs.indexOf(construct) < 0) {
-          resolveAllConstructs.push(construct);
-        }
-        if (construct.resolve) {
-          chunkedSplice(
-            context.events,
-            from2,
-            context.events.length - from2,
-            construct.resolve(context.events.slice(from2), context)
-          );
-        }
-        if (construct.resolveTo) {
-          context.events = construct.resolveTo(context.events, context);
-        }
-      }
-      function store() {
-        var startPoint = now();
-        var startPrevious = context.previous;
-        var startCurrentConstruct = context.currentConstruct;
-        var startEventsIndex = context.events.length;
-        var startStack = Array.from(stack3);
-        return {
-          restore,
-          from: startEventsIndex
-        };
-        function restore() {
-          point = startPoint;
-          context.previous = startPrevious;
-          context.currentConstruct = startCurrentConstruct;
-          context.events.length = startEventsIndex;
-          stack3 = startStack;
-          accountForPotentialSkip();
-        }
-      }
-      function accountForPotentialSkip() {
-        if (point.line in columnStart && point.column < 2) {
-          point.column = columnStart[point.line];
-          point.offset += columnStart[point.line] - 1;
-        }
-      }
-    }
-    module.exports = createTokenizer2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/markdown-line-ending-or-space.js
-var require_markdown_line_ending_or_space3 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/markdown-line-ending-or-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownLineEndingOrSpace2(code19) {
-      return code19 < 0 || code19 === 32;
-    }
-    module.exports = markdownLineEndingOrSpace2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/unicode-punctuation-regex.js
-var require_unicode_punctuation_regex4 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/unicode-punctuation-regex.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuation2 = /[!-\/:-@\[-`\{-~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u09FD\u0A76\u0AF0\u0C77\u0C84\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E4F\u2E52\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]/;
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/regex-check.js
-var require_regex_check4 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/regex-check.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var fromCharCode = require_from_char_code4();
-    function regexCheck2(regex2) {
-      return check2;
-      function check2(code19) {
-        return regex2.test(fromCharCode(code19));
-      }
-    }
-    module.exports = regexCheck2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/unicode-punctuation.js
-var require_unicode_punctuation4 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/unicode-punctuation.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var unicodePunctuationRegex = require_unicode_punctuation_regex4();
-    var regexCheck2 = require_regex_check4();
-    var unicodePunctuation2 = regexCheck2(unicodePunctuationRegex);
-    module.exports = unicodePunctuation2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/unicode-whitespace.js
-var require_unicode_whitespace4 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/unicode-whitespace.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var unicodeWhitespace2 = regexCheck2(/\s/);
-    module.exports = unicodeWhitespace2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/classify-character.js
-var require_classify_character2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/classify-character.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var unicodePunctuation2 = require_unicode_punctuation4();
-    var unicodeWhitespace2 = require_unicode_whitespace4();
-    function classifyCharacter2(code19) {
-      if (code19 === null || markdownLineEndingOrSpace2(code19) || unicodeWhitespace2(code19)) {
-        return 1;
-      }
-      if (unicodePunctuation2(code19)) {
-        return 2;
-      }
-    }
-    module.exports = classifyCharacter2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/move-point.js
-var require_move_point = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/util/move-point.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function movePoint2(point, offset) {
-      point.column += offset;
-      point.offset += offset;
-      point._bufferIndex += offset;
-      return point;
-    }
-    module.exports = movePoint2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/attention.js
-var require_attention = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/attention.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var chunkedPush2 = require_chunked_push();
-    var chunkedSplice = require_chunked_splice3();
-    var classifyCharacter2 = require_classify_character2();
-    var movePoint2 = require_move_point();
-    var resolveAll2 = require_resolve_all2();
-    var shallow = require_shallow2();
-    var attention2 = {
-      name: "attention",
-      tokenize: tokenizeAttention2,
-      resolveAll: resolveAllAttention2
-    };
-    function resolveAllAttention2(events, context) {
-      var index = -1;
-      var open;
-      var group2;
-      var text5;
-      var openingSequence;
-      var closingSequence;
-      var use;
-      var nextEvents;
-      var offset;
-      while (++index < events.length) {
-        if (events[index][0] === "enter" && events[index][1].type === "attentionSequence" && events[index][1]._close) {
-          open = index;
-          while (open--) {
-            if (events[open][0] === "exit" && events[open][1].type === "attentionSequence" && events[open][1]._open && // If the markers are the same:
-            context.sliceSerialize(events[open][1]).charCodeAt(0) === context.sliceSerialize(events[index][1]).charCodeAt(0)) {
-              if ((events[open][1]._close || events[index][1]._open) && (events[index][1].end.offset - events[index][1].start.offset) % 3 && !((events[open][1].end.offset - events[open][1].start.offset + events[index][1].end.offset - events[index][1].start.offset) % 3)) {
-                continue;
-              }
-              use = events[open][1].end.offset - events[open][1].start.offset > 1 && events[index][1].end.offset - events[index][1].start.offset > 1 ? 2 : 1;
-              openingSequence = {
-                type: use > 1 ? "strongSequence" : "emphasisSequence",
-                start: movePoint2(shallow(events[open][1].end), -use),
-                end: shallow(events[open][1].end)
-              };
-              closingSequence = {
-                type: use > 1 ? "strongSequence" : "emphasisSequence",
-                start: shallow(events[index][1].start),
-                end: movePoint2(shallow(events[index][1].start), use)
-              };
-              text5 = {
-                type: use > 1 ? "strongText" : "emphasisText",
-                start: shallow(events[open][1].end),
-                end: shallow(events[index][1].start)
-              };
-              group2 = {
-                type: use > 1 ? "strong" : "emphasis",
-                start: shallow(openingSequence.start),
-                end: shallow(closingSequence.end)
-              };
-              events[open][1].end = shallow(openingSequence.start);
-              events[index][1].start = shallow(closingSequence.end);
-              nextEvents = [];
-              if (events[open][1].end.offset - events[open][1].start.offset) {
-                nextEvents = chunkedPush2(nextEvents, [
-                  ["enter", events[open][1], context],
-                  ["exit", events[open][1], context]
-                ]);
-              }
-              nextEvents = chunkedPush2(nextEvents, [
-                ["enter", group2, context],
-                ["enter", openingSequence, context],
-                ["exit", openingSequence, context],
-                ["enter", text5, context]
-              ]);
-              nextEvents = chunkedPush2(
-                nextEvents,
-                resolveAll2(
-                  context.parser.constructs.insideSpan.null,
-                  events.slice(open + 1, index),
-                  context
-                )
-              );
-              nextEvents = chunkedPush2(nextEvents, [
-                ["exit", text5, context],
-                ["enter", closingSequence, context],
-                ["exit", closingSequence, context],
-                ["exit", group2, context]
-              ]);
-              if (events[index][1].end.offset - events[index][1].start.offset) {
-                offset = 2;
-                nextEvents = chunkedPush2(nextEvents, [
-                  ["enter", events[index][1], context],
-                  ["exit", events[index][1], context]
-                ]);
-              } else {
-                offset = 0;
-              }
-              chunkedSplice(events, open - 1, index - open + 3, nextEvents);
-              index = open + nextEvents.length - offset - 2;
+              const node = newNode(FootnoteReference, p7, j10 + 1);
+              nA[node] = addSide(normalizeIdentifier2(label5).toLowerCase());
+              nB2[node] = addSide(decodeString(label5));
+              append(block2, node);
+              p7 = j10 + 1;
+              textStart = p7;
               break;
             }
           }
         }
-      }
-      index = -1;
-      while (++index < events.length) {
-        if (events[index][1].type === "attentionSequence") {
-          events[index][1].type = "data";
-        }
-      }
-      return events;
-    }
-    function tokenizeAttention2(effects, ok2) {
-      var before = classifyCharacter2(this.previous);
-      var marker;
-      return start;
-      function start(code19) {
-        effects.enter("attentionSequence");
-        marker = code19;
-        return sequence(code19);
-      }
-      function sequence(code19) {
-        var token3;
-        var after;
-        var open;
-        var close;
-        if (code19 === marker) {
-          effects.consume(code19);
-          return sequence;
-        }
-        token3 = effects.exit("attentionSequence");
-        after = classifyCharacter2(code19);
-        open = !after || after === 2 && before;
-        close = !before || before === 2 && after;
-        token3._open = marker === 42 ? open : open && (before || !close);
-        token3._close = marker === 42 ? close : close && (after || !open);
-        return ok2(code19);
-      }
-    }
-    module.exports = attention2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-alpha.js
-var require_ascii_alpha2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-alpha.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var asciiAlpha2 = regexCheck2(/[A-Za-z]/);
-    module.exports = asciiAlpha2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-alphanumeric.js
-var require_ascii_alphanumeric2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-alphanumeric.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var asciiAlphanumeric2 = regexCheck2(/[\dA-Za-z]/);
-    module.exports = asciiAlphanumeric2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-atext.js
-var require_ascii_atext = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-atext.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var asciiAtext2 = regexCheck2(/[#-'*+\--9=?A-Z^-~]/);
-    module.exports = asciiAtext2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-control.js
-var require_ascii_control2 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-control.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function asciiControl2(code19) {
-      return (
-        // Special whitespace codes (which have negative values), C0 and Control
-        // character DEL
-        code19 < 32 || code19 === 127
-      );
-    }
-    module.exports = asciiControl2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/autolink.js
-var require_autolink = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/autolink.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiAlpha2 = require_ascii_alpha2();
-    var asciiAlphanumeric2 = require_ascii_alphanumeric2();
-    var asciiAtext2 = require_ascii_atext();
-    var asciiControl2 = require_ascii_control2();
-    var autolink3 = {
-      name: "autolink",
-      tokenize: tokenizeAutolink2
-    };
-    function tokenizeAutolink2(effects, ok2, nok) {
-      var size = 1;
-      return start;
-      function start(code19) {
-        effects.enter("autolink");
-        effects.enter("autolinkMarker");
-        effects.consume(code19);
-        effects.exit("autolinkMarker");
-        effects.enter("autolinkProtocol");
-        return open;
-      }
-      function open(code19) {
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          return schemeOrEmailAtext;
-        }
-        return asciiAtext2(code19) ? emailAtext(code19) : nok(code19);
-      }
-      function schemeOrEmailAtext(code19) {
-        return code19 === 43 || code19 === 45 || code19 === 46 || asciiAlphanumeric2(code19) ? schemeInsideOrEmailAtext(code19) : emailAtext(code19);
-      }
-      function schemeInsideOrEmailAtext(code19) {
-        if (code19 === 58) {
-          effects.consume(code19);
-          return urlInside;
-        }
-        if ((code19 === 43 || code19 === 45 || code19 === 46 || asciiAlphanumeric2(code19)) && size++ < 32) {
-          effects.consume(code19);
-          return schemeInsideOrEmailAtext;
-        }
-        return emailAtext(code19);
-      }
-      function urlInside(code19) {
-        if (code19 === 62) {
-          effects.exit("autolinkProtocol");
-          return end(code19);
-        }
-        if (code19 === 32 || code19 === 60 || asciiControl2(code19)) {
-          return nok(code19);
-        }
-        effects.consume(code19);
-        return urlInside;
-      }
-      function emailAtext(code19) {
-        if (code19 === 64) {
-          effects.consume(code19);
-          size = 0;
-          return emailAtSignOrDot;
-        }
-        if (asciiAtext2(code19)) {
-          effects.consume(code19);
-          return emailAtext;
-        }
-        return nok(code19);
-      }
-      function emailAtSignOrDot(code19) {
-        return asciiAlphanumeric2(code19) ? emailLabel(code19) : nok(code19);
-      }
-      function emailLabel(code19) {
-        if (code19 === 46) {
-          effects.consume(code19);
-          size = 0;
-          return emailAtSignOrDot;
-        }
-        if (code19 === 62) {
-          effects.exit("autolinkProtocol").type = "autolinkEmail";
-          return end(code19);
-        }
-        return emailValue(code19);
-      }
-      function emailValue(code19) {
-        if ((code19 === 45 || asciiAlphanumeric2(code19)) && size++ < 63) {
-          effects.consume(code19);
-          return code19 === 45 ? emailValue : emailLabel;
-        }
-        return nok(code19);
-      }
-      function end(code19) {
-        effects.enter("autolinkMarker");
-        effects.consume(code19);
-        effects.exit("autolinkMarker");
-        effects.exit("autolink");
-        return ok2;
-      }
-    }
-    module.exports = autolink3;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/block-quote.js
-var require_block_quote = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/block-quote.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownSpace2 = require_markdown_space3();
-    var factorySpace2 = require_factory_space3();
-    var blockQuote2 = {
-      name: "blockQuote",
-      tokenize: tokenizeBlockQuoteStart2,
-      continuation: {
-        tokenize: tokenizeBlockQuoteContinuation2
-      },
-      exit: exit2
-    };
-    function tokenizeBlockQuoteStart2(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code19) {
-        if (code19 === 62) {
-          if (!self.containerState.open) {
-            effects.enter("blockQuote", {
-              _container: true
-            });
-            self.containerState.open = true;
-          }
-          effects.enter("blockQuotePrefix");
-          effects.enter("blockQuoteMarker");
-          effects.consume(code19);
-          effects.exit("blockQuoteMarker");
-          return after;
-        }
-        return nok(code19);
-      }
-      function after(code19) {
-        if (markdownSpace2(code19)) {
-          effects.enter("blockQuotePrefixWhitespace");
-          effects.consume(code19);
-          effects.exit("blockQuotePrefixWhitespace");
-          effects.exit("blockQuotePrefix");
-          return ok2;
-        }
-        effects.exit("blockQuotePrefix");
-        return ok2(code19);
-      }
-    }
-    function tokenizeBlockQuoteContinuation2(effects, ok2, nok) {
-      return factorySpace2(
-        effects,
-        effects.attempt(blockQuote2, ok2, nok),
-        "linePrefix",
-        this.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4
-      );
-    }
-    function exit2(effects) {
-      effects.exit("blockQuote");
-    }
-    module.exports = blockQuote2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-punctuation.js
-var require_ascii_punctuation = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-punctuation.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var asciiPunctuation2 = regexCheck2(/[!-/:-@[-`{-~]/);
-    module.exports = asciiPunctuation2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/character-escape.js
-var require_character_escape = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/character-escape.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiPunctuation2 = require_ascii_punctuation();
-    var characterEscape2 = {
-      name: "characterEscape",
-      tokenize: tokenizeCharacterEscape2
-    };
-    function tokenizeCharacterEscape2(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        effects.enter("characterEscape");
-        effects.enter("escapeMarker");
-        effects.consume(code19);
-        effects.exit("escapeMarker");
-        return open;
-      }
-      function open(code19) {
-        if (asciiPunctuation2(code19)) {
-          effects.enter("characterEscapeValue");
-          effects.consume(code19);
-          effects.exit("characterEscapeValue");
-          effects.exit("characterEscape");
-          return ok2;
-        }
-        return nok(code19);
-      }
-    }
-    module.exports = characterEscape2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/character-entities/index.json
-var require_character_entities = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/character-entities/index.json"(exports, module) {
-    module.exports = {
-      AEli: "\xC6",
-      AElig: "\xC6",
-      AM: "&",
-      AMP: "&",
-      Aacut: "\xC1",
-      Aacute: "\xC1",
-      Abreve: "\u0102",
-      Acir: "\xC2",
-      Acirc: "\xC2",
-      Acy: "\u0410",
-      Afr: "\u{1D504}",
-      Agrav: "\xC0",
-      Agrave: "\xC0",
-      Alpha: "\u0391",
-      Amacr: "\u0100",
-      And: "\u2A53",
-      Aogon: "\u0104",
-      Aopf: "\u{1D538}",
-      ApplyFunction: "\u2061",
-      Arin: "\xC5",
-      Aring: "\xC5",
-      Ascr: "\u{1D49C}",
-      Assign: "\u2254",
-      Atild: "\xC3",
-      Atilde: "\xC3",
-      Aum: "\xC4",
-      Auml: "\xC4",
-      Backslash: "\u2216",
-      Barv: "\u2AE7",
-      Barwed: "\u2306",
-      Bcy: "\u0411",
-      Because: "\u2235",
-      Bernoullis: "\u212C",
-      Beta: "\u0392",
-      Bfr: "\u{1D505}",
-      Bopf: "\u{1D539}",
-      Breve: "\u02D8",
-      Bscr: "\u212C",
-      Bumpeq: "\u224E",
-      CHcy: "\u0427",
-      COP: "\xA9",
-      COPY: "\xA9",
-      Cacute: "\u0106",
-      Cap: "\u22D2",
-      CapitalDifferentialD: "\u2145",
-      Cayleys: "\u212D",
-      Ccaron: "\u010C",
-      Ccedi: "\xC7",
-      Ccedil: "\xC7",
-      Ccirc: "\u0108",
-      Cconint: "\u2230",
-      Cdot: "\u010A",
-      Cedilla: "\xB8",
-      CenterDot: "\xB7",
-      Cfr: "\u212D",
-      Chi: "\u03A7",
-      CircleDot: "\u2299",
-      CircleMinus: "\u2296",
-      CirclePlus: "\u2295",
-      CircleTimes: "\u2297",
-      ClockwiseContourIntegral: "\u2232",
-      CloseCurlyDoubleQuote: "\u201D",
-      CloseCurlyQuote: "\u2019",
-      Colon: "\u2237",
-      Colone: "\u2A74",
-      Congruent: "\u2261",
-      Conint: "\u222F",
-      ContourIntegral: "\u222E",
-      Copf: "\u2102",
-      Coproduct: "\u2210",
-      CounterClockwiseContourIntegral: "\u2233",
-      Cross: "\u2A2F",
-      Cscr: "\u{1D49E}",
-      Cup: "\u22D3",
-      CupCap: "\u224D",
-      DD: "\u2145",
-      DDotrahd: "\u2911",
-      DJcy: "\u0402",
-      DScy: "\u0405",
-      DZcy: "\u040F",
-      Dagger: "\u2021",
-      Darr: "\u21A1",
-      Dashv: "\u2AE4",
-      Dcaron: "\u010E",
-      Dcy: "\u0414",
-      Del: "\u2207",
-      Delta: "\u0394",
-      Dfr: "\u{1D507}",
-      DiacriticalAcute: "\xB4",
-      DiacriticalDot: "\u02D9",
-      DiacriticalDoubleAcute: "\u02DD",
-      DiacriticalGrave: "`",
-      DiacriticalTilde: "\u02DC",
-      Diamond: "\u22C4",
-      DifferentialD: "\u2146",
-      Dopf: "\u{1D53B}",
-      Dot: "\xA8",
-      DotDot: "\u20DC",
-      DotEqual: "\u2250",
-      DoubleContourIntegral: "\u222F",
-      DoubleDot: "\xA8",
-      DoubleDownArrow: "\u21D3",
-      DoubleLeftArrow: "\u21D0",
-      DoubleLeftRightArrow: "\u21D4",
-      DoubleLeftTee: "\u2AE4",
-      DoubleLongLeftArrow: "\u27F8",
-      DoubleLongLeftRightArrow: "\u27FA",
-      DoubleLongRightArrow: "\u27F9",
-      DoubleRightArrow: "\u21D2",
-      DoubleRightTee: "\u22A8",
-      DoubleUpArrow: "\u21D1",
-      DoubleUpDownArrow: "\u21D5",
-      DoubleVerticalBar: "\u2225",
-      DownArrow: "\u2193",
-      DownArrowBar: "\u2913",
-      DownArrowUpArrow: "\u21F5",
-      DownBreve: "\u0311",
-      DownLeftRightVector: "\u2950",
-      DownLeftTeeVector: "\u295E",
-      DownLeftVector: "\u21BD",
-      DownLeftVectorBar: "\u2956",
-      DownRightTeeVector: "\u295F",
-      DownRightVector: "\u21C1",
-      DownRightVectorBar: "\u2957",
-      DownTee: "\u22A4",
-      DownTeeArrow: "\u21A7",
-      Downarrow: "\u21D3",
-      Dscr: "\u{1D49F}",
-      Dstrok: "\u0110",
-      ENG: "\u014A",
-      ET: "\xD0",
-      ETH: "\xD0",
-      Eacut: "\xC9",
-      Eacute: "\xC9",
-      Ecaron: "\u011A",
-      Ecir: "\xCA",
-      Ecirc: "\xCA",
-      Ecy: "\u042D",
-      Edot: "\u0116",
-      Efr: "\u{1D508}",
-      Egrav: "\xC8",
-      Egrave: "\xC8",
-      Element: "\u2208",
-      Emacr: "\u0112",
-      EmptySmallSquare: "\u25FB",
-      EmptyVerySmallSquare: "\u25AB",
-      Eogon: "\u0118",
-      Eopf: "\u{1D53C}",
-      Epsilon: "\u0395",
-      Equal: "\u2A75",
-      EqualTilde: "\u2242",
-      Equilibrium: "\u21CC",
-      Escr: "\u2130",
-      Esim: "\u2A73",
-      Eta: "\u0397",
-      Eum: "\xCB",
-      Euml: "\xCB",
-      Exists: "\u2203",
-      ExponentialE: "\u2147",
-      Fcy: "\u0424",
-      Ffr: "\u{1D509}",
-      FilledSmallSquare: "\u25FC",
-      FilledVerySmallSquare: "\u25AA",
-      Fopf: "\u{1D53D}",
-      ForAll: "\u2200",
-      Fouriertrf: "\u2131",
-      Fscr: "\u2131",
-      GJcy: "\u0403",
-      G: ">",
-      GT: ">",
-      Gamma: "\u0393",
-      Gammad: "\u03DC",
-      Gbreve: "\u011E",
-      Gcedil: "\u0122",
-      Gcirc: "\u011C",
-      Gcy: "\u0413",
-      Gdot: "\u0120",
-      Gfr: "\u{1D50A}",
-      Gg: "\u22D9",
-      Gopf: "\u{1D53E}",
-      GreaterEqual: "\u2265",
-      GreaterEqualLess: "\u22DB",
-      GreaterFullEqual: "\u2267",
-      GreaterGreater: "\u2AA2",
-      GreaterLess: "\u2277",
-      GreaterSlantEqual: "\u2A7E",
-      GreaterTilde: "\u2273",
-      Gscr: "\u{1D4A2}",
-      Gt: "\u226B",
-      HARDcy: "\u042A",
-      Hacek: "\u02C7",
-      Hat: "^",
-      Hcirc: "\u0124",
-      Hfr: "\u210C",
-      HilbertSpace: "\u210B",
-      Hopf: "\u210D",
-      HorizontalLine: "\u2500",
-      Hscr: "\u210B",
-      Hstrok: "\u0126",
-      HumpDownHump: "\u224E",
-      HumpEqual: "\u224F",
-      IEcy: "\u0415",
-      IJlig: "\u0132",
-      IOcy: "\u0401",
-      Iacut: "\xCD",
-      Iacute: "\xCD",
-      Icir: "\xCE",
-      Icirc: "\xCE",
-      Icy: "\u0418",
-      Idot: "\u0130",
-      Ifr: "\u2111",
-      Igrav: "\xCC",
-      Igrave: "\xCC",
-      Im: "\u2111",
-      Imacr: "\u012A",
-      ImaginaryI: "\u2148",
-      Implies: "\u21D2",
-      Int: "\u222C",
-      Integral: "\u222B",
-      Intersection: "\u22C2",
-      InvisibleComma: "\u2063",
-      InvisibleTimes: "\u2062",
-      Iogon: "\u012E",
-      Iopf: "\u{1D540}",
-      Iota: "\u0399",
-      Iscr: "\u2110",
-      Itilde: "\u0128",
-      Iukcy: "\u0406",
-      Ium: "\xCF",
-      Iuml: "\xCF",
-      Jcirc: "\u0134",
-      Jcy: "\u0419",
-      Jfr: "\u{1D50D}",
-      Jopf: "\u{1D541}",
-      Jscr: "\u{1D4A5}",
-      Jsercy: "\u0408",
-      Jukcy: "\u0404",
-      KHcy: "\u0425",
-      KJcy: "\u040C",
-      Kappa: "\u039A",
-      Kcedil: "\u0136",
-      Kcy: "\u041A",
-      Kfr: "\u{1D50E}",
-      Kopf: "\u{1D542}",
-      Kscr: "\u{1D4A6}",
-      LJcy: "\u0409",
-      L: "<",
-      LT: "<",
-      Lacute: "\u0139",
-      Lambda: "\u039B",
-      Lang: "\u27EA",
-      Laplacetrf: "\u2112",
-      Larr: "\u219E",
-      Lcaron: "\u013D",
-      Lcedil: "\u013B",
-      Lcy: "\u041B",
-      LeftAngleBracket: "\u27E8",
-      LeftArrow: "\u2190",
-      LeftArrowBar: "\u21E4",
-      LeftArrowRightArrow: "\u21C6",
-      LeftCeiling: "\u2308",
-      LeftDoubleBracket: "\u27E6",
-      LeftDownTeeVector: "\u2961",
-      LeftDownVector: "\u21C3",
-      LeftDownVectorBar: "\u2959",
-      LeftFloor: "\u230A",
-      LeftRightArrow: "\u2194",
-      LeftRightVector: "\u294E",
-      LeftTee: "\u22A3",
-      LeftTeeArrow: "\u21A4",
-      LeftTeeVector: "\u295A",
-      LeftTriangle: "\u22B2",
-      LeftTriangleBar: "\u29CF",
-      LeftTriangleEqual: "\u22B4",
-      LeftUpDownVector: "\u2951",
-      LeftUpTeeVector: "\u2960",
-      LeftUpVector: "\u21BF",
-      LeftUpVectorBar: "\u2958",
-      LeftVector: "\u21BC",
-      LeftVectorBar: "\u2952",
-      Leftarrow: "\u21D0",
-      Leftrightarrow: "\u21D4",
-      LessEqualGreater: "\u22DA",
-      LessFullEqual: "\u2266",
-      LessGreater: "\u2276",
-      LessLess: "\u2AA1",
-      LessSlantEqual: "\u2A7D",
-      LessTilde: "\u2272",
-      Lfr: "\u{1D50F}",
-      Ll: "\u22D8",
-      Lleftarrow: "\u21DA",
-      Lmidot: "\u013F",
-      LongLeftArrow: "\u27F5",
-      LongLeftRightArrow: "\u27F7",
-      LongRightArrow: "\u27F6",
-      Longleftarrow: "\u27F8",
-      Longleftrightarrow: "\u27FA",
-      Longrightarrow: "\u27F9",
-      Lopf: "\u{1D543}",
-      LowerLeftArrow: "\u2199",
-      LowerRightArrow: "\u2198",
-      Lscr: "\u2112",
-      Lsh: "\u21B0",
-      Lstrok: "\u0141",
-      Lt: "\u226A",
-      Map: "\u2905",
-      Mcy: "\u041C",
-      MediumSpace: "\u205F",
-      Mellintrf: "\u2133",
-      Mfr: "\u{1D510}",
-      MinusPlus: "\u2213",
-      Mopf: "\u{1D544}",
-      Mscr: "\u2133",
-      Mu: "\u039C",
-      NJcy: "\u040A",
-      Nacute: "\u0143",
-      Ncaron: "\u0147",
-      Ncedil: "\u0145",
-      Ncy: "\u041D",
-      NegativeMediumSpace: "\u200B",
-      NegativeThickSpace: "\u200B",
-      NegativeThinSpace: "\u200B",
-      NegativeVeryThinSpace: "\u200B",
-      NestedGreaterGreater: "\u226B",
-      NestedLessLess: "\u226A",
-      NewLine: "\n",
-      Nfr: "\u{1D511}",
-      NoBreak: "\u2060",
-      NonBreakingSpace: "\xA0",
-      Nopf: "\u2115",
-      Not: "\u2AEC",
-      NotCongruent: "\u2262",
-      NotCupCap: "\u226D",
-      NotDoubleVerticalBar: "\u2226",
-      NotElement: "\u2209",
-      NotEqual: "\u2260",
-      NotEqualTilde: "\u2242\u0338",
-      NotExists: "\u2204",
-      NotGreater: "\u226F",
-      NotGreaterEqual: "\u2271",
-      NotGreaterFullEqual: "\u2267\u0338",
-      NotGreaterGreater: "\u226B\u0338",
-      NotGreaterLess: "\u2279",
-      NotGreaterSlantEqual: "\u2A7E\u0338",
-      NotGreaterTilde: "\u2275",
-      NotHumpDownHump: "\u224E\u0338",
-      NotHumpEqual: "\u224F\u0338",
-      NotLeftTriangle: "\u22EA",
-      NotLeftTriangleBar: "\u29CF\u0338",
-      NotLeftTriangleEqual: "\u22EC",
-      NotLess: "\u226E",
-      NotLessEqual: "\u2270",
-      NotLessGreater: "\u2278",
-      NotLessLess: "\u226A\u0338",
-      NotLessSlantEqual: "\u2A7D\u0338",
-      NotLessTilde: "\u2274",
-      NotNestedGreaterGreater: "\u2AA2\u0338",
-      NotNestedLessLess: "\u2AA1\u0338",
-      NotPrecedes: "\u2280",
-      NotPrecedesEqual: "\u2AAF\u0338",
-      NotPrecedesSlantEqual: "\u22E0",
-      NotReverseElement: "\u220C",
-      NotRightTriangle: "\u22EB",
-      NotRightTriangleBar: "\u29D0\u0338",
-      NotRightTriangleEqual: "\u22ED",
-      NotSquareSubset: "\u228F\u0338",
-      NotSquareSubsetEqual: "\u22E2",
-      NotSquareSuperset: "\u2290\u0338",
-      NotSquareSupersetEqual: "\u22E3",
-      NotSubset: "\u2282\u20D2",
-      NotSubsetEqual: "\u2288",
-      NotSucceeds: "\u2281",
-      NotSucceedsEqual: "\u2AB0\u0338",
-      NotSucceedsSlantEqual: "\u22E1",
-      NotSucceedsTilde: "\u227F\u0338",
-      NotSuperset: "\u2283\u20D2",
-      NotSupersetEqual: "\u2289",
-      NotTilde: "\u2241",
-      NotTildeEqual: "\u2244",
-      NotTildeFullEqual: "\u2247",
-      NotTildeTilde: "\u2249",
-      NotVerticalBar: "\u2224",
-      Nscr: "\u{1D4A9}",
-      Ntild: "\xD1",
-      Ntilde: "\xD1",
-      Nu: "\u039D",
-      OElig: "\u0152",
-      Oacut: "\xD3",
-      Oacute: "\xD3",
-      Ocir: "\xD4",
-      Ocirc: "\xD4",
-      Ocy: "\u041E",
-      Odblac: "\u0150",
-      Ofr: "\u{1D512}",
-      Ograv: "\xD2",
-      Ograve: "\xD2",
-      Omacr: "\u014C",
-      Omega: "\u03A9",
-      Omicron: "\u039F",
-      Oopf: "\u{1D546}",
-      OpenCurlyDoubleQuote: "\u201C",
-      OpenCurlyQuote: "\u2018",
-      Or: "\u2A54",
-      Oscr: "\u{1D4AA}",
-      Oslas: "\xD8",
-      Oslash: "\xD8",
-      Otild: "\xD5",
-      Otilde: "\xD5",
-      Otimes: "\u2A37",
-      Oum: "\xD6",
-      Ouml: "\xD6",
-      OverBar: "\u203E",
-      OverBrace: "\u23DE",
-      OverBracket: "\u23B4",
-      OverParenthesis: "\u23DC",
-      PartialD: "\u2202",
-      Pcy: "\u041F",
-      Pfr: "\u{1D513}",
-      Phi: "\u03A6",
-      Pi: "\u03A0",
-      PlusMinus: "\xB1",
-      Poincareplane: "\u210C",
-      Popf: "\u2119",
-      Pr: "\u2ABB",
-      Precedes: "\u227A",
-      PrecedesEqual: "\u2AAF",
-      PrecedesSlantEqual: "\u227C",
-      PrecedesTilde: "\u227E",
-      Prime: "\u2033",
-      Product: "\u220F",
-      Proportion: "\u2237",
-      Proportional: "\u221D",
-      Pscr: "\u{1D4AB}",
-      Psi: "\u03A8",
-      QUO: '"',
-      QUOT: '"',
-      Qfr: "\u{1D514}",
-      Qopf: "\u211A",
-      Qscr: "\u{1D4AC}",
-      RBarr: "\u2910",
-      RE: "\xAE",
-      REG: "\xAE",
-      Racute: "\u0154",
-      Rang: "\u27EB",
-      Rarr: "\u21A0",
-      Rarrtl: "\u2916",
-      Rcaron: "\u0158",
-      Rcedil: "\u0156",
-      Rcy: "\u0420",
-      Re: "\u211C",
-      ReverseElement: "\u220B",
-      ReverseEquilibrium: "\u21CB",
-      ReverseUpEquilibrium: "\u296F",
-      Rfr: "\u211C",
-      Rho: "\u03A1",
-      RightAngleBracket: "\u27E9",
-      RightArrow: "\u2192",
-      RightArrowBar: "\u21E5",
-      RightArrowLeftArrow: "\u21C4",
-      RightCeiling: "\u2309",
-      RightDoubleBracket: "\u27E7",
-      RightDownTeeVector: "\u295D",
-      RightDownVector: "\u21C2",
-      RightDownVectorBar: "\u2955",
-      RightFloor: "\u230B",
-      RightTee: "\u22A2",
-      RightTeeArrow: "\u21A6",
-      RightTeeVector: "\u295B",
-      RightTriangle: "\u22B3",
-      RightTriangleBar: "\u29D0",
-      RightTriangleEqual: "\u22B5",
-      RightUpDownVector: "\u294F",
-      RightUpTeeVector: "\u295C",
-      RightUpVector: "\u21BE",
-      RightUpVectorBar: "\u2954",
-      RightVector: "\u21C0",
-      RightVectorBar: "\u2953",
-      Rightarrow: "\u21D2",
-      Ropf: "\u211D",
-      RoundImplies: "\u2970",
-      Rrightarrow: "\u21DB",
-      Rscr: "\u211B",
-      Rsh: "\u21B1",
-      RuleDelayed: "\u29F4",
-      SHCHcy: "\u0429",
-      SHcy: "\u0428",
-      SOFTcy: "\u042C",
-      Sacute: "\u015A",
-      Sc: "\u2ABC",
-      Scaron: "\u0160",
-      Scedil: "\u015E",
-      Scirc: "\u015C",
-      Scy: "\u0421",
-      Sfr: "\u{1D516}",
-      ShortDownArrow: "\u2193",
-      ShortLeftArrow: "\u2190",
-      ShortRightArrow: "\u2192",
-      ShortUpArrow: "\u2191",
-      Sigma: "\u03A3",
-      SmallCircle: "\u2218",
-      Sopf: "\u{1D54A}",
-      Sqrt: "\u221A",
-      Square: "\u25A1",
-      SquareIntersection: "\u2293",
-      SquareSubset: "\u228F",
-      SquareSubsetEqual: "\u2291",
-      SquareSuperset: "\u2290",
-      SquareSupersetEqual: "\u2292",
-      SquareUnion: "\u2294",
-      Sscr: "\u{1D4AE}",
-      Star: "\u22C6",
-      Sub: "\u22D0",
-      Subset: "\u22D0",
-      SubsetEqual: "\u2286",
-      Succeeds: "\u227B",
-      SucceedsEqual: "\u2AB0",
-      SucceedsSlantEqual: "\u227D",
-      SucceedsTilde: "\u227F",
-      SuchThat: "\u220B",
-      Sum: "\u2211",
-      Sup: "\u22D1",
-      Superset: "\u2283",
-      SupersetEqual: "\u2287",
-      Supset: "\u22D1",
-      THOR: "\xDE",
-      THORN: "\xDE",
-      TRADE: "\u2122",
-      TSHcy: "\u040B",
-      TScy: "\u0426",
-      Tab: "	",
-      Tau: "\u03A4",
-      Tcaron: "\u0164",
-      Tcedil: "\u0162",
-      Tcy: "\u0422",
-      Tfr: "\u{1D517}",
-      Therefore: "\u2234",
-      Theta: "\u0398",
-      ThickSpace: "\u205F\u200A",
-      ThinSpace: "\u2009",
-      Tilde: "\u223C",
-      TildeEqual: "\u2243",
-      TildeFullEqual: "\u2245",
-      TildeTilde: "\u2248",
-      Topf: "\u{1D54B}",
-      TripleDot: "\u20DB",
-      Tscr: "\u{1D4AF}",
-      Tstrok: "\u0166",
-      Uacut: "\xDA",
-      Uacute: "\xDA",
-      Uarr: "\u219F",
-      Uarrocir: "\u2949",
-      Ubrcy: "\u040E",
-      Ubreve: "\u016C",
-      Ucir: "\xDB",
-      Ucirc: "\xDB",
-      Ucy: "\u0423",
-      Udblac: "\u0170",
-      Ufr: "\u{1D518}",
-      Ugrav: "\xD9",
-      Ugrave: "\xD9",
-      Umacr: "\u016A",
-      UnderBar: "_",
-      UnderBrace: "\u23DF",
-      UnderBracket: "\u23B5",
-      UnderParenthesis: "\u23DD",
-      Union: "\u22C3",
-      UnionPlus: "\u228E",
-      Uogon: "\u0172",
-      Uopf: "\u{1D54C}",
-      UpArrow: "\u2191",
-      UpArrowBar: "\u2912",
-      UpArrowDownArrow: "\u21C5",
-      UpDownArrow: "\u2195",
-      UpEquilibrium: "\u296E",
-      UpTee: "\u22A5",
-      UpTeeArrow: "\u21A5",
-      Uparrow: "\u21D1",
-      Updownarrow: "\u21D5",
-      UpperLeftArrow: "\u2196",
-      UpperRightArrow: "\u2197",
-      Upsi: "\u03D2",
-      Upsilon: "\u03A5",
-      Uring: "\u016E",
-      Uscr: "\u{1D4B0}",
-      Utilde: "\u0168",
-      Uum: "\xDC",
-      Uuml: "\xDC",
-      VDash: "\u22AB",
-      Vbar: "\u2AEB",
-      Vcy: "\u0412",
-      Vdash: "\u22A9",
-      Vdashl: "\u2AE6",
-      Vee: "\u22C1",
-      Verbar: "\u2016",
-      Vert: "\u2016",
-      VerticalBar: "\u2223",
-      VerticalLine: "|",
-      VerticalSeparator: "\u2758",
-      VerticalTilde: "\u2240",
-      VeryThinSpace: "\u200A",
-      Vfr: "\u{1D519}",
-      Vopf: "\u{1D54D}",
-      Vscr: "\u{1D4B1}",
-      Vvdash: "\u22AA",
-      Wcirc: "\u0174",
-      Wedge: "\u22C0",
-      Wfr: "\u{1D51A}",
-      Wopf: "\u{1D54E}",
-      Wscr: "\u{1D4B2}",
-      Xfr: "\u{1D51B}",
-      Xi: "\u039E",
-      Xopf: "\u{1D54F}",
-      Xscr: "\u{1D4B3}",
-      YAcy: "\u042F",
-      YIcy: "\u0407",
-      YUcy: "\u042E",
-      Yacut: "\xDD",
-      Yacute: "\xDD",
-      Ycirc: "\u0176",
-      Ycy: "\u042B",
-      Yfr: "\u{1D51C}",
-      Yopf: "\u{1D550}",
-      Yscr: "\u{1D4B4}",
-      Yuml: "\u0178",
-      ZHcy: "\u0416",
-      Zacute: "\u0179",
-      Zcaron: "\u017D",
-      Zcy: "\u0417",
-      Zdot: "\u017B",
-      ZeroWidthSpace: "\u200B",
-      Zeta: "\u0396",
-      Zfr: "\u2128",
-      Zopf: "\u2124",
-      Zscr: "\u{1D4B5}",
-      aacut: "\xE1",
-      aacute: "\xE1",
-      abreve: "\u0103",
-      ac: "\u223E",
-      acE: "\u223E\u0333",
-      acd: "\u223F",
-      acir: "\xE2",
-      acirc: "\xE2",
-      acut: "\xB4",
-      acute: "\xB4",
-      acy: "\u0430",
-      aeli: "\xE6",
-      aelig: "\xE6",
-      af: "\u2061",
-      afr: "\u{1D51E}",
-      agrav: "\xE0",
-      agrave: "\xE0",
-      alefsym: "\u2135",
-      aleph: "\u2135",
-      alpha: "\u03B1",
-      amacr: "\u0101",
-      amalg: "\u2A3F",
-      am: "&",
-      amp: "&",
-      and: "\u2227",
-      andand: "\u2A55",
-      andd: "\u2A5C",
-      andslope: "\u2A58",
-      andv: "\u2A5A",
-      ang: "\u2220",
-      ange: "\u29A4",
-      angle: "\u2220",
-      angmsd: "\u2221",
-      angmsdaa: "\u29A8",
-      angmsdab: "\u29A9",
-      angmsdac: "\u29AA",
-      angmsdad: "\u29AB",
-      angmsdae: "\u29AC",
-      angmsdaf: "\u29AD",
-      angmsdag: "\u29AE",
-      angmsdah: "\u29AF",
-      angrt: "\u221F",
-      angrtvb: "\u22BE",
-      angrtvbd: "\u299D",
-      angsph: "\u2222",
-      angst: "\xC5",
-      angzarr: "\u237C",
-      aogon: "\u0105",
-      aopf: "\u{1D552}",
-      ap: "\u2248",
-      apE: "\u2A70",
-      apacir: "\u2A6F",
-      ape: "\u224A",
-      apid: "\u224B",
-      apos: "'",
-      approx: "\u2248",
-      approxeq: "\u224A",
-      arin: "\xE5",
-      aring: "\xE5",
-      ascr: "\u{1D4B6}",
-      ast: "*",
-      asymp: "\u2248",
-      asympeq: "\u224D",
-      atild: "\xE3",
-      atilde: "\xE3",
-      aum: "\xE4",
-      auml: "\xE4",
-      awconint: "\u2233",
-      awint: "\u2A11",
-      bNot: "\u2AED",
-      backcong: "\u224C",
-      backepsilon: "\u03F6",
-      backprime: "\u2035",
-      backsim: "\u223D",
-      backsimeq: "\u22CD",
-      barvee: "\u22BD",
-      barwed: "\u2305",
-      barwedge: "\u2305",
-      bbrk: "\u23B5",
-      bbrktbrk: "\u23B6",
-      bcong: "\u224C",
-      bcy: "\u0431",
-      bdquo: "\u201E",
-      becaus: "\u2235",
-      because: "\u2235",
-      bemptyv: "\u29B0",
-      bepsi: "\u03F6",
-      bernou: "\u212C",
-      beta: "\u03B2",
-      beth: "\u2136",
-      between: "\u226C",
-      bfr: "\u{1D51F}",
-      bigcap: "\u22C2",
-      bigcirc: "\u25EF",
-      bigcup: "\u22C3",
-      bigodot: "\u2A00",
-      bigoplus: "\u2A01",
-      bigotimes: "\u2A02",
-      bigsqcup: "\u2A06",
-      bigstar: "\u2605",
-      bigtriangledown: "\u25BD",
-      bigtriangleup: "\u25B3",
-      biguplus: "\u2A04",
-      bigvee: "\u22C1",
-      bigwedge: "\u22C0",
-      bkarow: "\u290D",
-      blacklozenge: "\u29EB",
-      blacksquare: "\u25AA",
-      blacktriangle: "\u25B4",
-      blacktriangledown: "\u25BE",
-      blacktriangleleft: "\u25C2",
-      blacktriangleright: "\u25B8",
-      blank: "\u2423",
-      blk12: "\u2592",
-      blk14: "\u2591",
-      blk34: "\u2593",
-      block: "\u2588",
-      bne: "=\u20E5",
-      bnequiv: "\u2261\u20E5",
-      bnot: "\u2310",
-      bopf: "\u{1D553}",
-      bot: "\u22A5",
-      bottom: "\u22A5",
-      bowtie: "\u22C8",
-      boxDL: "\u2557",
-      boxDR: "\u2554",
-      boxDl: "\u2556",
-      boxDr: "\u2553",
-      boxH: "\u2550",
-      boxHD: "\u2566",
-      boxHU: "\u2569",
-      boxHd: "\u2564",
-      boxHu: "\u2567",
-      boxUL: "\u255D",
-      boxUR: "\u255A",
-      boxUl: "\u255C",
-      boxUr: "\u2559",
-      boxV: "\u2551",
-      boxVH: "\u256C",
-      boxVL: "\u2563",
-      boxVR: "\u2560",
-      boxVh: "\u256B",
-      boxVl: "\u2562",
-      boxVr: "\u255F",
-      boxbox: "\u29C9",
-      boxdL: "\u2555",
-      boxdR: "\u2552",
-      boxdl: "\u2510",
-      boxdr: "\u250C",
-      boxh: "\u2500",
-      boxhD: "\u2565",
-      boxhU: "\u2568",
-      boxhd: "\u252C",
-      boxhu: "\u2534",
-      boxminus: "\u229F",
-      boxplus: "\u229E",
-      boxtimes: "\u22A0",
-      boxuL: "\u255B",
-      boxuR: "\u2558",
-      boxul: "\u2518",
-      boxur: "\u2514",
-      boxv: "\u2502",
-      boxvH: "\u256A",
-      boxvL: "\u2561",
-      boxvR: "\u255E",
-      boxvh: "\u253C",
-      boxvl: "\u2524",
-      boxvr: "\u251C",
-      bprime: "\u2035",
-      breve: "\u02D8",
-      brvba: "\xA6",
-      brvbar: "\xA6",
-      bscr: "\u{1D4B7}",
-      bsemi: "\u204F",
-      bsim: "\u223D",
-      bsime: "\u22CD",
-      bsol: "\\",
-      bsolb: "\u29C5",
-      bsolhsub: "\u27C8",
-      bull: "\u2022",
-      bullet: "\u2022",
-      bump: "\u224E",
-      bumpE: "\u2AAE",
-      bumpe: "\u224F",
-      bumpeq: "\u224F",
-      cacute: "\u0107",
-      cap: "\u2229",
-      capand: "\u2A44",
-      capbrcup: "\u2A49",
-      capcap: "\u2A4B",
-      capcup: "\u2A47",
-      capdot: "\u2A40",
-      caps: "\u2229\uFE00",
-      caret: "\u2041",
-      caron: "\u02C7",
-      ccaps: "\u2A4D",
-      ccaron: "\u010D",
-      ccedi: "\xE7",
-      ccedil: "\xE7",
-      ccirc: "\u0109",
-      ccups: "\u2A4C",
-      ccupssm: "\u2A50",
-      cdot: "\u010B",
-      cedi: "\xB8",
-      cedil: "\xB8",
-      cemptyv: "\u29B2",
-      cen: "\xA2",
-      cent: "\xA2",
-      centerdot: "\xB7",
-      cfr: "\u{1D520}",
-      chcy: "\u0447",
-      check: "\u2713",
-      checkmark: "\u2713",
-      chi: "\u03C7",
-      cir: "\u25CB",
-      cirE: "\u29C3",
-      circ: "\u02C6",
-      circeq: "\u2257",
-      circlearrowleft: "\u21BA",
-      circlearrowright: "\u21BB",
-      circledR: "\xAE",
-      circledS: "\u24C8",
-      circledast: "\u229B",
-      circledcirc: "\u229A",
-      circleddash: "\u229D",
-      cire: "\u2257",
-      cirfnint: "\u2A10",
-      cirmid: "\u2AEF",
-      cirscir: "\u29C2",
-      clubs: "\u2663",
-      clubsuit: "\u2663",
-      colon: ":",
-      colone: "\u2254",
-      coloneq: "\u2254",
-      comma: ",",
-      commat: "@",
-      comp: "\u2201",
-      compfn: "\u2218",
-      complement: "\u2201",
-      complexes: "\u2102",
-      cong: "\u2245",
-      congdot: "\u2A6D",
-      conint: "\u222E",
-      copf: "\u{1D554}",
-      coprod: "\u2210",
-      cop: "\xA9",
-      copy: "\xA9",
-      copysr: "\u2117",
-      crarr: "\u21B5",
-      cross: "\u2717",
-      cscr: "\u{1D4B8}",
-      csub: "\u2ACF",
-      csube: "\u2AD1",
-      csup: "\u2AD0",
-      csupe: "\u2AD2",
-      ctdot: "\u22EF",
-      cudarrl: "\u2938",
-      cudarrr: "\u2935",
-      cuepr: "\u22DE",
-      cuesc: "\u22DF",
-      cularr: "\u21B6",
-      cularrp: "\u293D",
-      cup: "\u222A",
-      cupbrcap: "\u2A48",
-      cupcap: "\u2A46",
-      cupcup: "\u2A4A",
-      cupdot: "\u228D",
-      cupor: "\u2A45",
-      cups: "\u222A\uFE00",
-      curarr: "\u21B7",
-      curarrm: "\u293C",
-      curlyeqprec: "\u22DE",
-      curlyeqsucc: "\u22DF",
-      curlyvee: "\u22CE",
-      curlywedge: "\u22CF",
-      curre: "\xA4",
-      curren: "\xA4",
-      curvearrowleft: "\u21B6",
-      curvearrowright: "\u21B7",
-      cuvee: "\u22CE",
-      cuwed: "\u22CF",
-      cwconint: "\u2232",
-      cwint: "\u2231",
-      cylcty: "\u232D",
-      dArr: "\u21D3",
-      dHar: "\u2965",
-      dagger: "\u2020",
-      daleth: "\u2138",
-      darr: "\u2193",
-      dash: "\u2010",
-      dashv: "\u22A3",
-      dbkarow: "\u290F",
-      dblac: "\u02DD",
-      dcaron: "\u010F",
-      dcy: "\u0434",
-      dd: "\u2146",
-      ddagger: "\u2021",
-      ddarr: "\u21CA",
-      ddotseq: "\u2A77",
-      de: "\xB0",
-      deg: "\xB0",
-      delta: "\u03B4",
-      demptyv: "\u29B1",
-      dfisht: "\u297F",
-      dfr: "\u{1D521}",
-      dharl: "\u21C3",
-      dharr: "\u21C2",
-      diam: "\u22C4",
-      diamond: "\u22C4",
-      diamondsuit: "\u2666",
-      diams: "\u2666",
-      die: "\xA8",
-      digamma: "\u03DD",
-      disin: "\u22F2",
-      div: "\xF7",
-      divid: "\xF7",
-      divide: "\xF7",
-      divideontimes: "\u22C7",
-      divonx: "\u22C7",
-      djcy: "\u0452",
-      dlcorn: "\u231E",
-      dlcrop: "\u230D",
-      dollar: "$",
-      dopf: "\u{1D555}",
-      dot: "\u02D9",
-      doteq: "\u2250",
-      doteqdot: "\u2251",
-      dotminus: "\u2238",
-      dotplus: "\u2214",
-      dotsquare: "\u22A1",
-      doublebarwedge: "\u2306",
-      downarrow: "\u2193",
-      downdownarrows: "\u21CA",
-      downharpoonleft: "\u21C3",
-      downharpoonright: "\u21C2",
-      drbkarow: "\u2910",
-      drcorn: "\u231F",
-      drcrop: "\u230C",
-      dscr: "\u{1D4B9}",
-      dscy: "\u0455",
-      dsol: "\u29F6",
-      dstrok: "\u0111",
-      dtdot: "\u22F1",
-      dtri: "\u25BF",
-      dtrif: "\u25BE",
-      duarr: "\u21F5",
-      duhar: "\u296F",
-      dwangle: "\u29A6",
-      dzcy: "\u045F",
-      dzigrarr: "\u27FF",
-      eDDot: "\u2A77",
-      eDot: "\u2251",
-      eacut: "\xE9",
-      eacute: "\xE9",
-      easter: "\u2A6E",
-      ecaron: "\u011B",
-      ecir: "\xEA",
-      ecirc: "\xEA",
-      ecolon: "\u2255",
-      ecy: "\u044D",
-      edot: "\u0117",
-      ee: "\u2147",
-      efDot: "\u2252",
-      efr: "\u{1D522}",
-      eg: "\u2A9A",
-      egrav: "\xE8",
-      egrave: "\xE8",
-      egs: "\u2A96",
-      egsdot: "\u2A98",
-      el: "\u2A99",
-      elinters: "\u23E7",
-      ell: "\u2113",
-      els: "\u2A95",
-      elsdot: "\u2A97",
-      emacr: "\u0113",
-      empty: "\u2205",
-      emptyset: "\u2205",
-      emptyv: "\u2205",
-      emsp13: "\u2004",
-      emsp14: "\u2005",
-      emsp: "\u2003",
-      eng: "\u014B",
-      ensp: "\u2002",
-      eogon: "\u0119",
-      eopf: "\u{1D556}",
-      epar: "\u22D5",
-      eparsl: "\u29E3",
-      eplus: "\u2A71",
-      epsi: "\u03B5",
-      epsilon: "\u03B5",
-      epsiv: "\u03F5",
-      eqcirc: "\u2256",
-      eqcolon: "\u2255",
-      eqsim: "\u2242",
-      eqslantgtr: "\u2A96",
-      eqslantless: "\u2A95",
-      equals: "=",
-      equest: "\u225F",
-      equiv: "\u2261",
-      equivDD: "\u2A78",
-      eqvparsl: "\u29E5",
-      erDot: "\u2253",
-      erarr: "\u2971",
-      escr: "\u212F",
-      esdot: "\u2250",
-      esim: "\u2242",
-      eta: "\u03B7",
-      et: "\xF0",
-      eth: "\xF0",
-      eum: "\xEB",
-      euml: "\xEB",
-      euro: "\u20AC",
-      excl: "!",
-      exist: "\u2203",
-      expectation: "\u2130",
-      exponentiale: "\u2147",
-      fallingdotseq: "\u2252",
-      fcy: "\u0444",
-      female: "\u2640",
-      ffilig: "\uFB03",
-      fflig: "\uFB00",
-      ffllig: "\uFB04",
-      ffr: "\u{1D523}",
-      filig: "\uFB01",
-      fjlig: "fj",
-      flat: "\u266D",
-      fllig: "\uFB02",
-      fltns: "\u25B1",
-      fnof: "\u0192",
-      fopf: "\u{1D557}",
-      forall: "\u2200",
-      fork: "\u22D4",
-      forkv: "\u2AD9",
-      fpartint: "\u2A0D",
-      frac1: "\xBC",
-      frac12: "\xBD",
-      frac13: "\u2153",
-      frac14: "\xBC",
-      frac15: "\u2155",
-      frac16: "\u2159",
-      frac18: "\u215B",
-      frac23: "\u2154",
-      frac25: "\u2156",
-      frac3: "\xBE",
-      frac34: "\xBE",
-      frac35: "\u2157",
-      frac38: "\u215C",
-      frac45: "\u2158",
-      frac56: "\u215A",
-      frac58: "\u215D",
-      frac78: "\u215E",
-      frasl: "\u2044",
-      frown: "\u2322",
-      fscr: "\u{1D4BB}",
-      gE: "\u2267",
-      gEl: "\u2A8C",
-      gacute: "\u01F5",
-      gamma: "\u03B3",
-      gammad: "\u03DD",
-      gap: "\u2A86",
-      gbreve: "\u011F",
-      gcirc: "\u011D",
-      gcy: "\u0433",
-      gdot: "\u0121",
-      ge: "\u2265",
-      gel: "\u22DB",
-      geq: "\u2265",
-      geqq: "\u2267",
-      geqslant: "\u2A7E",
-      ges: "\u2A7E",
-      gescc: "\u2AA9",
-      gesdot: "\u2A80",
-      gesdoto: "\u2A82",
-      gesdotol: "\u2A84",
-      gesl: "\u22DB\uFE00",
-      gesles: "\u2A94",
-      gfr: "\u{1D524}",
-      gg: "\u226B",
-      ggg: "\u22D9",
-      gimel: "\u2137",
-      gjcy: "\u0453",
-      gl: "\u2277",
-      glE: "\u2A92",
-      gla: "\u2AA5",
-      glj: "\u2AA4",
-      gnE: "\u2269",
-      gnap: "\u2A8A",
-      gnapprox: "\u2A8A",
-      gne: "\u2A88",
-      gneq: "\u2A88",
-      gneqq: "\u2269",
-      gnsim: "\u22E7",
-      gopf: "\u{1D558}",
-      grave: "`",
-      gscr: "\u210A",
-      gsim: "\u2273",
-      gsime: "\u2A8E",
-      gsiml: "\u2A90",
-      g: ">",
-      gt: ">",
-      gtcc: "\u2AA7",
-      gtcir: "\u2A7A",
-      gtdot: "\u22D7",
-      gtlPar: "\u2995",
-      gtquest: "\u2A7C",
-      gtrapprox: "\u2A86",
-      gtrarr: "\u2978",
-      gtrdot: "\u22D7",
-      gtreqless: "\u22DB",
-      gtreqqless: "\u2A8C",
-      gtrless: "\u2277",
-      gtrsim: "\u2273",
-      gvertneqq: "\u2269\uFE00",
-      gvnE: "\u2269\uFE00",
-      hArr: "\u21D4",
-      hairsp: "\u200A",
-      half: "\xBD",
-      hamilt: "\u210B",
-      hardcy: "\u044A",
-      harr: "\u2194",
-      harrcir: "\u2948",
-      harrw: "\u21AD",
-      hbar: "\u210F",
-      hcirc: "\u0125",
-      hearts: "\u2665",
-      heartsuit: "\u2665",
-      hellip: "\u2026",
-      hercon: "\u22B9",
-      hfr: "\u{1D525}",
-      hksearow: "\u2925",
-      hkswarow: "\u2926",
-      hoarr: "\u21FF",
-      homtht: "\u223B",
-      hookleftarrow: "\u21A9",
-      hookrightarrow: "\u21AA",
-      hopf: "\u{1D559}",
-      horbar: "\u2015",
-      hscr: "\u{1D4BD}",
-      hslash: "\u210F",
-      hstrok: "\u0127",
-      hybull: "\u2043",
-      hyphen: "\u2010",
-      iacut: "\xED",
-      iacute: "\xED",
-      ic: "\u2063",
-      icir: "\xEE",
-      icirc: "\xEE",
-      icy: "\u0438",
-      iecy: "\u0435",
-      iexc: "\xA1",
-      iexcl: "\xA1",
-      iff: "\u21D4",
-      ifr: "\u{1D526}",
-      igrav: "\xEC",
-      igrave: "\xEC",
-      ii: "\u2148",
-      iiiint: "\u2A0C",
-      iiint: "\u222D",
-      iinfin: "\u29DC",
-      iiota: "\u2129",
-      ijlig: "\u0133",
-      imacr: "\u012B",
-      image: "\u2111",
-      imagline: "\u2110",
-      imagpart: "\u2111",
-      imath: "\u0131",
-      imof: "\u22B7",
-      imped: "\u01B5",
-      in: "\u2208",
-      incare: "\u2105",
-      infin: "\u221E",
-      infintie: "\u29DD",
-      inodot: "\u0131",
-      int: "\u222B",
-      intcal: "\u22BA",
-      integers: "\u2124",
-      intercal: "\u22BA",
-      intlarhk: "\u2A17",
-      intprod: "\u2A3C",
-      iocy: "\u0451",
-      iogon: "\u012F",
-      iopf: "\u{1D55A}",
-      iota: "\u03B9",
-      iprod: "\u2A3C",
-      iques: "\xBF",
-      iquest: "\xBF",
-      iscr: "\u{1D4BE}",
-      isin: "\u2208",
-      isinE: "\u22F9",
-      isindot: "\u22F5",
-      isins: "\u22F4",
-      isinsv: "\u22F3",
-      isinv: "\u2208",
-      it: "\u2062",
-      itilde: "\u0129",
-      iukcy: "\u0456",
-      ium: "\xEF",
-      iuml: "\xEF",
-      jcirc: "\u0135",
-      jcy: "\u0439",
-      jfr: "\u{1D527}",
-      jmath: "\u0237",
-      jopf: "\u{1D55B}",
-      jscr: "\u{1D4BF}",
-      jsercy: "\u0458",
-      jukcy: "\u0454",
-      kappa: "\u03BA",
-      kappav: "\u03F0",
-      kcedil: "\u0137",
-      kcy: "\u043A",
-      kfr: "\u{1D528}",
-      kgreen: "\u0138",
-      khcy: "\u0445",
-      kjcy: "\u045C",
-      kopf: "\u{1D55C}",
-      kscr: "\u{1D4C0}",
-      lAarr: "\u21DA",
-      lArr: "\u21D0",
-      lAtail: "\u291B",
-      lBarr: "\u290E",
-      lE: "\u2266",
-      lEg: "\u2A8B",
-      lHar: "\u2962",
-      lacute: "\u013A",
-      laemptyv: "\u29B4",
-      lagran: "\u2112",
-      lambda: "\u03BB",
-      lang: "\u27E8",
-      langd: "\u2991",
-      langle: "\u27E8",
-      lap: "\u2A85",
-      laqu: "\xAB",
-      laquo: "\xAB",
-      larr: "\u2190",
-      larrb: "\u21E4",
-      larrbfs: "\u291F",
-      larrfs: "\u291D",
-      larrhk: "\u21A9",
-      larrlp: "\u21AB",
-      larrpl: "\u2939",
-      larrsim: "\u2973",
-      larrtl: "\u21A2",
-      lat: "\u2AAB",
-      latail: "\u2919",
-      late: "\u2AAD",
-      lates: "\u2AAD\uFE00",
-      lbarr: "\u290C",
-      lbbrk: "\u2772",
-      lbrace: "{",
-      lbrack: "[",
-      lbrke: "\u298B",
-      lbrksld: "\u298F",
-      lbrkslu: "\u298D",
-      lcaron: "\u013E",
-      lcedil: "\u013C",
-      lceil: "\u2308",
-      lcub: "{",
-      lcy: "\u043B",
-      ldca: "\u2936",
-      ldquo: "\u201C",
-      ldquor: "\u201E",
-      ldrdhar: "\u2967",
-      ldrushar: "\u294B",
-      ldsh: "\u21B2",
-      le: "\u2264",
-      leftarrow: "\u2190",
-      leftarrowtail: "\u21A2",
-      leftharpoondown: "\u21BD",
-      leftharpoonup: "\u21BC",
-      leftleftarrows: "\u21C7",
-      leftrightarrow: "\u2194",
-      leftrightarrows: "\u21C6",
-      leftrightharpoons: "\u21CB",
-      leftrightsquigarrow: "\u21AD",
-      leftthreetimes: "\u22CB",
-      leg: "\u22DA",
-      leq: "\u2264",
-      leqq: "\u2266",
-      leqslant: "\u2A7D",
-      les: "\u2A7D",
-      lescc: "\u2AA8",
-      lesdot: "\u2A7F",
-      lesdoto: "\u2A81",
-      lesdotor: "\u2A83",
-      lesg: "\u22DA\uFE00",
-      lesges: "\u2A93",
-      lessapprox: "\u2A85",
-      lessdot: "\u22D6",
-      lesseqgtr: "\u22DA",
-      lesseqqgtr: "\u2A8B",
-      lessgtr: "\u2276",
-      lesssim: "\u2272",
-      lfisht: "\u297C",
-      lfloor: "\u230A",
-      lfr: "\u{1D529}",
-      lg: "\u2276",
-      lgE: "\u2A91",
-      lhard: "\u21BD",
-      lharu: "\u21BC",
-      lharul: "\u296A",
-      lhblk: "\u2584",
-      ljcy: "\u0459",
-      ll: "\u226A",
-      llarr: "\u21C7",
-      llcorner: "\u231E",
-      llhard: "\u296B",
-      lltri: "\u25FA",
-      lmidot: "\u0140",
-      lmoust: "\u23B0",
-      lmoustache: "\u23B0",
-      lnE: "\u2268",
-      lnap: "\u2A89",
-      lnapprox: "\u2A89",
-      lne: "\u2A87",
-      lneq: "\u2A87",
-      lneqq: "\u2268",
-      lnsim: "\u22E6",
-      loang: "\u27EC",
-      loarr: "\u21FD",
-      lobrk: "\u27E6",
-      longleftarrow: "\u27F5",
-      longleftrightarrow: "\u27F7",
-      longmapsto: "\u27FC",
-      longrightarrow: "\u27F6",
-      looparrowleft: "\u21AB",
-      looparrowright: "\u21AC",
-      lopar: "\u2985",
-      lopf: "\u{1D55D}",
-      loplus: "\u2A2D",
-      lotimes: "\u2A34",
-      lowast: "\u2217",
-      lowbar: "_",
-      loz: "\u25CA",
-      lozenge: "\u25CA",
-      lozf: "\u29EB",
-      lpar: "(",
-      lparlt: "\u2993",
-      lrarr: "\u21C6",
-      lrcorner: "\u231F",
-      lrhar: "\u21CB",
-      lrhard: "\u296D",
-      lrm: "\u200E",
-      lrtri: "\u22BF",
-      lsaquo: "\u2039",
-      lscr: "\u{1D4C1}",
-      lsh: "\u21B0",
-      lsim: "\u2272",
-      lsime: "\u2A8D",
-      lsimg: "\u2A8F",
-      lsqb: "[",
-      lsquo: "\u2018",
-      lsquor: "\u201A",
-      lstrok: "\u0142",
-      l: "<",
-      lt: "<",
-      ltcc: "\u2AA6",
-      ltcir: "\u2A79",
-      ltdot: "\u22D6",
-      lthree: "\u22CB",
-      ltimes: "\u22C9",
-      ltlarr: "\u2976",
-      ltquest: "\u2A7B",
-      ltrPar: "\u2996",
-      ltri: "\u25C3",
-      ltrie: "\u22B4",
-      ltrif: "\u25C2",
-      lurdshar: "\u294A",
-      luruhar: "\u2966",
-      lvertneqq: "\u2268\uFE00",
-      lvnE: "\u2268\uFE00",
-      mDDot: "\u223A",
-      mac: "\xAF",
-      macr: "\xAF",
-      male: "\u2642",
-      malt: "\u2720",
-      maltese: "\u2720",
-      map: "\u21A6",
-      mapsto: "\u21A6",
-      mapstodown: "\u21A7",
-      mapstoleft: "\u21A4",
-      mapstoup: "\u21A5",
-      marker: "\u25AE",
-      mcomma: "\u2A29",
-      mcy: "\u043C",
-      mdash: "\u2014",
-      measuredangle: "\u2221",
-      mfr: "\u{1D52A}",
-      mho: "\u2127",
-      micr: "\xB5",
-      micro: "\xB5",
-      mid: "\u2223",
-      midast: "*",
-      midcir: "\u2AF0",
-      middo: "\xB7",
-      middot: "\xB7",
-      minus: "\u2212",
-      minusb: "\u229F",
-      minusd: "\u2238",
-      minusdu: "\u2A2A",
-      mlcp: "\u2ADB",
-      mldr: "\u2026",
-      mnplus: "\u2213",
-      models: "\u22A7",
-      mopf: "\u{1D55E}",
-      mp: "\u2213",
-      mscr: "\u{1D4C2}",
-      mstpos: "\u223E",
-      mu: "\u03BC",
-      multimap: "\u22B8",
-      mumap: "\u22B8",
-      nGg: "\u22D9\u0338",
-      nGt: "\u226B\u20D2",
-      nGtv: "\u226B\u0338",
-      nLeftarrow: "\u21CD",
-      nLeftrightarrow: "\u21CE",
-      nLl: "\u22D8\u0338",
-      nLt: "\u226A\u20D2",
-      nLtv: "\u226A\u0338",
-      nRightarrow: "\u21CF",
-      nVDash: "\u22AF",
-      nVdash: "\u22AE",
-      nabla: "\u2207",
-      nacute: "\u0144",
-      nang: "\u2220\u20D2",
-      nap: "\u2249",
-      napE: "\u2A70\u0338",
-      napid: "\u224B\u0338",
-      napos: "\u0149",
-      napprox: "\u2249",
-      natur: "\u266E",
-      natural: "\u266E",
-      naturals: "\u2115",
-      nbs: "\xA0",
-      nbsp: "\xA0",
-      nbump: "\u224E\u0338",
-      nbumpe: "\u224F\u0338",
-      ncap: "\u2A43",
-      ncaron: "\u0148",
-      ncedil: "\u0146",
-      ncong: "\u2247",
-      ncongdot: "\u2A6D\u0338",
-      ncup: "\u2A42",
-      ncy: "\u043D",
-      ndash: "\u2013",
-      ne: "\u2260",
-      neArr: "\u21D7",
-      nearhk: "\u2924",
-      nearr: "\u2197",
-      nearrow: "\u2197",
-      nedot: "\u2250\u0338",
-      nequiv: "\u2262",
-      nesear: "\u2928",
-      nesim: "\u2242\u0338",
-      nexist: "\u2204",
-      nexists: "\u2204",
-      nfr: "\u{1D52B}",
-      ngE: "\u2267\u0338",
-      nge: "\u2271",
-      ngeq: "\u2271",
-      ngeqq: "\u2267\u0338",
-      ngeqslant: "\u2A7E\u0338",
-      nges: "\u2A7E\u0338",
-      ngsim: "\u2275",
-      ngt: "\u226F",
-      ngtr: "\u226F",
-      nhArr: "\u21CE",
-      nharr: "\u21AE",
-      nhpar: "\u2AF2",
-      ni: "\u220B",
-      nis: "\u22FC",
-      nisd: "\u22FA",
-      niv: "\u220B",
-      njcy: "\u045A",
-      nlArr: "\u21CD",
-      nlE: "\u2266\u0338",
-      nlarr: "\u219A",
-      nldr: "\u2025",
-      nle: "\u2270",
-      nleftarrow: "\u219A",
-      nleftrightarrow: "\u21AE",
-      nleq: "\u2270",
-      nleqq: "\u2266\u0338",
-      nleqslant: "\u2A7D\u0338",
-      nles: "\u2A7D\u0338",
-      nless: "\u226E",
-      nlsim: "\u2274",
-      nlt: "\u226E",
-      nltri: "\u22EA",
-      nltrie: "\u22EC",
-      nmid: "\u2224",
-      nopf: "\u{1D55F}",
-      no: "\xAC",
-      not: "\xAC",
-      notin: "\u2209",
-      notinE: "\u22F9\u0338",
-      notindot: "\u22F5\u0338",
-      notinva: "\u2209",
-      notinvb: "\u22F7",
-      notinvc: "\u22F6",
-      notni: "\u220C",
-      notniva: "\u220C",
-      notnivb: "\u22FE",
-      notnivc: "\u22FD",
-      npar: "\u2226",
-      nparallel: "\u2226",
-      nparsl: "\u2AFD\u20E5",
-      npart: "\u2202\u0338",
-      npolint: "\u2A14",
-      npr: "\u2280",
-      nprcue: "\u22E0",
-      npre: "\u2AAF\u0338",
-      nprec: "\u2280",
-      npreceq: "\u2AAF\u0338",
-      nrArr: "\u21CF",
-      nrarr: "\u219B",
-      nrarrc: "\u2933\u0338",
-      nrarrw: "\u219D\u0338",
-      nrightarrow: "\u219B",
-      nrtri: "\u22EB",
-      nrtrie: "\u22ED",
-      nsc: "\u2281",
-      nsccue: "\u22E1",
-      nsce: "\u2AB0\u0338",
-      nscr: "\u{1D4C3}",
-      nshortmid: "\u2224",
-      nshortparallel: "\u2226",
-      nsim: "\u2241",
-      nsime: "\u2244",
-      nsimeq: "\u2244",
-      nsmid: "\u2224",
-      nspar: "\u2226",
-      nsqsube: "\u22E2",
-      nsqsupe: "\u22E3",
-      nsub: "\u2284",
-      nsubE: "\u2AC5\u0338",
-      nsube: "\u2288",
-      nsubset: "\u2282\u20D2",
-      nsubseteq: "\u2288",
-      nsubseteqq: "\u2AC5\u0338",
-      nsucc: "\u2281",
-      nsucceq: "\u2AB0\u0338",
-      nsup: "\u2285",
-      nsupE: "\u2AC6\u0338",
-      nsupe: "\u2289",
-      nsupset: "\u2283\u20D2",
-      nsupseteq: "\u2289",
-      nsupseteqq: "\u2AC6\u0338",
-      ntgl: "\u2279",
-      ntild: "\xF1",
-      ntilde: "\xF1",
-      ntlg: "\u2278",
-      ntriangleleft: "\u22EA",
-      ntrianglelefteq: "\u22EC",
-      ntriangleright: "\u22EB",
-      ntrianglerighteq: "\u22ED",
-      nu: "\u03BD",
-      num: "#",
-      numero: "\u2116",
-      numsp: "\u2007",
-      nvDash: "\u22AD",
-      nvHarr: "\u2904",
-      nvap: "\u224D\u20D2",
-      nvdash: "\u22AC",
-      nvge: "\u2265\u20D2",
-      nvgt: ">\u20D2",
-      nvinfin: "\u29DE",
-      nvlArr: "\u2902",
-      nvle: "\u2264\u20D2",
-      nvlt: "<\u20D2",
-      nvltrie: "\u22B4\u20D2",
-      nvrArr: "\u2903",
-      nvrtrie: "\u22B5\u20D2",
-      nvsim: "\u223C\u20D2",
-      nwArr: "\u21D6",
-      nwarhk: "\u2923",
-      nwarr: "\u2196",
-      nwarrow: "\u2196",
-      nwnear: "\u2927",
-      oS: "\u24C8",
-      oacut: "\xF3",
-      oacute: "\xF3",
-      oast: "\u229B",
-      ocir: "\xF4",
-      ocirc: "\xF4",
-      ocy: "\u043E",
-      odash: "\u229D",
-      odblac: "\u0151",
-      odiv: "\u2A38",
-      odot: "\u2299",
-      odsold: "\u29BC",
-      oelig: "\u0153",
-      ofcir: "\u29BF",
-      ofr: "\u{1D52C}",
-      ogon: "\u02DB",
-      ograv: "\xF2",
-      ograve: "\xF2",
-      ogt: "\u29C1",
-      ohbar: "\u29B5",
-      ohm: "\u03A9",
-      oint: "\u222E",
-      olarr: "\u21BA",
-      olcir: "\u29BE",
-      olcross: "\u29BB",
-      oline: "\u203E",
-      olt: "\u29C0",
-      omacr: "\u014D",
-      omega: "\u03C9",
-      omicron: "\u03BF",
-      omid: "\u29B6",
-      ominus: "\u2296",
-      oopf: "\u{1D560}",
-      opar: "\u29B7",
-      operp: "\u29B9",
-      oplus: "\u2295",
-      or: "\u2228",
-      orarr: "\u21BB",
-      ord: "\xBA",
-      order: "\u2134",
-      orderof: "\u2134",
-      ordf: "\xAA",
-      ordm: "\xBA",
-      origof: "\u22B6",
-      oror: "\u2A56",
-      orslope: "\u2A57",
-      orv: "\u2A5B",
-      oscr: "\u2134",
-      oslas: "\xF8",
-      oslash: "\xF8",
-      osol: "\u2298",
-      otild: "\xF5",
-      otilde: "\xF5",
-      otimes: "\u2297",
-      otimesas: "\u2A36",
-      oum: "\xF6",
-      ouml: "\xF6",
-      ovbar: "\u233D",
-      par: "\xB6",
-      para: "\xB6",
-      parallel: "\u2225",
-      parsim: "\u2AF3",
-      parsl: "\u2AFD",
-      part: "\u2202",
-      pcy: "\u043F",
-      percnt: "%",
-      period: ".",
-      permil: "\u2030",
-      perp: "\u22A5",
-      pertenk: "\u2031",
-      pfr: "\u{1D52D}",
-      phi: "\u03C6",
-      phiv: "\u03D5",
-      phmmat: "\u2133",
-      phone: "\u260E",
-      pi: "\u03C0",
-      pitchfork: "\u22D4",
-      piv: "\u03D6",
-      planck: "\u210F",
-      planckh: "\u210E",
-      plankv: "\u210F",
-      plus: "+",
-      plusacir: "\u2A23",
-      plusb: "\u229E",
-      pluscir: "\u2A22",
-      plusdo: "\u2214",
-      plusdu: "\u2A25",
-      pluse: "\u2A72",
-      plusm: "\xB1",
-      plusmn: "\xB1",
-      plussim: "\u2A26",
-      plustwo: "\u2A27",
-      pm: "\xB1",
-      pointint: "\u2A15",
-      popf: "\u{1D561}",
-      poun: "\xA3",
-      pound: "\xA3",
-      pr: "\u227A",
-      prE: "\u2AB3",
-      prap: "\u2AB7",
-      prcue: "\u227C",
-      pre: "\u2AAF",
-      prec: "\u227A",
-      precapprox: "\u2AB7",
-      preccurlyeq: "\u227C",
-      preceq: "\u2AAF",
-      precnapprox: "\u2AB9",
-      precneqq: "\u2AB5",
-      precnsim: "\u22E8",
-      precsim: "\u227E",
-      prime: "\u2032",
-      primes: "\u2119",
-      prnE: "\u2AB5",
-      prnap: "\u2AB9",
-      prnsim: "\u22E8",
-      prod: "\u220F",
-      profalar: "\u232E",
-      profline: "\u2312",
-      profsurf: "\u2313",
-      prop: "\u221D",
-      propto: "\u221D",
-      prsim: "\u227E",
-      prurel: "\u22B0",
-      pscr: "\u{1D4C5}",
-      psi: "\u03C8",
-      puncsp: "\u2008",
-      qfr: "\u{1D52E}",
-      qint: "\u2A0C",
-      qopf: "\u{1D562}",
-      qprime: "\u2057",
-      qscr: "\u{1D4C6}",
-      quaternions: "\u210D",
-      quatint: "\u2A16",
-      quest: "?",
-      questeq: "\u225F",
-      quo: '"',
-      quot: '"',
-      rAarr: "\u21DB",
-      rArr: "\u21D2",
-      rAtail: "\u291C",
-      rBarr: "\u290F",
-      rHar: "\u2964",
-      race: "\u223D\u0331",
-      racute: "\u0155",
-      radic: "\u221A",
-      raemptyv: "\u29B3",
-      rang: "\u27E9",
-      rangd: "\u2992",
-      range: "\u29A5",
-      rangle: "\u27E9",
-      raqu: "\xBB",
-      raquo: "\xBB",
-      rarr: "\u2192",
-      rarrap: "\u2975",
-      rarrb: "\u21E5",
-      rarrbfs: "\u2920",
-      rarrc: "\u2933",
-      rarrfs: "\u291E",
-      rarrhk: "\u21AA",
-      rarrlp: "\u21AC",
-      rarrpl: "\u2945",
-      rarrsim: "\u2974",
-      rarrtl: "\u21A3",
-      rarrw: "\u219D",
-      ratail: "\u291A",
-      ratio: "\u2236",
-      rationals: "\u211A",
-      rbarr: "\u290D",
-      rbbrk: "\u2773",
-      rbrace: "}",
-      rbrack: "]",
-      rbrke: "\u298C",
-      rbrksld: "\u298E",
-      rbrkslu: "\u2990",
-      rcaron: "\u0159",
-      rcedil: "\u0157",
-      rceil: "\u2309",
-      rcub: "}",
-      rcy: "\u0440",
-      rdca: "\u2937",
-      rdldhar: "\u2969",
-      rdquo: "\u201D",
-      rdquor: "\u201D",
-      rdsh: "\u21B3",
-      real: "\u211C",
-      realine: "\u211B",
-      realpart: "\u211C",
-      reals: "\u211D",
-      rect: "\u25AD",
-      re: "\xAE",
-      reg: "\xAE",
-      rfisht: "\u297D",
-      rfloor: "\u230B",
-      rfr: "\u{1D52F}",
-      rhard: "\u21C1",
-      rharu: "\u21C0",
-      rharul: "\u296C",
-      rho: "\u03C1",
-      rhov: "\u03F1",
-      rightarrow: "\u2192",
-      rightarrowtail: "\u21A3",
-      rightharpoondown: "\u21C1",
-      rightharpoonup: "\u21C0",
-      rightleftarrows: "\u21C4",
-      rightleftharpoons: "\u21CC",
-      rightrightarrows: "\u21C9",
-      rightsquigarrow: "\u219D",
-      rightthreetimes: "\u22CC",
-      ring: "\u02DA",
-      risingdotseq: "\u2253",
-      rlarr: "\u21C4",
-      rlhar: "\u21CC",
-      rlm: "\u200F",
-      rmoust: "\u23B1",
-      rmoustache: "\u23B1",
-      rnmid: "\u2AEE",
-      roang: "\u27ED",
-      roarr: "\u21FE",
-      robrk: "\u27E7",
-      ropar: "\u2986",
-      ropf: "\u{1D563}",
-      roplus: "\u2A2E",
-      rotimes: "\u2A35",
-      rpar: ")",
-      rpargt: "\u2994",
-      rppolint: "\u2A12",
-      rrarr: "\u21C9",
-      rsaquo: "\u203A",
-      rscr: "\u{1D4C7}",
-      rsh: "\u21B1",
-      rsqb: "]",
-      rsquo: "\u2019",
-      rsquor: "\u2019",
-      rthree: "\u22CC",
-      rtimes: "\u22CA",
-      rtri: "\u25B9",
-      rtrie: "\u22B5",
-      rtrif: "\u25B8",
-      rtriltri: "\u29CE",
-      ruluhar: "\u2968",
-      rx: "\u211E",
-      sacute: "\u015B",
-      sbquo: "\u201A",
-      sc: "\u227B",
-      scE: "\u2AB4",
-      scap: "\u2AB8",
-      scaron: "\u0161",
-      sccue: "\u227D",
-      sce: "\u2AB0",
-      scedil: "\u015F",
-      scirc: "\u015D",
-      scnE: "\u2AB6",
-      scnap: "\u2ABA",
-      scnsim: "\u22E9",
-      scpolint: "\u2A13",
-      scsim: "\u227F",
-      scy: "\u0441",
-      sdot: "\u22C5",
-      sdotb: "\u22A1",
-      sdote: "\u2A66",
-      seArr: "\u21D8",
-      searhk: "\u2925",
-      searr: "\u2198",
-      searrow: "\u2198",
-      sec: "\xA7",
-      sect: "\xA7",
-      semi: ";",
-      seswar: "\u2929",
-      setminus: "\u2216",
-      setmn: "\u2216",
-      sext: "\u2736",
-      sfr: "\u{1D530}",
-      sfrown: "\u2322",
-      sharp: "\u266F",
-      shchcy: "\u0449",
-      shcy: "\u0448",
-      shortmid: "\u2223",
-      shortparallel: "\u2225",
-      sh: "\xAD",
-      shy: "\xAD",
-      sigma: "\u03C3",
-      sigmaf: "\u03C2",
-      sigmav: "\u03C2",
-      sim: "\u223C",
-      simdot: "\u2A6A",
-      sime: "\u2243",
-      simeq: "\u2243",
-      simg: "\u2A9E",
-      simgE: "\u2AA0",
-      siml: "\u2A9D",
-      simlE: "\u2A9F",
-      simne: "\u2246",
-      simplus: "\u2A24",
-      simrarr: "\u2972",
-      slarr: "\u2190",
-      smallsetminus: "\u2216",
-      smashp: "\u2A33",
-      smeparsl: "\u29E4",
-      smid: "\u2223",
-      smile: "\u2323",
-      smt: "\u2AAA",
-      smte: "\u2AAC",
-      smtes: "\u2AAC\uFE00",
-      softcy: "\u044C",
-      sol: "/",
-      solb: "\u29C4",
-      solbar: "\u233F",
-      sopf: "\u{1D564}",
-      spades: "\u2660",
-      spadesuit: "\u2660",
-      spar: "\u2225",
-      sqcap: "\u2293",
-      sqcaps: "\u2293\uFE00",
-      sqcup: "\u2294",
-      sqcups: "\u2294\uFE00",
-      sqsub: "\u228F",
-      sqsube: "\u2291",
-      sqsubset: "\u228F",
-      sqsubseteq: "\u2291",
-      sqsup: "\u2290",
-      sqsupe: "\u2292",
-      sqsupset: "\u2290",
-      sqsupseteq: "\u2292",
-      squ: "\u25A1",
-      square: "\u25A1",
-      squarf: "\u25AA",
-      squf: "\u25AA",
-      srarr: "\u2192",
-      sscr: "\u{1D4C8}",
-      ssetmn: "\u2216",
-      ssmile: "\u2323",
-      sstarf: "\u22C6",
-      star: "\u2606",
-      starf: "\u2605",
-      straightepsilon: "\u03F5",
-      straightphi: "\u03D5",
-      strns: "\xAF",
-      sub: "\u2282",
-      subE: "\u2AC5",
-      subdot: "\u2ABD",
-      sube: "\u2286",
-      subedot: "\u2AC3",
-      submult: "\u2AC1",
-      subnE: "\u2ACB",
-      subne: "\u228A",
-      subplus: "\u2ABF",
-      subrarr: "\u2979",
-      subset: "\u2282",
-      subseteq: "\u2286",
-      subseteqq: "\u2AC5",
-      subsetneq: "\u228A",
-      subsetneqq: "\u2ACB",
-      subsim: "\u2AC7",
-      subsub: "\u2AD5",
-      subsup: "\u2AD3",
-      succ: "\u227B",
-      succapprox: "\u2AB8",
-      succcurlyeq: "\u227D",
-      succeq: "\u2AB0",
-      succnapprox: "\u2ABA",
-      succneqq: "\u2AB6",
-      succnsim: "\u22E9",
-      succsim: "\u227F",
-      sum: "\u2211",
-      sung: "\u266A",
-      sup: "\u2283",
-      sup1: "\xB9",
-      sup2: "\xB2",
-      sup3: "\xB3",
-      supE: "\u2AC6",
-      supdot: "\u2ABE",
-      supdsub: "\u2AD8",
-      supe: "\u2287",
-      supedot: "\u2AC4",
-      suphsol: "\u27C9",
-      suphsub: "\u2AD7",
-      suplarr: "\u297B",
-      supmult: "\u2AC2",
-      supnE: "\u2ACC",
-      supne: "\u228B",
-      supplus: "\u2AC0",
-      supset: "\u2283",
-      supseteq: "\u2287",
-      supseteqq: "\u2AC6",
-      supsetneq: "\u228B",
-      supsetneqq: "\u2ACC",
-      supsim: "\u2AC8",
-      supsub: "\u2AD4",
-      supsup: "\u2AD6",
-      swArr: "\u21D9",
-      swarhk: "\u2926",
-      swarr: "\u2199",
-      swarrow: "\u2199",
-      swnwar: "\u292A",
-      szli: "\xDF",
-      szlig: "\xDF",
-      target: "\u2316",
-      tau: "\u03C4",
-      tbrk: "\u23B4",
-      tcaron: "\u0165",
-      tcedil: "\u0163",
-      tcy: "\u0442",
-      tdot: "\u20DB",
-      telrec: "\u2315",
-      tfr: "\u{1D531}",
-      there4: "\u2234",
-      therefore: "\u2234",
-      theta: "\u03B8",
-      thetasym: "\u03D1",
-      thetav: "\u03D1",
-      thickapprox: "\u2248",
-      thicksim: "\u223C",
-      thinsp: "\u2009",
-      thkap: "\u2248",
-      thksim: "\u223C",
-      thor: "\xFE",
-      thorn: "\xFE",
-      tilde: "\u02DC",
-      time: "\xD7",
-      times: "\xD7",
-      timesb: "\u22A0",
-      timesbar: "\u2A31",
-      timesd: "\u2A30",
-      tint: "\u222D",
-      toea: "\u2928",
-      top: "\u22A4",
-      topbot: "\u2336",
-      topcir: "\u2AF1",
-      topf: "\u{1D565}",
-      topfork: "\u2ADA",
-      tosa: "\u2929",
-      tprime: "\u2034",
-      trade: "\u2122",
-      triangle: "\u25B5",
-      triangledown: "\u25BF",
-      triangleleft: "\u25C3",
-      trianglelefteq: "\u22B4",
-      triangleq: "\u225C",
-      triangleright: "\u25B9",
-      trianglerighteq: "\u22B5",
-      tridot: "\u25EC",
-      trie: "\u225C",
-      triminus: "\u2A3A",
-      triplus: "\u2A39",
-      trisb: "\u29CD",
-      tritime: "\u2A3B",
-      trpezium: "\u23E2",
-      tscr: "\u{1D4C9}",
-      tscy: "\u0446",
-      tshcy: "\u045B",
-      tstrok: "\u0167",
-      twixt: "\u226C",
-      twoheadleftarrow: "\u219E",
-      twoheadrightarrow: "\u21A0",
-      uArr: "\u21D1",
-      uHar: "\u2963",
-      uacut: "\xFA",
-      uacute: "\xFA",
-      uarr: "\u2191",
-      ubrcy: "\u045E",
-      ubreve: "\u016D",
-      ucir: "\xFB",
-      ucirc: "\xFB",
-      ucy: "\u0443",
-      udarr: "\u21C5",
-      udblac: "\u0171",
-      udhar: "\u296E",
-      ufisht: "\u297E",
-      ufr: "\u{1D532}",
-      ugrav: "\xF9",
-      ugrave: "\xF9",
-      uharl: "\u21BF",
-      uharr: "\u21BE",
-      uhblk: "\u2580",
-      ulcorn: "\u231C",
-      ulcorner: "\u231C",
-      ulcrop: "\u230F",
-      ultri: "\u25F8",
-      umacr: "\u016B",
-      um: "\xA8",
-      uml: "\xA8",
-      uogon: "\u0173",
-      uopf: "\u{1D566}",
-      uparrow: "\u2191",
-      updownarrow: "\u2195",
-      upharpoonleft: "\u21BF",
-      upharpoonright: "\u21BE",
-      uplus: "\u228E",
-      upsi: "\u03C5",
-      upsih: "\u03D2",
-      upsilon: "\u03C5",
-      upuparrows: "\u21C8",
-      urcorn: "\u231D",
-      urcorner: "\u231D",
-      urcrop: "\u230E",
-      uring: "\u016F",
-      urtri: "\u25F9",
-      uscr: "\u{1D4CA}",
-      utdot: "\u22F0",
-      utilde: "\u0169",
-      utri: "\u25B5",
-      utrif: "\u25B4",
-      uuarr: "\u21C8",
-      uum: "\xFC",
-      uuml: "\xFC",
-      uwangle: "\u29A7",
-      vArr: "\u21D5",
-      vBar: "\u2AE8",
-      vBarv: "\u2AE9",
-      vDash: "\u22A8",
-      vangrt: "\u299C",
-      varepsilon: "\u03F5",
-      varkappa: "\u03F0",
-      varnothing: "\u2205",
-      varphi: "\u03D5",
-      varpi: "\u03D6",
-      varpropto: "\u221D",
-      varr: "\u2195",
-      varrho: "\u03F1",
-      varsigma: "\u03C2",
-      varsubsetneq: "\u228A\uFE00",
-      varsubsetneqq: "\u2ACB\uFE00",
-      varsupsetneq: "\u228B\uFE00",
-      varsupsetneqq: "\u2ACC\uFE00",
-      vartheta: "\u03D1",
-      vartriangleleft: "\u22B2",
-      vartriangleright: "\u22B3",
-      vcy: "\u0432",
-      vdash: "\u22A2",
-      vee: "\u2228",
-      veebar: "\u22BB",
-      veeeq: "\u225A",
-      vellip: "\u22EE",
-      verbar: "|",
-      vert: "|",
-      vfr: "\u{1D533}",
-      vltri: "\u22B2",
-      vnsub: "\u2282\u20D2",
-      vnsup: "\u2283\u20D2",
-      vopf: "\u{1D567}",
-      vprop: "\u221D",
-      vrtri: "\u22B3",
-      vscr: "\u{1D4CB}",
-      vsubnE: "\u2ACB\uFE00",
-      vsubne: "\u228A\uFE00",
-      vsupnE: "\u2ACC\uFE00",
-      vsupne: "\u228B\uFE00",
-      vzigzag: "\u299A",
-      wcirc: "\u0175",
-      wedbar: "\u2A5F",
-      wedge: "\u2227",
-      wedgeq: "\u2259",
-      weierp: "\u2118",
-      wfr: "\u{1D534}",
-      wopf: "\u{1D568}",
-      wp: "\u2118",
-      wr: "\u2240",
-      wreath: "\u2240",
-      wscr: "\u{1D4CC}",
-      xcap: "\u22C2",
-      xcirc: "\u25EF",
-      xcup: "\u22C3",
-      xdtri: "\u25BD",
-      xfr: "\u{1D535}",
-      xhArr: "\u27FA",
-      xharr: "\u27F7",
-      xi: "\u03BE",
-      xlArr: "\u27F8",
-      xlarr: "\u27F5",
-      xmap: "\u27FC",
-      xnis: "\u22FB",
-      xodot: "\u2A00",
-      xopf: "\u{1D569}",
-      xoplus: "\u2A01",
-      xotime: "\u2A02",
-      xrArr: "\u27F9",
-      xrarr: "\u27F6",
-      xscr: "\u{1D4CD}",
-      xsqcup: "\u2A06",
-      xuplus: "\u2A04",
-      xutri: "\u25B3",
-      xvee: "\u22C1",
-      xwedge: "\u22C0",
-      yacut: "\xFD",
-      yacute: "\xFD",
-      yacy: "\u044F",
-      ycirc: "\u0177",
-      ycy: "\u044B",
-      ye: "\xA5",
-      yen: "\xA5",
-      yfr: "\u{1D536}",
-      yicy: "\u0457",
-      yopf: "\u{1D56A}",
-      yscr: "\u{1D4CE}",
-      yucy: "\u044E",
-      yum: "\xFF",
-      yuml: "\xFF",
-      zacute: "\u017A",
-      zcaron: "\u017E",
-      zcy: "\u0437",
-      zdot: "\u017C",
-      zeetrf: "\u2128",
-      zeta: "\u03B6",
-      zfr: "\u{1D537}",
-      zhcy: "\u0436",
-      zigrarr: "\u21DD",
-      zopf: "\u{1D56B}",
-      zscr: "\u{1D4CF}",
-      zwj: "\u200D",
-      zwnj: "\u200C"
-    };
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/parse-entities/decode-entity.js
-var require_decode_entity = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/parse-entities/decode-entity.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var characterEntities2 = require_character_entities();
-    module.exports = decodeEntity;
-    var own3 = {}.hasOwnProperty;
-    function decodeEntity(characters) {
-      return own3.call(characterEntities2, characters) ? characterEntities2[characters] : false;
-    }
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-digit.js
-var require_ascii_digit = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-digit.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var asciiDigit2 = regexCheck2(/\d/);
-    module.exports = asciiDigit2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-hex-digit.js
-var require_ascii_hex_digit = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/character/ascii-hex-digit.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var regexCheck2 = require_regex_check4();
-    var asciiHexDigit2 = regexCheck2(/[\dA-Fa-f]/);
-    module.exports = asciiHexDigit2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/character-reference.js
-var require_character_reference = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/character-reference.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var decodeEntity = require_decode_entity();
-    var asciiAlphanumeric2 = require_ascii_alphanumeric2();
-    var asciiDigit2 = require_ascii_digit();
-    var asciiHexDigit2 = require_ascii_hex_digit();
-    function _interopDefaultLegacy(e4) {
-      return e4 && typeof e4 === "object" && "default" in e4 ? e4 : { default: e4 };
-    }
-    var decodeEntity__default = /* @__PURE__ */ _interopDefaultLegacy(decodeEntity);
-    var characterReference2 = {
-      name: "characterReference",
-      tokenize: tokenizeCharacterReference2
-    };
-    function tokenizeCharacterReference2(effects, ok2, nok) {
-      var self = this;
-      var size = 0;
-      var max;
-      var test;
-      return start;
-      function start(code19) {
-        effects.enter("characterReference");
-        effects.enter("characterReferenceMarker");
-        effects.consume(code19);
-        effects.exit("characterReferenceMarker");
-        return open;
-      }
-      function open(code19) {
-        if (code19 === 35) {
-          effects.enter("characterReferenceMarkerNumeric");
-          effects.consume(code19);
-          effects.exit("characterReferenceMarkerNumeric");
-          return numeric2;
-        }
-        effects.enter("characterReferenceValue");
-        max = 31;
-        test = asciiAlphanumeric2;
-        return value(code19);
-      }
-      function numeric2(code19) {
-        if (code19 === 88 || code19 === 120) {
-          effects.enter("characterReferenceMarkerHexadecimal");
-          effects.consume(code19);
-          effects.exit("characterReferenceMarkerHexadecimal");
-          effects.enter("characterReferenceValue");
-          max = 6;
-          test = asciiHexDigit2;
-          return value;
-        }
-        effects.enter("characterReferenceValue");
-        max = 7;
-        test = asciiDigit2;
-        return value(code19);
-      }
-      function value(code19) {
-        var token3;
-        if (code19 === 59 && size) {
-          token3 = effects.exit("characterReferenceValue");
-          if (test === asciiAlphanumeric2 && !decodeEntity__default["default"](self.sliceSerialize(token3))) {
-            return nok(code19);
-          }
-          effects.enter("characterReferenceMarker");
-          effects.consume(code19);
-          effects.exit("characterReferenceMarker");
-          effects.exit("characterReference");
-          return ok2;
-        }
-        if (test(code19) && size++ < max) {
-          effects.consume(code19);
-          return value;
-        }
-        return nok(code19);
-      }
-    }
-    module.exports = characterReference2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/code-fenced.js
-var require_code_fenced = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/code-fenced.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var prefixSize = require_prefix_size2();
-    var factorySpace2 = require_factory_space3();
-    var codeFenced2 = {
-      name: "codeFenced",
-      tokenize: tokenizeCodeFenced2,
-      concrete: true
-    };
-    function tokenizeCodeFenced2(effects, ok2, nok) {
-      var self = this;
-      var closingFenceConstruct = {
-        tokenize: tokenizeClosingFence,
-        partial: true
-      };
-      var initialPrefix = prefixSize(this.events, "linePrefix");
-      var sizeOpen = 0;
-      var marker;
-      return start;
-      function start(code19) {
-        effects.enter("codeFenced");
-        effects.enter("codeFencedFence");
-        effects.enter("codeFencedFenceSequence");
-        marker = code19;
-        return sequenceOpen(code19);
-      }
-      function sequenceOpen(code19) {
-        if (code19 === marker) {
-          effects.consume(code19);
-          sizeOpen++;
-          return sequenceOpen;
-        }
-        effects.exit("codeFencedFenceSequence");
-        return sizeOpen < 3 ? nok(code19) : factorySpace2(effects, infoOpen, "whitespace")(code19);
-      }
-      function infoOpen(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          return openAfter(code19);
-        }
-        effects.enter("codeFencedFenceInfo");
-        effects.enter("chunkString", {
-          contentType: "string"
-        });
-        return info(code19);
-      }
-      function info(code19) {
-        if (code19 === null || markdownLineEndingOrSpace2(code19)) {
-          effects.exit("chunkString");
-          effects.exit("codeFencedFenceInfo");
-          return factorySpace2(effects, infoAfter, "whitespace")(code19);
-        }
-        if (code19 === 96 && code19 === marker) return nok(code19);
-        effects.consume(code19);
-        return info;
-      }
-      function infoAfter(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          return openAfter(code19);
-        }
-        effects.enter("codeFencedFenceMeta");
-        effects.enter("chunkString", {
-          contentType: "string"
-        });
-        return meta(code19);
-      }
-      function meta(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("chunkString");
-          effects.exit("codeFencedFenceMeta");
-          return openAfter(code19);
-        }
-        if (code19 === 96 && code19 === marker) return nok(code19);
-        effects.consume(code19);
-        return meta;
-      }
-      function openAfter(code19) {
-        effects.exit("codeFencedFence");
-        return self.interrupt ? ok2(code19) : content3(code19);
-      }
-      function content3(code19) {
-        if (code19 === null) {
-          return after(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return effects.attempt(
-            closingFenceConstruct,
-            after,
-            initialPrefix ? factorySpace2(effects, content3, "linePrefix", initialPrefix + 1) : content3
-          );
-        }
-        effects.enter("codeFlowValue");
-        return contentContinue(code19);
-      }
-      function contentContinue(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("codeFlowValue");
-          return content3(code19);
-        }
-        effects.consume(code19);
-        return contentContinue;
-      }
-      function after(code19) {
-        effects.exit("codeFenced");
-        return ok2(code19);
-      }
-      function tokenizeClosingFence(effects2, ok3, nok2) {
-        var size = 0;
-        return factorySpace2(
-          effects2,
-          closingSequenceStart,
-          "linePrefix",
-          this.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4
-        );
-        function closingSequenceStart(code19) {
-          effects2.enter("codeFencedFence");
-          effects2.enter("codeFencedFenceSequence");
-          return closingSequence(code19);
-        }
-        function closingSequence(code19) {
-          if (code19 === marker) {
-            effects2.consume(code19);
-            size++;
-            return closingSequence;
-          }
-          if (size < sizeOpen) return nok2(code19);
-          effects2.exit("codeFencedFenceSequence");
-          return factorySpace2(effects2, closingSequenceEnd, "whitespace")(code19);
-        }
-        function closingSequenceEnd(code19) {
-          if (code19 === null || markdownLineEnding2(code19)) {
-            effects2.exit("codeFencedFence");
-            return ok3(code19);
-          }
-          return nok2(code19);
-        }
-      }
-    }
-    module.exports = codeFenced2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/code-indented.js
-var require_code_indented = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/code-indented.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var chunkedSplice = require_chunked_splice3();
-    var prefixSize = require_prefix_size2();
-    var factorySpace2 = require_factory_space3();
-    var codeIndented2 = {
-      name: "codeIndented",
-      tokenize: tokenizeCodeIndented2,
-      resolve: resolveCodeIndented
-    };
-    var indentedContentConstruct = {
-      tokenize: tokenizeIndentedContent,
-      partial: true
-    };
-    function resolveCodeIndented(events, context) {
-      var code19 = {
-        type: "codeIndented",
-        start: events[0][1].start,
-        end: events[events.length - 1][1].end
-      };
-      chunkedSplice(events, 0, 0, [["enter", code19, context]]);
-      chunkedSplice(events, events.length, 0, [["exit", code19, context]]);
-      return events;
-    }
-    function tokenizeCodeIndented2(effects, ok2, nok) {
-      return effects.attempt(indentedContentConstruct, afterPrefix, nok);
-      function afterPrefix(code19) {
-        if (code19 === null) {
-          return ok2(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          return effects.attempt(indentedContentConstruct, afterPrefix, ok2)(code19);
-        }
-        effects.enter("codeFlowValue");
-        return content3(code19);
-      }
-      function content3(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("codeFlowValue");
-          return afterPrefix(code19);
-        }
-        effects.consume(code19);
-        return content3;
-      }
-    }
-    function tokenizeIndentedContent(effects, ok2, nok) {
-      var self = this;
-      return factorySpace2(effects, afterPrefix, "linePrefix", 4 + 1);
-      function afterPrefix(code19) {
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return factorySpace2(effects, afterPrefix, "linePrefix", 4 + 1);
-        }
-        return prefixSize(self.events, "linePrefix") < 4 ? nok(code19) : ok2(code19);
-      }
-    }
-    module.exports = codeIndented2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/code-text.js
-var require_code_text = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/code-text.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var codeText2 = {
-      name: "codeText",
-      tokenize: tokenizeCodeText2,
-      resolve: resolveCodeText2,
-      previous: previous4
-    };
-    function resolveCodeText2(events) {
-      var tailExitIndex = events.length - 4;
-      var headEnterIndex = 3;
-      var index;
-      var enter;
-      if ((events[headEnterIndex][1].type === "lineEnding" || events[headEnterIndex][1].type === "space") && (events[tailExitIndex][1].type === "lineEnding" || events[tailExitIndex][1].type === "space")) {
-        index = headEnterIndex;
-        while (++index < tailExitIndex) {
-          if (events[index][1].type === "codeTextData") {
-            events[tailExitIndex][1].type = events[headEnterIndex][1].type = "codeTextPadding";
-            headEnterIndex += 2;
-            tailExitIndex -= 2;
-            break;
-          }
-        }
-      }
-      index = headEnterIndex - 1;
-      tailExitIndex++;
-      while (++index <= tailExitIndex) {
-        if (enter === void 0) {
-          if (index !== tailExitIndex && events[index][1].type !== "lineEnding") {
-            enter = index;
-          }
-        } else if (index === tailExitIndex || events[index][1].type === "lineEnding") {
-          events[enter][1].type = "codeTextData";
-          if (index !== enter + 2) {
-            events[enter][1].end = events[index - 1][1].end;
-            events.splice(enter + 2, index - enter - 2);
-            tailExitIndex -= index - enter - 2;
-            index = enter + 2;
-          }
-          enter = void 0;
-        }
-      }
-      return events;
-    }
-    function previous4(code19) {
-      return code19 !== 96 || this.events[this.events.length - 1][1].type === "characterEscape";
-    }
-    function tokenizeCodeText2(effects, ok2, nok) {
-      var sizeOpen = 0;
-      var size;
-      var token3;
-      return start;
-      function start(code19) {
-        effects.enter("codeText");
-        effects.enter("codeTextSequence");
-        return openingSequence(code19);
-      }
-      function openingSequence(code19) {
-        if (code19 === 96) {
-          effects.consume(code19);
-          sizeOpen++;
-          return openingSequence;
-        }
-        effects.exit("codeTextSequence");
-        return gap(code19);
-      }
-      function gap(code19) {
-        if (code19 === null) {
-          return nok(code19);
-        }
-        if (code19 === 96) {
-          token3 = effects.enter("codeTextSequence");
-          size = 0;
-          return closingSequence(code19);
-        }
-        if (code19 === 32) {
-          effects.enter("space");
-          effects.consume(code19);
-          effects.exit("space");
-          return gap;
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return gap;
-        }
-        effects.enter("codeTextData");
-        return data(code19);
-      }
-      function data(code19) {
-        if (code19 === null || code19 === 32 || code19 === 96 || markdownLineEnding2(code19)) {
-          effects.exit("codeTextData");
-          return gap(code19);
-        }
-        effects.consume(code19);
-        return data;
-      }
-      function closingSequence(code19) {
-        if (code19 === 96) {
-          effects.consume(code19);
-          size++;
-          return closingSequence;
-        }
-        if (size === sizeOpen) {
-          effects.exit("codeTextSequence");
-          effects.exit("codeText");
-          return ok2(code19);
-        }
-        token3.type = "codeTextData";
-        return data(code19);
-      }
-    }
-    module.exports = codeText2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-destination.js
-var require_factory_destination = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-destination.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiControl2 = require_ascii_control2();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    function destinationFactory(effects, ok2, nok, type, literalType, literalMarkerType, rawType, stringType, max) {
-      var limit = max || Infinity;
-      var balance = 0;
-      return start;
-      function start(code19) {
-        if (code19 === 60) {
-          effects.enter(type);
-          effects.enter(literalType);
-          effects.enter(literalMarkerType);
-          effects.consume(code19);
-          effects.exit(literalMarkerType);
-          return destinationEnclosedBefore;
-        }
-        if (asciiControl2(code19) || code19 === 41) {
-          return nok(code19);
-        }
-        effects.enter(type);
-        effects.enter(rawType);
-        effects.enter(stringType);
-        effects.enter("chunkString", {
-          contentType: "string"
-        });
-        return destinationRaw(code19);
-      }
-      function destinationEnclosedBefore(code19) {
-        if (code19 === 62) {
-          effects.enter(literalMarkerType);
-          effects.consume(code19);
-          effects.exit(literalMarkerType);
-          effects.exit(literalType);
-          effects.exit(type);
-          return ok2;
-        }
-        effects.enter(stringType);
-        effects.enter("chunkString", {
-          contentType: "string"
-        });
-        return destinationEnclosed(code19);
-      }
-      function destinationEnclosed(code19) {
-        if (code19 === 62) {
-          effects.exit("chunkString");
-          effects.exit(stringType);
-          return destinationEnclosedBefore(code19);
-        }
-        if (code19 === null || code19 === 60 || markdownLineEnding2(code19)) {
-          return nok(code19);
-        }
-        effects.consume(code19);
-        return code19 === 92 ? destinationEnclosedEscape : destinationEnclosed;
-      }
-      function destinationEnclosedEscape(code19) {
-        if (code19 === 60 || code19 === 62 || code19 === 92) {
-          effects.consume(code19);
-          return destinationEnclosed;
-        }
-        return destinationEnclosed(code19);
-      }
-      function destinationRaw(code19) {
-        if (code19 === 40) {
-          if (++balance > limit) return nok(code19);
-          effects.consume(code19);
-          return destinationRaw;
-        }
-        if (code19 === 41) {
-          if (!balance--) {
-            effects.exit("chunkString");
-            effects.exit(stringType);
-            effects.exit(rawType);
-            effects.exit(type);
-            return ok2(code19);
-          }
-          effects.consume(code19);
-          return destinationRaw;
-        }
-        if (code19 === null || markdownLineEndingOrSpace2(code19)) {
-          if (balance) return nok(code19);
-          effects.exit("chunkString");
-          effects.exit(stringType);
-          effects.exit(rawType);
-          effects.exit(type);
-          return ok2(code19);
-        }
-        if (asciiControl2(code19)) return nok(code19);
-        effects.consume(code19);
-        return code19 === 92 ? destinationRawEscape : destinationRaw;
-      }
-      function destinationRawEscape(code19) {
-        if (code19 === 40 || code19 === 41 || code19 === 92) {
-          effects.consume(code19);
-          return destinationRaw;
-        }
-        return destinationRaw(code19);
-      }
-    }
-    module.exports = destinationFactory;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-label.js
-var require_factory_label = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-label.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownSpace2 = require_markdown_space3();
-    function labelFactory(effects, ok2, nok, type, markerType, stringType) {
-      var self = this;
-      var size = 0;
-      var data;
-      return start;
-      function start(code19) {
-        effects.enter(type);
-        effects.enter(markerType);
-        effects.consume(code19);
-        effects.exit(markerType);
-        effects.enter(stringType);
-        return atBreak;
-      }
-      function atBreak(code19) {
-        if (code19 === null || code19 === 91 || code19 === 93 && !data || /* c8 ignore next */
-        code19 === 94 && /* c8 ignore next */
-        !size && /* c8 ignore next */
-        "_hiddenFootnoteSupport" in self.parser.constructs || size > 999) {
-          return nok(code19);
-        }
-        if (code19 === 93) {
-          effects.exit(stringType);
-          effects.enter(markerType);
-          effects.consume(code19);
-          effects.exit(markerType);
-          effects.exit(type);
-          return ok2;
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return atBreak;
-        }
-        effects.enter("chunkString", {
-          contentType: "string"
-        });
-        return label5(code19);
-      }
-      function label5(code19) {
-        if (code19 === null || code19 === 91 || code19 === 93 || markdownLineEnding2(code19) || size++ > 999) {
-          effects.exit("chunkString");
-          return atBreak(code19);
-        }
-        effects.consume(code19);
-        data = data || !markdownSpace2(code19);
-        return code19 === 92 ? labelEscape : label5;
-      }
-      function labelEscape(code19) {
-        if (code19 === 91 || code19 === 92 || code19 === 93) {
-          effects.consume(code19);
-          size++;
-          return label5;
-        }
-        return label5(code19);
-      }
-    }
-    module.exports = labelFactory;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-whitespace.js
-var require_factory_whitespace = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-whitespace.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownSpace2 = require_markdown_space3();
-    var factorySpace2 = require_factory_space3();
-    function whitespaceFactory(effects, ok2) {
-      var seen;
-      return start;
-      function start(code19) {
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          seen = true;
-          return start;
-        }
-        if (markdownSpace2(code19)) {
-          return factorySpace2(
-            effects,
-            start,
-            seen ? "linePrefix" : "lineSuffix"
-          )(code19);
-        }
-        return ok2(code19);
-      }
-    }
-    module.exports = whitespaceFactory;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-title.js
-var require_factory_title = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/factory-title.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var factorySpace2 = require_factory_space3();
-    function titleFactory(effects, ok2, nok, type, markerType, stringType) {
-      var marker;
-      return start;
-      function start(code19) {
-        effects.enter(type);
-        effects.enter(markerType);
-        effects.consume(code19);
-        effects.exit(markerType);
-        marker = code19 === 40 ? 41 : code19;
-        return atFirstTitleBreak;
-      }
-      function atFirstTitleBreak(code19) {
-        if (code19 === marker) {
-          effects.enter(markerType);
-          effects.consume(code19);
-          effects.exit(markerType);
-          effects.exit(type);
-          return ok2;
-        }
-        effects.enter(stringType);
-        return atTitleBreak(code19);
-      }
-      function atTitleBreak(code19) {
-        if (code19 === marker) {
-          effects.exit(stringType);
-          return atFirstTitleBreak(marker);
-        }
-        if (code19 === null) {
-          return nok(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return factorySpace2(effects, atTitleBreak, "linePrefix");
-        }
-        effects.enter("chunkString", {
-          contentType: "string"
-        });
-        return title(code19);
-      }
-      function title(code19) {
-        if (code19 === marker || code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("chunkString");
-          return atTitleBreak(code19);
-        }
-        effects.consume(code19);
-        return code19 === 92 ? titleEscape : title;
-      }
-      function titleEscape(code19) {
-        if (code19 === marker || code19 === 92) {
-          effects.consume(code19);
-          return title;
-        }
-        return title(code19);
-      }
-    }
-    module.exports = titleFactory;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/definition.js
-var require_definition = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/definition.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var normalizeIdentifier2 = require_normalize_identifier();
-    var factoryDestination2 = require_factory_destination();
-    var factoryLabel3 = require_factory_label();
-    var factorySpace2 = require_factory_space3();
-    var factoryWhitespace2 = require_factory_whitespace();
-    var factoryTitle2 = require_factory_title();
-    var definition2 = {
-      name: "definition",
-      tokenize: tokenizeDefinition2
-    };
-    var titleConstruct = {
-      tokenize: tokenizeTitle,
-      partial: true
-    };
-    function tokenizeDefinition2(effects, ok2, nok) {
-      var self = this;
-      var identifier;
-      return start;
-      function start(code19) {
-        effects.enter("definition");
-        return factoryLabel3.call(
-          self,
-          effects,
-          labelAfter,
-          nok,
-          "definitionLabel",
-          "definitionLabelMarker",
-          "definitionLabelString"
-        )(code19);
-      }
-      function labelAfter(code19) {
-        identifier = normalizeIdentifier2(
-          self.sliceSerialize(self.events[self.events.length - 1][1]).slice(1, -1)
-        );
-        if (code19 === 58) {
-          effects.enter("definitionMarker");
-          effects.consume(code19);
-          effects.exit("definitionMarker");
-          return factoryWhitespace2(
-            effects,
-            factoryDestination2(
-              effects,
-              effects.attempt(
-                titleConstruct,
-                factorySpace2(effects, after, "whitespace"),
-                factorySpace2(effects, after, "whitespace")
-              ),
-              nok,
-              "definitionDestination",
-              "definitionDestinationLiteral",
-              "definitionDestinationLiteralMarker",
-              "definitionDestinationRaw",
-              "definitionDestinationString"
-            )
-          );
-        }
-        return nok(code19);
-      }
-      function after(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("definition");
-          if (self.parser.defined.indexOf(identifier) < 0) {
-            self.parser.defined.push(identifier);
-          }
-          return ok2(code19);
-        }
-        return nok(code19);
-      }
-    }
-    function tokenizeTitle(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        return markdownLineEndingOrSpace2(code19) ? factoryWhitespace2(effects, before)(code19) : nok(code19);
-      }
-      function before(code19) {
-        if (code19 === 34 || code19 === 39 || code19 === 40) {
-          return factoryTitle2(
-            effects,
-            factorySpace2(effects, after, "whitespace"),
-            nok,
-            "definitionTitle",
-            "definitionTitleMarker",
-            "definitionTitleString"
-          )(code19);
-        }
-        return nok(code19);
-      }
-      function after(code19) {
-        return code19 === null || markdownLineEnding2(code19) ? ok2(code19) : nok(code19);
-      }
-    }
-    module.exports = definition2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/hard-break-escape.js
-var require_hard_break_escape = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/hard-break-escape.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var hardBreakEscape2 = {
-      name: "hardBreakEscape",
-      tokenize: tokenizeHardBreakEscape2
-    };
-    function tokenizeHardBreakEscape2(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        effects.enter("hardBreakEscape");
-        effects.enter("escapeMarker");
-        effects.consume(code19);
-        return open;
-      }
-      function open(code19) {
-        if (markdownLineEnding2(code19)) {
-          effects.exit("escapeMarker");
-          effects.exit("hardBreakEscape");
-          return ok2(code19);
-        }
-        return nok(code19);
-      }
-    }
-    module.exports = hardBreakEscape2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/heading-atx.js
-var require_heading_atx = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/heading-atx.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var markdownSpace2 = require_markdown_space3();
-    var chunkedSplice = require_chunked_splice3();
-    var factorySpace2 = require_factory_space3();
-    var headingAtx2 = {
-      name: "headingAtx",
-      tokenize: tokenizeHeadingAtx2,
-      resolve: resolveHeadingAtx2
-    };
-    function resolveHeadingAtx2(events, context) {
-      var contentEnd = events.length - 2;
-      var contentStart = 3;
-      var content3;
-      var text5;
-      if (events[contentStart][1].type === "whitespace") {
-        contentStart += 2;
-      }
-      if (contentEnd - 2 > contentStart && events[contentEnd][1].type === "whitespace") {
-        contentEnd -= 2;
-      }
-      if (events[contentEnd][1].type === "atxHeadingSequence" && (contentStart === contentEnd - 1 || contentEnd - 4 > contentStart && events[contentEnd - 2][1].type === "whitespace")) {
-        contentEnd -= contentStart + 1 === contentEnd ? 2 : 4;
-      }
-      if (contentEnd > contentStart) {
-        content3 = {
-          type: "atxHeadingText",
-          start: events[contentStart][1].start,
-          end: events[contentEnd][1].end
-        };
-        text5 = {
-          type: "chunkText",
-          start: events[contentStart][1].start,
-          end: events[contentEnd][1].end,
-          contentType: "text"
-        };
-        chunkedSplice(events, contentStart, contentEnd - contentStart + 1, [
-          ["enter", content3, context],
-          ["enter", text5, context],
-          ["exit", text5, context],
-          ["exit", content3, context]
-        ]);
-      }
-      return events;
-    }
-    function tokenizeHeadingAtx2(effects, ok2, nok) {
-      var self = this;
-      var size = 0;
-      return start;
-      function start(code19) {
-        effects.enter("atxHeading");
-        effects.enter("atxHeadingSequence");
-        return fenceOpenInside(code19);
-      }
-      function fenceOpenInside(code19) {
-        if (code19 === 35 && size++ < 6) {
-          effects.consume(code19);
-          return fenceOpenInside;
-        }
-        if (code19 === null || markdownLineEndingOrSpace2(code19)) {
-          effects.exit("atxHeadingSequence");
-          return self.interrupt ? ok2(code19) : headingBreak(code19);
-        }
-        return nok(code19);
-      }
-      function headingBreak(code19) {
-        if (code19 === 35) {
-          effects.enter("atxHeadingSequence");
-          return sequence(code19);
-        }
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("atxHeading");
-          return ok2(code19);
-        }
-        if (markdownSpace2(code19)) {
-          return factorySpace2(effects, headingBreak, "whitespace")(code19);
-        }
-        effects.enter("atxHeadingText");
-        return data(code19);
-      }
-      function sequence(code19) {
-        if (code19 === 35) {
-          effects.consume(code19);
-          return sequence;
-        }
-        effects.exit("atxHeadingSequence");
-        return headingBreak(code19);
-      }
-      function data(code19) {
-        if (code19 === null || code19 === 35 || markdownLineEndingOrSpace2(code19)) {
-          effects.exit("atxHeadingText");
-          return headingBreak(code19);
-        }
-        effects.consume(code19);
-        return data;
-      }
-    }
-    module.exports = headingAtx2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/html-block-names.js
-var require_html_block_names = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/html-block-names.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var basics = [
-      "address",
-      "article",
-      "aside",
-      "base",
-      "basefont",
-      "blockquote",
-      "body",
-      "caption",
-      "center",
-      "col",
-      "colgroup",
-      "dd",
-      "details",
-      "dialog",
-      "dir",
-      "div",
-      "dl",
-      "dt",
-      "fieldset",
-      "figcaption",
-      "figure",
-      "footer",
-      "form",
-      "frame",
-      "frameset",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      "head",
-      "header",
-      "hr",
-      "html",
-      "iframe",
-      "legend",
-      "li",
-      "link",
-      "main",
-      "menu",
-      "menuitem",
-      "nav",
-      "noframes",
-      "ol",
-      "optgroup",
-      "option",
-      "p",
-      "param",
-      "section",
-      "source",
-      "summary",
-      "table",
-      "tbody",
-      "td",
-      "tfoot",
-      "th",
-      "thead",
-      "title",
-      "tr",
-      "track",
-      "ul"
-    ];
-    module.exports = basics;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/html-raw-names.js
-var require_html_raw_names = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constant/html-raw-names.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var raws = ["pre", "script", "style", "textarea"];
-    module.exports = raws;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/html-flow.js
-var require_html_flow = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/html-flow.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiAlpha2 = require_ascii_alpha2();
-    var asciiAlphanumeric2 = require_ascii_alphanumeric2();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var markdownSpace2 = require_markdown_space3();
-    var fromCharCode = require_from_char_code4();
-    var htmlBlockNames2 = require_html_block_names();
-    var htmlRawNames2 = require_html_raw_names();
-    var partialBlankLine = require_partial_blank_line();
-    var htmlFlow2 = {
-      name: "htmlFlow",
-      tokenize: tokenizeHtmlFlow2,
-      resolveTo: resolveToHtmlFlow2,
-      concrete: true
-    };
-    var nextBlankConstruct = {
-      tokenize: tokenizeNextBlank,
-      partial: true
-    };
-    function resolveToHtmlFlow2(events) {
-      var index = events.length;
-      while (index--) {
-        if (events[index][0] === "enter" && events[index][1].type === "htmlFlow") {
+        if (buf.charCodeAt(p7 + 1) === 94 && p7 + 1 < e4) {
+          p7++;
           break;
         }
+        if (p7 > textStart) {
+          addText(block2, textStart, p7, complex);
+          complex = false;
+        }
+        const i = brN++;
+        brNode[i] = addText(block2, p7, p7 + 1, false);
+        brImage[i] = false;
+        brActive[i] = true;
+        brDelim[i] = dLast;
+        brTextStart[i] = p7 + 1;
+        p7++;
+        textStart = p7;
+        break;
       }
-      if (index > 1 && events[index - 2][1].type === "linePrefix") {
-        events[index][1].start = events[index - 2][1].start;
-        events[index + 1][1].start = events[index - 2][1].start;
-        events.splice(index - 2, 2);
-      }
-      return events;
-    }
-    function tokenizeHtmlFlow2(effects, ok2, nok) {
-      var self = this;
-      var kind;
-      var startTag;
-      var buffer3;
-      var index;
-      var marker;
-      return start;
-      function start(code19) {
-        effects.enter("htmlFlow");
-        effects.enter("htmlFlowData");
-        effects.consume(code19);
-        return open;
-      }
-      function open(code19) {
-        if (code19 === 33) {
-          effects.consume(code19);
-          return declarationStart;
-        }
-        if (code19 === 47) {
-          effects.consume(code19);
-          return tagCloseStart;
-        }
-        if (code19 === 63) {
-          effects.consume(code19);
-          kind = 3;
-          return self.interrupt ? ok2 : continuationDeclarationInside;
-        }
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          buffer3 = fromCharCode(code19);
-          startTag = true;
-          return tagName;
-        }
-        return nok(code19);
-      }
-      function declarationStart(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          kind = 2;
-          return commentOpenInside;
-        }
-        if (code19 === 91) {
-          effects.consume(code19);
-          kind = 5;
-          buffer3 = "CDATA[";
-          index = 0;
-          return cdataOpenInside;
-        }
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          kind = 4;
-          return self.interrupt ? ok2 : continuationDeclarationInside;
-        }
-        return nok(code19);
-      }
-      function commentOpenInside(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return self.interrupt ? ok2 : continuationDeclarationInside;
-        }
-        return nok(code19);
-      }
-      function cdataOpenInside(code19) {
-        if (code19 === buffer3.charCodeAt(index++)) {
-          effects.consume(code19);
-          return index === buffer3.length ? self.interrupt ? ok2 : continuation : cdataOpenInside;
-        }
-        return nok(code19);
-      }
-      function tagCloseStart(code19) {
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          buffer3 = fromCharCode(code19);
-          return tagName;
-        }
-        return nok(code19);
-      }
-      function tagName(code19) {
-        if (code19 === null || code19 === 47 || code19 === 62 || markdownLineEndingOrSpace2(code19)) {
-          if (code19 !== 47 && startTag && htmlRawNames2.indexOf(buffer3.toLowerCase()) > -1) {
-            kind = 1;
-            return self.interrupt ? ok2(code19) : continuation(code19);
-          }
-          if (htmlBlockNames2.indexOf(buffer3.toLowerCase()) > -1) {
-            kind = 6;
-            if (code19 === 47) {
-              effects.consume(code19);
-              return basicSelfClosing;
+      case 93: {
+        if (brN === 0) {
+          if (ntN > 0) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
             }
-            return self.interrupt ? ok2(code19) : continuation(code19);
-          }
-          kind = 7;
-          return self.interrupt ? nok(code19) : startTag ? completeAttributeNameBefore(code19) : completeClosingTagAfter(code19);
-        }
-        if (code19 === 45 || asciiAlphanumeric2(code19)) {
-          effects.consume(code19);
-          buffer3 += fromCharCode(code19);
-          return tagName;
-        }
-        return nok(code19);
-      }
-      function basicSelfClosing(code19) {
-        if (code19 === 62) {
-          effects.consume(code19);
-          return self.interrupt ? ok2 : continuation;
-        }
-        return nok(code19);
-      }
-      function completeClosingTagAfter(code19) {
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return completeClosingTagAfter;
-        }
-        return completeEnd(code19);
-      }
-      function completeAttributeNameBefore(code19) {
-        if (code19 === 47) {
-          effects.consume(code19);
-          return completeEnd;
-        }
-        if (code19 === 58 || code19 === 95 || asciiAlpha2(code19)) {
-          effects.consume(code19);
-          return completeAttributeName;
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return completeAttributeNameBefore;
-        }
-        return completeEnd(code19);
-      }
-      function completeAttributeName(code19) {
-        if (code19 === 45 || code19 === 46 || code19 === 58 || code19 === 95 || asciiAlphanumeric2(code19)) {
-          effects.consume(code19);
-          return completeAttributeName;
-        }
-        return completeAttributeNameAfter(code19);
-      }
-      function completeAttributeNameAfter(code19) {
-        if (code19 === 61) {
-          effects.consume(code19);
-          return completeAttributeValueBefore;
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return completeAttributeNameAfter;
-        }
-        return completeAttributeNameBefore(code19);
-      }
-      function completeAttributeValueBefore(code19) {
-        if (code19 === null || code19 === 60 || code19 === 61 || code19 === 62 || code19 === 96) {
-          return nok(code19);
-        }
-        if (code19 === 34 || code19 === 39) {
-          effects.consume(code19);
-          marker = code19;
-          return completeAttributeValueQuoted;
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return completeAttributeValueBefore;
-        }
-        marker = void 0;
-        return completeAttributeValueUnquoted(code19);
-      }
-      function completeAttributeValueQuoted(code19) {
-        if (code19 === marker) {
-          effects.consume(code19);
-          return completeAttributeValueQuotedAfter;
-        }
-        if (code19 === null || markdownLineEnding2(code19)) {
-          return nok(code19);
-        }
-        effects.consume(code19);
-        return completeAttributeValueQuoted;
-      }
-      function completeAttributeValueUnquoted(code19) {
-        if (code19 === null || code19 === 34 || code19 === 39 || code19 === 60 || code19 === 61 || code19 === 62 || code19 === 96 || markdownLineEndingOrSpace2(code19)) {
-          return completeAttributeNameAfter(code19);
-        }
-        effects.consume(code19);
-        return completeAttributeValueUnquoted;
-      }
-      function completeAttributeValueQuotedAfter(code19) {
-        if (code19 === 47 || code19 === 62 || markdownSpace2(code19)) {
-          return completeAttributeNameBefore(code19);
-        }
-        return nok(code19);
-      }
-      function completeEnd(code19) {
-        if (code19 === 62) {
-          effects.consume(code19);
-          return completeAfter;
-        }
-        return nok(code19);
-      }
-      function completeAfter(code19) {
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return completeAfter;
-        }
-        return code19 === null || markdownLineEnding2(code19) ? continuation(code19) : nok(code19);
-      }
-      function continuation(code19) {
-        if (code19 === 45 && kind === 2) {
-          effects.consume(code19);
-          return continuationCommentInside;
-        }
-        if (code19 === 60 && kind === 1) {
-          effects.consume(code19);
-          return continuationRawTagOpen;
-        }
-        if (code19 === 62 && kind === 4) {
-          effects.consume(code19);
-          return continuationClose;
-        }
-        if (code19 === 63 && kind === 3) {
-          effects.consume(code19);
-          return continuationDeclarationInside;
-        }
-        if (code19 === 93 && kind === 5) {
-          effects.consume(code19);
-          return continuationCharacterDataInside;
-        }
-        if (markdownLineEnding2(code19) && (kind === 6 || kind === 7)) {
-          return effects.check(
-            nextBlankConstruct,
-            continuationClose,
-            continuationAtLineEnding
-          )(code19);
-        }
-        if (code19 === null || markdownLineEnding2(code19)) {
-          return continuationAtLineEnding(code19);
-        }
-        effects.consume(code19);
-        return continuation;
-      }
-      function continuationAtLineEnding(code19) {
-        effects.exit("htmlFlowData");
-        return htmlContinueStart(code19);
-      }
-      function htmlContinueStart(code19) {
-        if (code19 === null) {
-          return done(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return htmlContinueStart;
-        }
-        effects.enter("htmlFlowData");
-        return continuation(code19);
-      }
-      function continuationCommentInside(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return continuationDeclarationInside;
-        }
-        return continuation(code19);
-      }
-      function continuationRawTagOpen(code19) {
-        if (code19 === 47) {
-          effects.consume(code19);
-          buffer3 = "";
-          return continuationRawEndTag;
-        }
-        return continuation(code19);
-      }
-      function continuationRawEndTag(code19) {
-        if (code19 === 62 && htmlRawNames2.indexOf(buffer3.toLowerCase()) > -1) {
-          effects.consume(code19);
-          return continuationClose;
-        }
-        if (asciiAlpha2(code19) && buffer3.length < 8) {
-          effects.consume(code19);
-          buffer3 += fromCharCode(code19);
-          return continuationRawEndTag;
-        }
-        return continuation(code19);
-      }
-      function continuationCharacterDataInside(code19) {
-        if (code19 === 93) {
-          effects.consume(code19);
-          return continuationDeclarationInside;
-        }
-        return continuation(code19);
-      }
-      function continuationDeclarationInside(code19) {
-        if (code19 === 62) {
-          effects.consume(code19);
-          return continuationClose;
-        }
-        return continuation(code19);
-      }
-      function continuationClose(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("htmlFlowData");
-          return done(code19);
-        }
-        effects.consume(code19);
-        return continuationClose;
-      }
-      function done(code19) {
-        effects.exit("htmlFlow");
-        return ok2(code19);
-      }
-    }
-    function tokenizeNextBlank(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        effects.exit("htmlFlowData");
-        effects.enter("lineEndingBlank");
-        effects.consume(code19);
-        effects.exit("lineEndingBlank");
-        return effects.attempt(partialBlankLine, ok2, nok);
-      }
-    }
-    module.exports = htmlFlow2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/html-text.js
-var require_html_text = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/html-text.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiAlpha2 = require_ascii_alpha2();
-    var asciiAlphanumeric2 = require_ascii_alphanumeric2();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var markdownSpace2 = require_markdown_space3();
-    var factorySpace2 = require_factory_space3();
-    var htmlText2 = {
-      name: "htmlText",
-      tokenize: tokenizeHtmlText2
-    };
-    function tokenizeHtmlText2(effects, ok2, nok) {
-      var self = this;
-      var marker;
-      var buffer3;
-      var index;
-      var returnState;
-      return start;
-      function start(code19) {
-        effects.enter("htmlText");
-        effects.enter("htmlTextData");
-        effects.consume(code19);
-        return open;
-      }
-      function open(code19) {
-        if (code19 === 33) {
-          effects.consume(code19);
-          return declarationOpen;
-        }
-        if (code19 === 47) {
-          effects.consume(code19);
-          return tagCloseStart;
-        }
-        if (code19 === 63) {
-          effects.consume(code19);
-          return instruction;
-        }
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          return tagOpen;
-        }
-        return nok(code19);
-      }
-      function declarationOpen(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return commentOpen;
-        }
-        if (code19 === 91) {
-          effects.consume(code19);
-          buffer3 = "CDATA[";
-          index = 0;
-          return cdataOpen;
-        }
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          return declaration;
-        }
-        return nok(code19);
-      }
-      function commentOpen(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return commentStart;
-        }
-        return nok(code19);
-      }
-      function commentStart(code19) {
-        if (code19 === null || code19 === 62) {
-          return nok(code19);
-        }
-        if (code19 === 45) {
-          effects.consume(code19);
-          return commentStartDash;
-        }
-        return comment(code19);
-      }
-      function commentStartDash(code19) {
-        if (code19 === null || code19 === 62) {
-          return nok(code19);
-        }
-        return comment(code19);
-      }
-      function comment(code19) {
-        if (code19 === null) {
-          return nok(code19);
-        }
-        if (code19 === 45) {
-          effects.consume(code19);
-          return commentClose;
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = comment;
-          return atLineEnding(code19);
-        }
-        effects.consume(code19);
-        return comment;
-      }
-      function commentClose(code19) {
-        if (code19 === 45) {
-          effects.consume(code19);
-          return end;
-        }
-        return comment(code19);
-      }
-      function cdataOpen(code19) {
-        if (code19 === buffer3.charCodeAt(index++)) {
-          effects.consume(code19);
-          return index === buffer3.length ? cdata : cdataOpen;
-        }
-        return nok(code19);
-      }
-      function cdata(code19) {
-        if (code19 === null) {
-          return nok(code19);
-        }
-        if (code19 === 93) {
-          effects.consume(code19);
-          return cdataClose;
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = cdata;
-          return atLineEnding(code19);
-        }
-        effects.consume(code19);
-        return cdata;
-      }
-      function cdataClose(code19) {
-        if (code19 === 93) {
-          effects.consume(code19);
-          return cdataEnd;
-        }
-        return cdata(code19);
-      }
-      function cdataEnd(code19) {
-        if (code19 === 62) {
-          return end(code19);
-        }
-        if (code19 === 93) {
-          effects.consume(code19);
-          return cdataEnd;
-        }
-        return cdata(code19);
-      }
-      function declaration(code19) {
-        if (code19 === null || code19 === 62) {
-          return end(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = declaration;
-          return atLineEnding(code19);
-        }
-        effects.consume(code19);
-        return declaration;
-      }
-      function instruction(code19) {
-        if (code19 === null) {
-          return nok(code19);
-        }
-        if (code19 === 63) {
-          effects.consume(code19);
-          return instructionClose;
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = instruction;
-          return atLineEnding(code19);
-        }
-        effects.consume(code19);
-        return instruction;
-      }
-      function instructionClose(code19) {
-        return code19 === 62 ? end(code19) : instruction(code19);
-      }
-      function tagCloseStart(code19) {
-        if (asciiAlpha2(code19)) {
-          effects.consume(code19);
-          return tagClose;
-        }
-        return nok(code19);
-      }
-      function tagClose(code19) {
-        if (code19 === 45 || asciiAlphanumeric2(code19)) {
-          effects.consume(code19);
-          return tagClose;
-        }
-        return tagCloseBetween(code19);
-      }
-      function tagCloseBetween(code19) {
-        if (markdownLineEnding2(code19)) {
-          returnState = tagCloseBetween;
-          return atLineEnding(code19);
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return tagCloseBetween;
-        }
-        return end(code19);
-      }
-      function tagOpen(code19) {
-        if (code19 === 45 || asciiAlphanumeric2(code19)) {
-          effects.consume(code19);
-          return tagOpen;
-        }
-        if (code19 === 47 || code19 === 62 || markdownLineEndingOrSpace2(code19)) {
-          return tagOpenBetween(code19);
-        }
-        return nok(code19);
-      }
-      function tagOpenBetween(code19) {
-        if (code19 === 47) {
-          effects.consume(code19);
-          return end;
-        }
-        if (code19 === 58 || code19 === 95 || asciiAlpha2(code19)) {
-          effects.consume(code19);
-          return tagOpenAttributeName;
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = tagOpenBetween;
-          return atLineEnding(code19);
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return tagOpenBetween;
-        }
-        return end(code19);
-      }
-      function tagOpenAttributeName(code19) {
-        if (code19 === 45 || code19 === 46 || code19 === 58 || code19 === 95 || asciiAlphanumeric2(code19)) {
-          effects.consume(code19);
-          return tagOpenAttributeName;
-        }
-        return tagOpenAttributeNameAfter(code19);
-      }
-      function tagOpenAttributeNameAfter(code19) {
-        if (code19 === 61) {
-          effects.consume(code19);
-          return tagOpenAttributeValueBefore;
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = tagOpenAttributeNameAfter;
-          return atLineEnding(code19);
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return tagOpenAttributeNameAfter;
-        }
-        return tagOpenBetween(code19);
-      }
-      function tagOpenAttributeValueBefore(code19) {
-        if (code19 === null || code19 === 60 || code19 === 61 || code19 === 62 || code19 === 96) {
-          return nok(code19);
-        }
-        if (code19 === 34 || code19 === 39) {
-          effects.consume(code19);
-          marker = code19;
-          return tagOpenAttributeValueQuoted;
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = tagOpenAttributeValueBefore;
-          return atLineEnding(code19);
-        }
-        if (markdownSpace2(code19)) {
-          effects.consume(code19);
-          return tagOpenAttributeValueBefore;
-        }
-        effects.consume(code19);
-        marker = void 0;
-        return tagOpenAttributeValueUnquoted;
-      }
-      function tagOpenAttributeValueQuoted(code19) {
-        if (code19 === marker) {
-          effects.consume(code19);
-          return tagOpenAttributeValueQuotedAfter;
-        }
-        if (code19 === null) {
-          return nok(code19);
-        }
-        if (markdownLineEnding2(code19)) {
-          returnState = tagOpenAttributeValueQuoted;
-          return atLineEnding(code19);
-        }
-        effects.consume(code19);
-        return tagOpenAttributeValueQuoted;
-      }
-      function tagOpenAttributeValueQuotedAfter(code19) {
-        if (code19 === 62 || code19 === 47 || markdownLineEndingOrSpace2(code19)) {
-          return tagOpenBetween(code19);
-        }
-        return nok(code19);
-      }
-      function tagOpenAttributeValueUnquoted(code19) {
-        if (code19 === null || code19 === 34 || code19 === 39 || code19 === 60 || code19 === 61 || code19 === 96) {
-          return nok(code19);
-        }
-        if (code19 === 62 || markdownLineEndingOrSpace2(code19)) {
-          return tagOpenBetween(code19);
-        }
-        effects.consume(code19);
-        return tagOpenAttributeValueUnquoted;
-      }
-      function atLineEnding(code19) {
-        effects.exit("htmlTextData");
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return factorySpace2(
-          effects,
-          afterPrefix,
-          "linePrefix",
-          self.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4
-        );
-      }
-      function afterPrefix(code19) {
-        effects.enter("htmlTextData");
-        return returnState(code19);
-      }
-      function end(code19) {
-        if (code19 === 62) {
-          effects.consume(code19);
-          effects.exit("htmlTextData");
-          effects.exit("htmlText");
-          return ok2;
-        }
-        return nok(code19);
-      }
-    }
-    module.exports = htmlText2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/label-end.js
-var require_label_end = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/label-end.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEndingOrSpace2 = require_markdown_line_ending_or_space3();
-    var chunkedPush2 = require_chunked_push();
-    var chunkedSplice = require_chunked_splice3();
-    var normalizeIdentifier2 = require_normalize_identifier();
-    var resolveAll2 = require_resolve_all2();
-    var shallow = require_shallow2();
-    var factoryDestination2 = require_factory_destination();
-    var factoryLabel3 = require_factory_label();
-    var factoryTitle2 = require_factory_title();
-    var factoryWhitespace2 = require_factory_whitespace();
-    var labelEnd2 = {
-      name: "labelEnd",
-      tokenize: tokenizeLabelEnd2,
-      resolveTo: resolveToLabelEnd2,
-      resolveAll: resolveAllLabelEnd2
-    };
-    var resourceConstruct2 = {
-      tokenize: tokenizeResource2
-    };
-    var fullReferenceConstruct = {
-      tokenize: tokenizeFullReference
-    };
-    var collapsedReferenceConstruct = {
-      tokenize: tokenizeCollapsedReference
-    };
-    function resolveAllLabelEnd2(events) {
-      var index = -1;
-      var token3;
-      while (++index < events.length) {
-        token3 = events[index][1];
-        if (!token3._used && (token3.type === "labelImage" || token3.type === "labelLink" || token3.type === "labelEnd")) {
-          events.splice(index + 1, token3.type === "labelImage" ? 4 : 2);
-          token3.type = "data";
-          index++;
-        }
-      }
-      return events;
-    }
-    function resolveToLabelEnd2(events, context) {
-      var index = events.length;
-      var offset = 0;
-      var group2;
-      var label5;
-      var text5;
-      var token3;
-      var open;
-      var close;
-      var media;
-      while (index--) {
-        token3 = events[index][1];
-        if (open) {
-          if (token3.type === "link" || token3.type === "labelLink" && token3._inactive) {
-            break;
-          }
-          if (events[index][0] === "enter" && token3.type === "labelLink") {
-            token3._inactive = true;
-          }
-        } else if (close) {
-          if (events[index][0] === "enter" && (token3.type === "labelImage" || token3.type === "labelLink") && !token3._balanced) {
-            open = index;
-            if (token3.type !== "labelLink") {
-              offset = 2;
-              break;
+            if (closeNote(p7)) {
+              p7++;
+              textStart = p7;
+            } else {
+              textStart = p7;
+              p7++;
             }
+          } else {
+            p7++;
           }
-        } else if (token3.type === "labelEnd") {
-          close = index;
-        }
-      }
-      group2 = {
-        type: events[open][1].type === "labelLink" ? "link" : "image",
-        start: shallow(events[open][1].start),
-        end: shallow(events[events.length - 1][1].end)
-      };
-      label5 = {
-        type: "label",
-        start: shallow(events[open][1].start),
-        end: shallow(events[close][1].end)
-      };
-      text5 = {
-        type: "labelText",
-        start: shallow(events[open + offset + 2][1].end),
-        end: shallow(events[close - 2][1].start)
-      };
-      media = [
-        ["enter", group2, context],
-        ["enter", label5, context]
-      ];
-      media = chunkedPush2(media, events.slice(open + 1, open + offset + 3));
-      media = chunkedPush2(media, [["enter", text5, context]]);
-      media = chunkedPush2(
-        media,
-        resolveAll2(
-          context.parser.constructs.insideSpan.null,
-          events.slice(open + offset + 4, close - 3),
-          context
-        )
-      );
-      media = chunkedPush2(media, [
-        ["exit", text5, context],
-        events[close - 2],
-        events[close - 1],
-        ["exit", label5, context]
-      ]);
-      media = chunkedPush2(media, events.slice(close + 1));
-      media = chunkedPush2(media, [["exit", group2, context]]);
-      chunkedSplice(events, open, events.length, media);
-      return events;
-    }
-    function tokenizeLabelEnd2(effects, ok2, nok) {
-      var self = this;
-      var index = self.events.length;
-      var labelStart;
-      var defined;
-      while (index--) {
-        if ((self.events[index][1].type === "labelImage" || self.events[index][1].type === "labelLink") && !self.events[index][1]._balanced) {
-          labelStart = self.events[index][1];
           break;
         }
-      }
-      return start;
-      function start(code19) {
-        if (!labelStart) {
-          return nok(code19);
-        }
-        if (labelStart._inactive) return balanced2(code19);
-        defined = self.parser.defined.indexOf(
-          normalizeIdentifier2(
-            self.sliceSerialize({
-              start: labelStart.end,
-              end: self.now()
-            })
-          )
-        ) > -1;
-        effects.enter("labelEnd");
-        effects.enter("labelMarker");
-        effects.consume(code19);
-        effects.exit("labelMarker");
-        effects.exit("labelEnd");
-        return afterLabelEnd;
-      }
-      function afterLabelEnd(code19) {
-        if (code19 === 40) {
-          return effects.attempt(
-            resourceConstruct2,
-            ok2,
-            defined ? ok2 : balanced2
-          )(code19);
-        }
-        if (code19 === 91) {
-          return effects.attempt(
-            fullReferenceConstruct,
-            ok2,
-            defined ? effects.attempt(collapsedReferenceConstruct, ok2, balanced2) : balanced2
-          )(code19);
-        }
-        return defined ? ok2(code19) : balanced2(code19);
-      }
-      function balanced2(code19) {
-        labelStart._balanced = true;
-        return nok(code19);
-      }
-    }
-    function tokenizeResource2(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        effects.enter("resource");
-        effects.enter("resourceMarker");
-        effects.consume(code19);
-        effects.exit("resourceMarker");
-        return factoryWhitespace2(effects, open);
-      }
-      function open(code19) {
-        if (code19 === 41) {
-          return end(code19);
-        }
-        return factoryDestination2(
-          effects,
-          destinationAfter,
-          nok,
-          "resourceDestination",
-          "resourceDestinationLiteral",
-          "resourceDestinationLiteralMarker",
-          "resourceDestinationRaw",
-          "resourceDestinationString",
-          3
-        )(code19);
-      }
-      function destinationAfter(code19) {
-        return markdownLineEndingOrSpace2(code19) ? factoryWhitespace2(effects, between)(code19) : end(code19);
-      }
-      function between(code19) {
-        if (code19 === 34 || code19 === 39 || code19 === 40) {
-          return factoryTitle2(
-            effects,
-            factoryWhitespace2(effects, end),
-            nok,
-            "resourceTitle",
-            "resourceTitleMarker",
-            "resourceTitleString"
-          )(code19);
-        }
-        return end(code19);
-      }
-      function end(code19) {
-        if (code19 === 41) {
-          effects.enter("resourceMarker");
-          effects.consume(code19);
-          effects.exit("resourceMarker");
-          effects.exit("resource");
-          return ok2;
-        }
-        return nok(code19);
-      }
-    }
-    function tokenizeFullReference(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code19) {
-        return factoryLabel3.call(
-          self,
-          effects,
-          afterLabel,
-          nok,
-          "reference",
-          "referenceMarker",
-          "referenceString"
-        )(code19);
-      }
-      function afterLabel(code19) {
-        return self.parser.defined.indexOf(
-          normalizeIdentifier2(
-            self.sliceSerialize(self.events[self.events.length - 1][1]).slice(1, -1)
-          )
-        ) < 0 ? nok(code19) : ok2(code19);
-      }
-    }
-    function tokenizeCollapsedReference(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        effects.enter("reference");
-        effects.enter("referenceMarker");
-        effects.consume(code19);
-        effects.exit("referenceMarker");
-        return open;
-      }
-      function open(code19) {
-        if (code19 === 93) {
-          effects.enter("referenceMarker");
-          effects.consume(code19);
-          effects.exit("referenceMarker");
-          effects.exit("reference");
-          return ok2;
-        }
-        return nok(code19);
-      }
-    }
-    module.exports = labelEnd2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/label-start-image.js
-var require_label_start_image = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/label-start-image.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var labelEnd2 = require_label_end();
-    var labelStartImage2 = {
-      name: "labelStartImage",
-      tokenize: tokenizeLabelStartImage2,
-      resolveAll: labelEnd2.resolveAll
-    };
-    function tokenizeLabelStartImage2(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code19) {
-        effects.enter("labelImage");
-        effects.enter("labelImageMarker");
-        effects.consume(code19);
-        effects.exit("labelImageMarker");
-        return open;
-      }
-      function open(code19) {
-        if (code19 === 91) {
-          effects.enter("labelMarker");
-          effects.consume(code19);
-          effects.exit("labelMarker");
-          effects.exit("labelImage");
-          return after;
-        }
-        return nok(code19);
-      }
-      function after(code19) {
-        return code19 === 94 && /* c8 ignore next */
-        "_hiddenFootnoteSupport" in self.parser.constructs ? (
-          /* c8 ignore next */
-          nok(code19)
-        ) : ok2(code19);
-      }
-    }
-    module.exports = labelStartImage2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/label-start-link.js
-var require_label_start_link = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/label-start-link.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var labelEnd2 = require_label_end();
-    var labelStartLink2 = {
-      name: "labelStartLink",
-      tokenize: tokenizeLabelStartLink2,
-      resolveAll: labelEnd2.resolveAll
-    };
-    function tokenizeLabelStartLink2(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code19) {
-        effects.enter("labelLink");
-        effects.enter("labelMarker");
-        effects.consume(code19);
-        effects.exit("labelMarker");
-        effects.exit("labelLink");
-        return after;
-      }
-      function after(code19) {
-        return code19 === 94 && /* c8 ignore next */
-        "_hiddenFootnoteSupport" in self.parser.constructs ? (
-          /* c8 ignore next */
-          nok(code19)
-        ) : ok2(code19);
-      }
-    }
-    module.exports = labelStartLink2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/line-ending.js
-var require_line_ending = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/line-ending.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var factorySpace2 = require_factory_space3();
-    var lineEnding2 = {
-      name: "lineEnding",
-      tokenize: tokenizeLineEnding2
-    };
-    function tokenizeLineEnding2(effects, ok2) {
-      return start;
-      function start(code19) {
-        effects.enter("lineEnding");
-        effects.consume(code19);
-        effects.exit("lineEnding");
-        return factorySpace2(effects, ok2, "linePrefix");
-      }
-    }
-    module.exports = lineEnding2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/thematic-break.js
-var require_thematic_break = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/thematic-break.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var markdownSpace2 = require_markdown_space3();
-    var factorySpace2 = require_factory_space3();
-    var thematicBreak2 = {
-      name: "thematicBreak",
-      tokenize: tokenizeThematicBreak2
-    };
-    function tokenizeThematicBreak2(effects, ok2, nok) {
-      var size = 0;
-      var marker;
-      return start;
-      function start(code19) {
-        effects.enter("thematicBreak");
-        marker = code19;
-        return atBreak(code19);
-      }
-      function atBreak(code19) {
-        if (code19 === marker) {
-          effects.enter("thematicBreakSequence");
-          return sequence(code19);
-        }
-        if (markdownSpace2(code19)) {
-          return factorySpace2(effects, atBreak, "whitespace")(code19);
-        }
-        if (size < 3 || code19 !== null && !markdownLineEnding2(code19)) {
-          return nok(code19);
-        }
-        effects.exit("thematicBreak");
-        return ok2(code19);
-      }
-      function sequence(code19) {
-        if (code19 === marker) {
-          effects.consume(code19);
-          size++;
-          return sequence;
-        }
-        effects.exit("thematicBreakSequence");
-        return atBreak(code19);
-      }
-    }
-    module.exports = thematicBreak2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/list.js
-var require_list = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/list.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var asciiDigit2 = require_ascii_digit();
-    var markdownSpace2 = require_markdown_space3();
-    var prefixSize = require_prefix_size2();
-    var sizeChunks = require_size_chunks2();
-    var factorySpace2 = require_factory_space3();
-    var partialBlankLine = require_partial_blank_line();
-    var thematicBreak2 = require_thematic_break();
-    var list3 = {
-      name: "list",
-      tokenize: tokenizeListStart2,
-      continuation: {
-        tokenize: tokenizeListContinuation2
-      },
-      exit: tokenizeListEnd2
-    };
-    var listItemPrefixWhitespaceConstruct2 = {
-      tokenize: tokenizeListItemPrefixWhitespace2,
-      partial: true
-    };
-    var indentConstruct2 = {
-      tokenize: tokenizeIndent3,
-      partial: true
-    };
-    function tokenizeListStart2(effects, ok2, nok) {
-      var self = this;
-      var initialSize = prefixSize(self.events, "linePrefix");
-      var size = 0;
-      return start;
-      function start(code19) {
-        var kind = self.containerState.type || (code19 === 42 || code19 === 43 || code19 === 45 ? "listUnordered" : "listOrdered");
-        if (kind === "listUnordered" ? !self.containerState.marker || code19 === self.containerState.marker : asciiDigit2(code19)) {
-          if (!self.containerState.type) {
-            self.containerState.type = kind;
-            effects.enter(kind, {
-              _container: true
-            });
+        const opener = brN - 1;
+        if (!brActive[opener]) {
+          brN--;
+          if (ntN > 0) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
+            }
+            if (closeNote(p7)) {
+              p7++;
+              textStart = p7;
+            } else {
+              textStart = p7;
+              p7++;
+            }
+          } else {
+            p7++;
           }
-          if (kind === "listUnordered") {
-            effects.enter("listItemPrefix");
-            return code19 === 42 || code19 === 45 ? effects.check(thematicBreak2, nok, atMarker)(code19) : atMarker(code19);
-          }
-          if (!self.interrupt || code19 === 49) {
-            effects.enter("listItemPrefix");
-            effects.enter("listItemValue");
-            return inside(code19);
-          }
-        }
-        return nok(code19);
-      }
-      function inside(code19) {
-        if (asciiDigit2(code19) && ++size < 10) {
-          effects.consume(code19);
-          return inside;
-        }
-        if ((!self.interrupt || size < 2) && (self.containerState.marker ? code19 === self.containerState.marker : code19 === 41 || code19 === 46)) {
-          effects.exit("listItemValue");
-          return atMarker(code19);
-        }
-        return nok(code19);
-      }
-      function atMarker(code19) {
-        effects.enter("listItemMarker");
-        effects.consume(code19);
-        effects.exit("listItemMarker");
-        self.containerState.marker = self.containerState.marker || code19;
-        return effects.check(
-          partialBlankLine,
-          // Can’t be empty when interrupting.
-          self.interrupt ? nok : onBlank,
-          effects.attempt(
-            listItemPrefixWhitespaceConstruct2,
-            endOfPrefix,
-            otherPrefix
-          )
-        );
-      }
-      function onBlank(code19) {
-        self.containerState.initialBlankLine = true;
-        initialSize++;
-        return endOfPrefix(code19);
-      }
-      function otherPrefix(code19) {
-        if (markdownSpace2(code19)) {
-          effects.enter("listItemPrefixWhitespace");
-          effects.consume(code19);
-          effects.exit("listItemPrefixWhitespace");
-          return endOfPrefix;
-        }
-        return nok(code19);
-      }
-      function endOfPrefix(code19) {
-        self.containerState.size = initialSize + sizeChunks(self.sliceStream(effects.exit("listItemPrefix")));
-        return ok2(code19);
-      }
-    }
-    function tokenizeListContinuation2(effects, ok2, nok) {
-      var self = this;
-      self.containerState._closeFlow = void 0;
-      return effects.check(partialBlankLine, onBlank, notBlank);
-      function onBlank(code19) {
-        self.containerState.furtherBlankLines = self.containerState.furtherBlankLines || self.containerState.initialBlankLine;
-        return factorySpace2(
-          effects,
-          ok2,
-          "listItemIndent",
-          self.containerState.size + 1
-        )(code19);
-      }
-      function notBlank(code19) {
-        if (self.containerState.furtherBlankLines || !markdownSpace2(code19)) {
-          self.containerState.furtherBlankLines = self.containerState.initialBlankLine = void 0;
-          return notInCurrentItem(code19);
-        }
-        self.containerState.furtherBlankLines = self.containerState.initialBlankLine = void 0;
-        return effects.attempt(indentConstruct2, ok2, notInCurrentItem)(code19);
-      }
-      function notInCurrentItem(code19) {
-        self.containerState._closeFlow = true;
-        self.interrupt = void 0;
-        return factorySpace2(
-          effects,
-          effects.attempt(list3, ok2, nok),
-          "linePrefix",
-          self.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4
-        )(code19);
-      }
-    }
-    function tokenizeIndent3(effects, ok2, nok) {
-      var self = this;
-      return factorySpace2(
-        effects,
-        afterPrefix,
-        "listItemIndent",
-        self.containerState.size + 1
-      );
-      function afterPrefix(code19) {
-        return prefixSize(self.events, "listItemIndent") === self.containerState.size ? ok2(code19) : nok(code19);
-      }
-    }
-    function tokenizeListEnd2(effects) {
-      effects.exit(this.containerState.type);
-    }
-    function tokenizeListItemPrefixWhitespace2(effects, ok2, nok) {
-      var self = this;
-      return factorySpace2(
-        effects,
-        afterPrefix,
-        "listItemPrefixWhitespace",
-        self.parser.constructs.disable.null.indexOf("codeIndented") > -1 ? void 0 : 4 + 1
-      );
-      function afterPrefix(code19) {
-        return markdownSpace2(code19) || !prefixSize(self.events, "listItemPrefixWhitespace") ? nok(code19) : ok2(code19);
-      }
-    }
-    module.exports = list3;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/setext-underline.js
-var require_setext_underline = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/tokenize/setext-underline.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending2();
-    var shallow = require_shallow2();
-    var factorySpace2 = require_factory_space3();
-    var setextUnderline2 = {
-      name: "setextUnderline",
-      tokenize: tokenizeSetextUnderline2,
-      resolveTo: resolveToSetextUnderline2
-    };
-    function resolveToSetextUnderline2(events, context) {
-      var index = events.length;
-      var content3;
-      var text5;
-      var definition2;
-      var heading2;
-      while (index--) {
-        if (events[index][0] === "enter") {
-          if (events[index][1].type === "content") {
-            content3 = index;
-            break;
-          }
-          if (events[index][1].type === "paragraph") {
-            text5 = index;
-          }
-        } else {
-          if (events[index][1].type === "content") {
-            events.splice(index, 1);
-          }
-          if (!definition2 && events[index][1].type === "definition") {
-            definition2 = index;
-          }
-        }
-      }
-      heading2 = {
-        type: "setextHeading",
-        start: shallow(events[text5][1].start),
-        end: shallow(events[events.length - 1][1].end)
-      };
-      events[text5][1].type = "setextHeadingText";
-      if (definition2) {
-        events.splice(text5, 0, ["enter", heading2, context]);
-        events.splice(definition2 + 1, 0, ["exit", events[content3][1], context]);
-        events[content3][1].end = shallow(events[definition2][1].end);
-      } else {
-        events[content3][1] = heading2;
-      }
-      events.push(["exit", heading2, context]);
-      return events;
-    }
-    function tokenizeSetextUnderline2(effects, ok2, nok) {
-      var self = this;
-      var index = self.events.length;
-      var marker;
-      var paragraph2;
-      while (index--) {
-        if (self.events[index][1].type !== "lineEnding" && self.events[index][1].type !== "linePrefix" && self.events[index][1].type !== "content") {
-          paragraph2 = self.events[index][1].type === "paragraph";
           break;
         }
-      }
-      return start;
-      function start(code19) {
-        if (!self.lazy && (self.interrupt || paragraph2)) {
-          effects.enter("setextHeadingLine");
-          effects.enter("setextHeadingLineSequence");
-          marker = code19;
-          return closingSequence(code19);
-        }
-        return nok(code19);
-      }
-      function closingSequence(code19) {
-        if (code19 === marker) {
-          effects.consume(code19);
-          return closingSequence;
-        }
-        effects.exit("setextHeadingLineSequence");
-        return factorySpace2(effects, closingSequenceEnd, "lineSuffix")(code19);
-      }
-      function closingSequenceEnd(code19) {
-        if (code19 === null || markdownLineEnding2(code19)) {
-          effects.exit("setextHeadingLine");
-          return ok2(code19);
-        }
-        return nok(code19);
-      }
-    }
-    module.exports = setextUnderline2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constructs.js
-var require_constructs = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/constructs.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    var text$1 = require_text();
-    var attention2 = require_attention();
-    var autolink3 = require_autolink();
-    var blockQuote2 = require_block_quote();
-    var characterEscape2 = require_character_escape();
-    var characterReference2 = require_character_reference();
-    var codeFenced2 = require_code_fenced();
-    var codeIndented2 = require_code_indented();
-    var codeText2 = require_code_text();
-    var definition2 = require_definition();
-    var hardBreakEscape2 = require_hard_break_escape();
-    var headingAtx2 = require_heading_atx();
-    var htmlFlow2 = require_html_flow();
-    var htmlText2 = require_html_text();
-    var labelEnd2 = require_label_end();
-    var labelStartImage2 = require_label_start_image();
-    var labelStartLink2 = require_label_start_link();
-    var lineEnding2 = require_line_ending();
-    var list3 = require_list();
-    var setextUnderline2 = require_setext_underline();
-    var thematicBreak2 = require_thematic_break();
-    var document4 = {
-      42: list3,
-      // Asterisk
-      43: list3,
-      // Plus sign
-      45: list3,
-      // Dash
-      48: list3,
-      // 0
-      49: list3,
-      // 1
-      50: list3,
-      // 2
-      51: list3,
-      // 3
-      52: list3,
-      // 4
-      53: list3,
-      // 5
-      54: list3,
-      // 6
-      55: list3,
-      // 7
-      56: list3,
-      // 8
-      57: list3,
-      // 9
-      62: blockQuote2
-      // Greater than
-    };
-    var contentInitial2 = {
-      91: definition2
-      // Left square bracket
-    };
-    var flowInitial2 = {
-      "-2": codeIndented2,
-      // Horizontal tab
-      "-1": codeIndented2,
-      // Virtual space
-      32: codeIndented2
-      // Space
-    };
-    var flow3 = {
-      35: headingAtx2,
-      // Number sign
-      42: thematicBreak2,
-      // Asterisk
-      45: [setextUnderline2, thematicBreak2],
-      // Dash
-      60: htmlFlow2,
-      // Less than
-      61: setextUnderline2,
-      // Equals to
-      95: thematicBreak2,
-      // Underscore
-      96: codeFenced2,
-      // Grave accent
-      126: codeFenced2
-      // Tilde
-    };
-    var string3 = {
-      38: characterReference2,
-      // Ampersand
-      92: characterEscape2
-      // Backslash
-    };
-    var text5 = {
-      "-5": lineEnding2,
-      // Carriage return
-      "-4": lineEnding2,
-      // Line feed
-      "-3": lineEnding2,
-      // Carriage return + line feed
-      33: labelStartImage2,
-      // Exclamation mark
-      38: characterReference2,
-      // Ampersand
-      42: attention2,
-      // Asterisk
-      60: [autolink3, htmlText2],
-      // Less than
-      91: labelStartLink2,
-      // Left square bracket
-      92: [hardBreakEscape2, characterEscape2],
-      // Backslash
-      93: labelEnd2,
-      // Right square bracket
-      95: attention2,
-      // Underscore
-      96: codeText2
-      // Grave accent
-    };
-    var insideSpan2 = {
-      null: [attention2, text$1.resolver]
-    };
-    var disable2 = {
-      null: []
-    };
-    exports.contentInitial = contentInitial2;
-    exports.disable = disable2;
-    exports.document = document4;
-    exports.flow = flow3;
-    exports.flowInitial = flowInitial2;
-    exports.insideSpan = insideSpan2;
-    exports.string = string3;
-    exports.text = text5;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/parse.js
-var require_parse4 = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/parse.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var content3 = require_content();
-    var document4 = require_document();
-    var flow3 = require_flow();
-    var text5 = require_text();
-    var combineExtensions2 = require_combine_extensions2();
-    var createTokenizer2 = require_create_tokenizer();
-    var miniflat = require_miniflat2();
-    var constructs2 = require_constructs();
-    function parse11(options7) {
-      var settings = options7 || {};
-      var parser = {
-        defined: [],
-        constructs: combineExtensions2(
-          [constructs2].concat(miniflat(settings.extensions))
-        ),
-        content: create(content3),
-        document: create(document4),
-        flow: create(flow3),
-        string: create(text5.string),
-        text: create(text5.text)
-      };
-      return parser;
-      function create(initializer) {
-        return creator;
-        function creator(from) {
-          return createTokenizer2(parser, initializer, from);
-        }
-      }
-    }
-    module.exports = parse11;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/preprocess.js
-var require_preprocess = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/preprocess.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var search2 = /[\0\t\n\r]/g;
-    function preprocess2() {
-      var start = true;
-      var column3 = 1;
-      var buffer3 = "";
-      var atCarriageReturn;
-      return preprocessor;
-      function preprocessor(value, encoding, end) {
-        var chunks = [];
-        var match2;
-        var next;
-        var startPosition;
-        var endPosition;
-        var code19;
-        value = buffer3 + value.toString(encoding);
-        startPosition = 0;
-        buffer3 = "";
-        if (start) {
-          if (value.charCodeAt(0) === 65279) {
-            startPosition++;
-          }
-          start = void 0;
-        }
-        while (startPosition < value.length) {
-          search2.lastIndex = startPosition;
-          match2 = search2.exec(value);
-          endPosition = match2 ? match2.index : value.length;
-          code19 = value.charCodeAt(endPosition);
-          if (!match2) {
-            buffer3 = value.slice(startPosition);
-            break;
-          }
-          if (code19 === 10 && startPosition === endPosition && atCarriageReturn) {
-            chunks.push(-3);
-            atCarriageReturn = void 0;
+        const isImage = brImage[opener];
+        const labelText = buf.slice(brTextStart[opener], p7);
+        const defined = definitions.size > 0 && definitions.has(normalizeIdentifier2(labelText));
+        const next = p7 + 1 < e4 ? buf.charCodeAt(p7 + 1) : -1;
+        let end = -1;
+        let url3 = null;
+        let title = null;
+        let referenceType = -1;
+        let referenceLabel = labelText;
+        if (next === 40) {
+          let q10 = skipWhitespace2(p7 + 2, e4);
+          if (q10 < e4 && buf.charCodeAt(q10) === 41) {
+            url3 = "";
+            end = q10 + 1;
           } else {
-            if (atCarriageReturn) {
-              chunks.push(-5);
-              atCarriageReturn = void 0;
-            }
-            if (startPosition < endPosition) {
-              chunks.push(value.slice(startPosition, endPosition));
-              column3 += endPosition - startPosition;
-            }
-            if (code19 === 0) {
-              chunks.push(65533);
-              column3++;
-            } else if (code19 === 9) {
-              next = Math.ceil(column3 / 4) * 4;
-              chunks.push(-2);
-              while (column3++ < next) chunks.push(-1);
-            } else if (code19 === 10) {
-              chunks.push(-4);
-              column3 = 1;
-            } else {
-              atCarriageReturn = true;
-              column3 = 1;
-            }
-          }
-          startPosition = endPosition + 1;
-        }
-        if (end) {
-          if (atCarriageReturn) chunks.push(-5);
-          if (buffer3) chunks.push(buffer3);
-          chunks.push(null);
-        }
-        return chunks;
-      }
-    }
-    module.exports = preprocess2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/node_modules/micromark/dist/postprocess.js
-var require_postprocess = __commonJS({
-  "node_modules/mdast-util-from-markdown/node_modules/micromark/dist/postprocess.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var subtokenize2 = require_subtokenize();
-    function postprocess2(events) {
-      while (!subtokenize2(events)) {
-      }
-      return events;
-    }
-    module.exports = postprocess2;
-  }
-});
-
-// node_modules/mdast-util-from-markdown/dist/index.js
-var require_dist = __commonJS({
-  "node_modules/mdast-util-from-markdown/dist/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = fromMarkdown;
-    var toString2 = require_mdast_util_to_string();
-    var assign = require_assign2();
-    var own3 = require_has_own_property2();
-    var normalizeIdentifier2 = require_normalize_identifier();
-    var safeFromInt = require_safe_from_int();
-    var parser = require_parse4();
-    var preprocessor = require_preprocess();
-    var postprocess2 = require_postprocess();
-    var decode3 = require_decode_entity();
-    var stringifyPosition = require_unist_util_stringify_position();
-    function fromMarkdown(value, encoding, options7) {
-      if (typeof encoding !== "string") {
-        options7 = encoding;
-        encoding = void 0;
-      }
-      return compiler(options7)(
-        postprocess2(
-          parser(options7).document().write(preprocessor()(value, encoding, true))
-        )
-      );
-    }
-    function compiler(options7) {
-      var settings = options7 || {};
-      var config2 = configure(
-        {
-          transforms: [],
-          canContainEols: [
-            "emphasis",
-            "fragment",
-            "heading",
-            "paragraph",
-            "strong"
-          ],
-          enter: {
-            autolink: opener(link2),
-            autolinkProtocol: onenterdata,
-            autolinkEmail: onenterdata,
-            atxHeading: opener(heading2),
-            blockQuote: opener(blockQuote2),
-            characterEscape: onenterdata,
-            characterReference: onenterdata,
-            codeFenced: opener(codeFlow),
-            codeFencedFenceInfo: buffer3,
-            codeFencedFenceMeta: buffer3,
-            codeIndented: opener(codeFlow, buffer3),
-            codeText: opener(codeText2, buffer3),
-            codeTextData: onenterdata,
-            data: onenterdata,
-            codeFlowValue: onenterdata,
-            definition: opener(definition2),
-            definitionDestinationString: buffer3,
-            definitionLabelString: buffer3,
-            definitionTitleString: buffer3,
-            emphasis: opener(emphasis),
-            hardBreakEscape: opener(hardBreak),
-            hardBreakTrailing: opener(hardBreak),
-            htmlFlow: opener(html, buffer3),
-            htmlFlowData: onenterdata,
-            htmlText: opener(html, buffer3),
-            htmlTextData: onenterdata,
-            image: opener(image2),
-            label: buffer3,
-            link: opener(link2),
-            listItem: opener(listItem),
-            listItemValue: onenterlistitemvalue,
-            listOrdered: opener(list3, onenterlistordered),
-            listUnordered: opener(list3),
-            paragraph: opener(paragraph2),
-            reference: onenterreference,
-            referenceString: buffer3,
-            resourceDestinationString: buffer3,
-            resourceTitleString: buffer3,
-            setextHeading: opener(heading2),
-            strong: opener(strong),
-            thematicBreak: opener(thematicBreak2)
-          },
-          exit: {
-            atxHeading: closer(),
-            atxHeadingSequence: onexitatxheadingsequence,
-            autolink: closer(),
-            autolinkEmail: onexitautolinkemail,
-            autolinkProtocol: onexitautolinkprotocol,
-            blockQuote: closer(),
-            characterEscapeValue: onexitdata,
-            characterReferenceMarkerHexadecimal: onexitcharacterreferencemarker,
-            characterReferenceMarkerNumeric: onexitcharacterreferencemarker,
-            characterReferenceValue: onexitcharacterreferencevalue,
-            codeFenced: closer(onexitcodefenced),
-            codeFencedFence: onexitcodefencedfence,
-            codeFencedFenceInfo: onexitcodefencedfenceinfo,
-            codeFencedFenceMeta: onexitcodefencedfencemeta,
-            codeFlowValue: onexitdata,
-            codeIndented: closer(onexitcodeindented),
-            codeText: closer(onexitcodetext),
-            codeTextData: onexitdata,
-            data: onexitdata,
-            definition: closer(),
-            definitionDestinationString: onexitdefinitiondestinationstring,
-            definitionLabelString: onexitdefinitionlabelstring,
-            definitionTitleString: onexitdefinitiontitlestring,
-            emphasis: closer(),
-            hardBreakEscape: closer(onexithardbreak),
-            hardBreakTrailing: closer(onexithardbreak),
-            htmlFlow: closer(onexithtmlflow),
-            htmlFlowData: onexitdata,
-            htmlText: closer(onexithtmltext),
-            htmlTextData: onexitdata,
-            image: closer(onexitimage),
-            label: onexitlabel,
-            labelText: onexitlabeltext,
-            lineEnding: onexitlineending,
-            link: closer(onexitlink),
-            listItem: closer(),
-            listOrdered: closer(),
-            listUnordered: closer(),
-            paragraph: closer(),
-            referenceString: onexitreferencestring,
-            resourceDestinationString: onexitresourcedestinationstring,
-            resourceTitleString: onexitresourcetitlestring,
-            resource: onexitresource,
-            setextHeading: closer(onexitsetextheading),
-            setextHeadingLineSequence: onexitsetextheadinglinesequence,
-            setextHeadingText: onexitsetextheadingtext,
-            strong: closer(),
-            thematicBreak: closer()
-          }
-        },
-        settings.mdastExtensions || []
-      );
-      var data = {};
-      return compile2;
-      function compile2(events) {
-        var tree = { type: "root", children: [] };
-        var stack3 = [tree];
-        var tokenStack = [];
-        var listStack = [];
-        var index = -1;
-        var handler;
-        var listStart;
-        var context = {
-          stack: stack3,
-          tokenStack,
-          config: config2,
-          enter,
-          exit: exit2,
-          buffer: buffer3,
-          resume,
-          setData,
-          getData
-        };
-        while (++index < events.length) {
-          if (events[index][1].type === "listOrdered" || events[index][1].type === "listUnordered") {
-            if (events[index][0] === "enter") {
-              listStack.push(index);
-            } else {
-              listStart = listStack.pop(index);
-              index = prepareList(events, listStart, index);
-            }
-          }
-        }
-        index = -1;
-        while (++index < events.length) {
-          handler = config2[events[index][0]];
-          if (own3.call(handler, events[index][1].type)) {
-            handler[events[index][1].type].call(
-              assign({ sliceSerialize: events[index][2].sliceSerialize }, context),
-              events[index][1]
-            );
-          }
-        }
-        if (tokenStack.length) {
-          throw new Error(
-            "Cannot close document, a token (`" + tokenStack[tokenStack.length - 1].type + "`, " + stringifyPosition({
-              start: tokenStack[tokenStack.length - 1].start,
-              end: tokenStack[tokenStack.length - 1].end
-            }) + ") is still open"
-          );
-        }
-        tree.position = {
-          start: point(
-            events.length ? events[0][1].start : { line: 1, column: 1, offset: 0 }
-          ),
-          end: point(
-            events.length ? events[events.length - 2][1].end : { line: 1, column: 1, offset: 0 }
-          )
-        };
-        index = -1;
-        while (++index < config2.transforms.length) {
-          tree = config2.transforms[index](tree) || tree;
-        }
-        return tree;
-      }
-      function prepareList(events, start, length) {
-        var index = start - 1;
-        var containerBalance = -1;
-        var listSpread = false;
-        var listItem2;
-        var tailIndex;
-        var lineIndex;
-        var tailEvent;
-        var event;
-        var firstBlankLineIndex;
-        var atMarker;
-        while (++index <= length) {
-          event = events[index];
-          if (event[1].type === "listUnordered" || event[1].type === "listOrdered" || event[1].type === "blockQuote") {
-            if (event[0] === "enter") {
-              containerBalance++;
-            } else {
-              containerBalance--;
-            }
-            atMarker = void 0;
-          } else if (event[1].type === "lineEndingBlank") {
-            if (event[0] === "enter") {
-              if (listItem2 && !atMarker && !containerBalance && !firstBlankLineIndex) {
-                firstBlankLineIndex = index;
-              }
-              atMarker = void 0;
-            }
-          } else if (event[1].type === "linePrefix" || event[1].type === "listItemValue" || event[1].type === "listItemMarker" || event[1].type === "listItemPrefix" || event[1].type === "listItemPrefixWhitespace") {
-          } else {
-            atMarker = void 0;
-          }
-          if (!containerBalance && event[0] === "enter" && event[1].type === "listItemPrefix" || containerBalance === -1 && event[0] === "exit" && (event[1].type === "listUnordered" || event[1].type === "listOrdered")) {
-            if (listItem2) {
-              tailIndex = index;
-              lineIndex = void 0;
-              while (tailIndex--) {
-                tailEvent = events[tailIndex];
-                if (tailEvent[1].type === "lineEnding" || tailEvent[1].type === "lineEndingBlank") {
-                  if (tailEvent[0] === "exit") continue;
-                  if (lineIndex) {
-                    events[lineIndex][1].type = "lineEndingBlank";
-                    listSpread = true;
+            const d4 = scanDestination(q10, e4);
+            if (d4 !== -1) {
+              const ds10 = partStart;
+              const de10 = partEnd;
+              q10 = skipWhitespace2(d4, e4);
+              if (q10 < e4 && buf.charCodeAt(q10) === 41) {
+                url3 = decodeString(buf.slice(ds10, de10));
+                end = q10 + 1;
+              } else if (q10 > d4) {
+                const t42 = scanTitle(q10, e4);
+                if (t42 !== -1) {
+                  const ts11 = partStart;
+                  const te11 = partEnd;
+                  q10 = skipWhitespace2(t42, e4);
+                  if (q10 < e4 && buf.charCodeAt(q10) === 41) {
+                    url3 = decodeString(buf.slice(ds10, de10));
+                    title = te11 > ts11 ? decodeText(ts11, te11, true) : null;
+                    end = q10 + 1;
                   }
-                  tailEvent[1].type = "lineEnding";
-                  lineIndex = tailIndex;
-                } else if (tailEvent[1].type === "linePrefix" || tailEvent[1].type === "blockQuotePrefix" || tailEvent[1].type === "blockQuotePrefixWhitespace" || tailEvent[1].type === "blockQuoteMarker" || tailEvent[1].type === "listItemIndent") {
-                } else {
-                  break;
                 }
               }
-              if (firstBlankLineIndex && (!lineIndex || firstBlankLineIndex < lineIndex)) {
-                listItem2._spread = true;
-              }
-              listItem2.end = point(
-                lineIndex ? events[lineIndex][1].start : event[1].end
-              );
-              events.splice(lineIndex || index, 0, ["exit", listItem2, event[2]]);
-              index++;
-              length++;
-            }
-            if (event[1].type === "listItemPrefix") {
-              listItem2 = {
-                type: "listItem",
-                _spread: false,
-                start: point(event[1].start)
-              };
-              events.splice(index, 0, ["enter", listItem2, event[2]]);
-              index++;
-              length++;
-              firstBlankLineIndex = void 0;
-              atMarker = true;
             }
           }
-        }
-        events[start][1]._spread = listSpread;
-        return length;
-      }
-      function setData(key3, value) {
-        data[key3] = value;
-      }
-      function getData(key3) {
-        return data[key3];
-      }
-      function point(d4) {
-        return { line: d4.line, column: d4.column, offset: d4.offset };
-      }
-      function opener(create, and) {
-        return open;
-        function open(token3) {
-          enter.call(this, create(token3), token3);
-          if (and) and.call(this, token3);
-        }
-      }
-      function buffer3() {
-        this.stack.push({ type: "fragment", children: [] });
-      }
-      function enter(node, token3) {
-        this.stack[this.stack.length - 1].children.push(node);
-        this.stack.push(node);
-        this.tokenStack.push(token3);
-        node.position = { start: point(token3.start) };
-        return node;
-      }
-      function closer(and) {
-        return close;
-        function close(token3) {
-          if (and) and.call(this, token3);
-          exit2.call(this, token3);
-        }
-      }
-      function exit2(token3) {
-        var node = this.stack.pop();
-        var open = this.tokenStack.pop();
-        if (!open) {
-          throw new Error(
-            "Cannot close `" + token3.type + "` (" + stringifyPosition({ start: token3.start, end: token3.end }) + "): it\u2019s not open"
-          );
-        } else if (open.type !== token3.type) {
-          throw new Error(
-            "Cannot close `" + token3.type + "` (" + stringifyPosition({ start: token3.start, end: token3.end }) + "): a different token (`" + open.type + "`, " + stringifyPosition({ start: open.start, end: open.end }) + ") is open"
-          );
-        }
-        node.position.end = point(token3.end);
-        return node;
-      }
-      function resume() {
-        return toString2(this.stack.pop());
-      }
-      function onenterlistordered() {
-        setData("expectingFirstListItemValue", true);
-      }
-      function onenterlistitemvalue(token3) {
-        if (getData("expectingFirstListItemValue")) {
-          this.stack[this.stack.length - 2].start = parseInt(
-            this.sliceSerialize(token3),
-            10
-          );
-          setData("expectingFirstListItemValue");
-        }
-      }
-      function onexitcodefencedfenceinfo() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].lang = data2;
-      }
-      function onexitcodefencedfencemeta() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].meta = data2;
-      }
-      function onexitcodefencedfence() {
-        if (getData("flowCodeInside")) return;
-        this.buffer();
-        setData("flowCodeInside", true);
-      }
-      function onexitcodefenced() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].value = data2.replace(
-          /^(\r?\n|\r)|(\r?\n|\r)$/g,
-          ""
-        );
-        setData("flowCodeInside");
-      }
-      function onexitcodeindented() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].value = data2;
-      }
-      function onexitdefinitionlabelstring(token3) {
-        var label5 = this.resume();
-        this.stack[this.stack.length - 1].label = label5;
-        this.stack[this.stack.length - 1].identifier = normalizeIdentifier2(
-          this.sliceSerialize(token3)
-        ).toLowerCase();
-      }
-      function onexitdefinitiontitlestring() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].title = data2;
-      }
-      function onexitdefinitiondestinationstring() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].url = data2;
-      }
-      function onexitatxheadingsequence(token3) {
-        if (!this.stack[this.stack.length - 1].depth) {
-          this.stack[this.stack.length - 1].depth = this.sliceSerialize(
-            token3
-          ).length;
-        }
-      }
-      function onexitsetextheadingtext() {
-        setData("setextHeadingSlurpLineEnding", true);
-      }
-      function onexitsetextheadinglinesequence(token3) {
-        this.stack[this.stack.length - 1].depth = this.sliceSerialize(token3).charCodeAt(0) === 61 ? 1 : 2;
-      }
-      function onexitsetextheading() {
-        setData("setextHeadingSlurpLineEnding");
-      }
-      function onenterdata(token3) {
-        var siblings = this.stack[this.stack.length - 1].children;
-        var tail = siblings[siblings.length - 1];
-        if (!tail || tail.type !== "text") {
-          tail = text5();
-          tail.position = { start: point(token3.start) };
-          this.stack[this.stack.length - 1].children.push(tail);
-        }
-        this.stack.push(tail);
-      }
-      function onexitdata(token3) {
-        var tail = this.stack.pop();
-        tail.value += this.sliceSerialize(token3);
-        tail.position.end = point(token3.end);
-      }
-      function onexitlineending(token3) {
-        var context = this.stack[this.stack.length - 1];
-        if (getData("atHardBreak")) {
-          context.children[context.children.length - 1].position.end = point(
-            token3.end
-          );
-          setData("atHardBreak");
-          return;
-        }
-        if (!getData("setextHeadingSlurpLineEnding") && config2.canContainEols.indexOf(context.type) > -1) {
-          onenterdata.call(this, token3);
-          onexitdata.call(this, token3);
-        }
-      }
-      function onexithardbreak() {
-        setData("atHardBreak", true);
-      }
-      function onexithtmlflow() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].value = data2;
-      }
-      function onexithtmltext() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].value = data2;
-      }
-      function onexitcodetext() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].value = data2;
-      }
-      function onexitlink() {
-        var context = this.stack[this.stack.length - 1];
-        if (getData("inReference")) {
-          context.type += "Reference";
-          context.referenceType = getData("referenceType") || "shortcut";
-          delete context.url;
-          delete context.title;
-        } else {
-          delete context.identifier;
-          delete context.label;
-          delete context.referenceType;
-        }
-        setData("referenceType");
-      }
-      function onexitimage() {
-        var context = this.stack[this.stack.length - 1];
-        if (getData("inReference")) {
-          context.type += "Reference";
-          context.referenceType = getData("referenceType") || "shortcut";
-          delete context.url;
-          delete context.title;
-        } else {
-          delete context.identifier;
-          delete context.label;
-          delete context.referenceType;
-        }
-        setData("referenceType");
-      }
-      function onexitlabeltext(token3) {
-        this.stack[this.stack.length - 2].identifier = normalizeIdentifier2(
-          this.sliceSerialize(token3)
-        ).toLowerCase();
-      }
-      function onexitlabel() {
-        var fragment = this.stack[this.stack.length - 1];
-        var value = this.resume();
-        this.stack[this.stack.length - 1].label = value;
-        setData("inReference", true);
-        if (this.stack[this.stack.length - 1].type === "link") {
-          this.stack[this.stack.length - 1].children = fragment.children;
-        } else {
-          this.stack[this.stack.length - 1].alt = value;
-        }
-      }
-      function onexitresourcedestinationstring() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].url = data2;
-      }
-      function onexitresourcetitlestring() {
-        var data2 = this.resume();
-        this.stack[this.stack.length - 1].title = data2;
-      }
-      function onexitresource() {
-        setData("inReference");
-      }
-      function onenterreference() {
-        setData("referenceType", "collapsed");
-      }
-      function onexitreferencestring(token3) {
-        var label5 = this.resume();
-        this.stack[this.stack.length - 1].label = label5;
-        this.stack[this.stack.length - 1].identifier = normalizeIdentifier2(
-          this.sliceSerialize(token3)
-        ).toLowerCase();
-        setData("referenceType", "full");
-      }
-      function onexitcharacterreferencemarker(token3) {
-        setData("characterReferenceType", token3.type);
-      }
-      function onexitcharacterreferencevalue(token3) {
-        var data2 = this.sliceSerialize(token3);
-        var type = getData("characterReferenceType");
-        var value;
-        var tail;
-        if (type) {
-          value = safeFromInt(
-            data2,
-            type === "characterReferenceMarkerNumeric" ? 10 : 16
-          );
-          setData("characterReferenceType");
-        } else {
-          value = decode3(data2);
-        }
-        tail = this.stack.pop();
-        tail.value += value;
-        tail.position.end = point(token3.end);
-      }
-      function onexitautolinkprotocol(token3) {
-        onexitdata.call(this, token3);
-        this.stack[this.stack.length - 1].url = this.sliceSerialize(token3);
-      }
-      function onexitautolinkemail(token3) {
-        onexitdata.call(this, token3);
-        this.stack[this.stack.length - 1].url = "mailto:" + this.sliceSerialize(token3);
-      }
-      function blockQuote2() {
-        return { type: "blockquote", children: [] };
-      }
-      function codeFlow() {
-        return { type: "code", lang: null, meta: null, value: "" };
-      }
-      function codeText2() {
-        return { type: "inlineCode", value: "" };
-      }
-      function definition2() {
-        return {
-          type: "definition",
-          identifier: "",
-          label: null,
-          title: null,
-          url: ""
-        };
-      }
-      function emphasis() {
-        return { type: "emphasis", children: [] };
-      }
-      function heading2() {
-        return { type: "heading", depth: void 0, children: [] };
-      }
-      function hardBreak() {
-        return { type: "break" };
-      }
-      function html() {
-        return { type: "html", value: "" };
-      }
-      function image2() {
-        return { type: "image", title: null, url: "", alt: null };
-      }
-      function link2() {
-        return { type: "link", title: null, url: "", children: [] };
-      }
-      function list3(token3) {
-        return {
-          type: "list",
-          ordered: token3.type === "listOrdered",
-          start: null,
-          spread: token3._spread,
-          children: []
-        };
-      }
-      function listItem(token3) {
-        return {
-          type: "listItem",
-          spread: token3._spread,
-          checked: null,
-          children: []
-        };
-      }
-      function paragraph2() {
-        return { type: "paragraph", children: [] };
-      }
-      function strong() {
-        return { type: "strong", children: [] };
-      }
-      function text5() {
-        return { type: "text", value: "" };
-      }
-      function thematicBreak2() {
-        return { type: "thematicBreak" };
-      }
-    }
-    function configure(config2, extensions) {
-      var index = -1;
-      while (++index < extensions.length) {
-        extension(config2, extensions[index]);
-      }
-      return config2;
-    }
-    function extension(config2, extension2) {
-      var key3;
-      var left;
-      for (key3 in extension2) {
-        left = own3.call(config2, key3) ? config2[key3] : config2[key3] = {};
-        if (key3 === "canContainEols" || key3 === "transforms") {
-          config2[key3] = [].concat(left, extension2[key3]);
-        } else {
-          Object.assign(left, extension2[key3]);
-        }
-      }
-    }
-  }
-});
-
-// node_modules/mdast-util-from-markdown/index.js
-var require_mdast_util_from_markdown = __commonJS({
-  "node_modules/mdast-util-from-markdown/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_dist();
-  }
-});
-
-// node_modules/remark-parse/index.js
-var require_remark_parse = __commonJS({
-  "node_modules/remark-parse/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = parse11;
-    var fromMarkdown = require_mdast_util_from_markdown();
-    function parse11(options7) {
-      var self = this;
-      this.Parser = parse12;
-      function parse12(doc) {
-        return fromMarkdown(
-          doc,
-          Object.assign({}, self.data("settings"), options7, {
-            // Note: these options are not in the readme.
-            // The goal is for them to be set by plugins on `data` instead of being
-            // passed by users.
-            extensions: self.data("micromarkExtensions") || [],
-            mdastExtensions: self.data("fromMarkdownExtensions") || []
-          })
-        );
-      }
-    }
-  }
-});
-
-// node_modules/format/format.js
-var require_format = __commonJS({
-  "node_modules/format/format.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    (function() {
-      var namespace;
-      if (typeof module !== "undefined") {
-        namespace = module.exports = format4;
-      } else {
-        namespace = (function() {
-          return this || (1, eval)("this");
-        })();
-      }
-      namespace.format = format4;
-      namespace.vsprintf = vsprintf;
-      if (typeof console !== "undefined" && typeof console.log === "function") {
-        namespace.printf = printf;
-      }
-      function printf() {
-        console.log(format4.apply(null, arguments));
-      }
-      function vsprintf(fmt, replacements) {
-        return format4.apply(null, [fmt].concat(replacements));
-      }
-      function format4(fmt) {
-        var argIndex = 1, args = [].slice.call(arguments), i = 0, n4 = fmt.length, result = "", c8, escaped = false, arg, tmp, leadingZero = false, precision, nextArg = function() {
-          return args[argIndex++];
-        }, slurpNumber = function() {
-          var digits = "";
-          while (/\d/.test(fmt[i])) {
-            digits += fmt[i++];
-            c8 = fmt[i];
+          if (end === -1 && defined) {
+            referenceType = 0;
+            end = p7 + 1;
           }
-          return digits.length > 0 ? parseInt(digits) : null;
-        };
-        for (; i < n4; ++i) {
-          c8 = fmt[i];
-          if (escaped) {
-            escaped = false;
-            if (c8 == ".") {
-              leadingZero = false;
-              c8 = fmt[++i];
-            } else if (c8 == "0" && fmt[i + 1] == ".") {
-              leadingZero = true;
-              i += 2;
-              c8 = fmt[i];
+        } else if (next === 91) {
+          const labelEnd2 = definitions.size > 0 ? scanLabel(p7 + 1, e4) : -1;
+          if (labelEnd2 !== -1 && definitions.has(normalizeIdentifier2(buf.slice(p7 + 2, labelEnd2)))) {
+            referenceType = 2;
+            referenceLabel = buf.slice(p7 + 2, labelEnd2);
+            end = labelEnd2 + 1;
+          } else if (defined && buf.charCodeAt(p7 + 2) === 93 && p7 + 2 < e4) {
+            referenceType = 1;
+            end = p7 + 3;
+          }
+        } else if (defined) {
+          referenceType = 0;
+          end = p7 + 1;
+        }
+        if (end === -1) {
+          brN--;
+          if (ntN > 0) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
+            }
+            if (closeNote(p7)) {
+              p7++;
+              textStart = p7;
             } else {
-              leadingZero = true;
+              textStart = p7;
+              p7++;
             }
-            precision = slurpNumber();
-            switch (c8) {
-              case "b":
-                result += parseInt(nextArg(), 10).toString(2);
-                break;
-              case "c":
-                arg = nextArg();
-                if (typeof arg === "string" || arg instanceof String)
-                  result += arg;
-                else
-                  result += String.fromCharCode(parseInt(arg, 10));
-                break;
-              case "d":
-                result += parseInt(nextArg(), 10);
-                break;
-              case "f":
-                tmp = String(parseFloat(nextArg()).toFixed(precision || 6));
-                result += leadingZero ? tmp : tmp.replace(/^0/, "");
-                break;
-              case "j":
-                result += JSON.stringify(nextArg());
-                break;
-              case "o":
-                result += "0" + parseInt(nextArg(), 10).toString(8);
-                break;
-              case "s":
-                result += nextArg();
-                break;
-              case "x":
-                result += "0x" + parseInt(nextArg(), 10).toString(16);
-                break;
-              case "X":
-                result += "0x" + parseInt(nextArg(), 10).toString(16).toUpperCase();
-                break;
-              default:
-                result += c8;
-                break;
-            }
-          } else if (c8 === "%") {
-            escaped = true;
           } else {
-            result += c8;
+            p7++;
           }
-        }
-        return result;
-      }
-    })();
-  }
-});
-
-// node_modules/fault/index.js
-var require_fault = __commonJS({
-  "node_modules/fault/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var formatter = require_format();
-    var fault = create(Error);
-    module.exports = fault;
-    fault.eval = create(EvalError);
-    fault.range = create(RangeError);
-    fault.reference = create(ReferenceError);
-    fault.syntax = create(SyntaxError);
-    fault.type = create(TypeError);
-    fault.uri = create(URIError);
-    fault.create = create;
-    function create(EConstructor) {
-      FormattedError.displayName = EConstructor.displayName || EConstructor.name;
-      return FormattedError;
-      function FormattedError(format4) {
-        if (format4) {
-          format4 = formatter.apply(null, arguments);
-        }
-        return new EConstructor(format4);
-      }
-    }
-  }
-});
-
-// node_modules/micromark-extension-frontmatter/lib/matters.js
-var require_matters = __commonJS({
-  "node_modules/micromark-extension-frontmatter/lib/matters.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = matters;
-    var fault = require_fault();
-    var own3 = {}.hasOwnProperty;
-    var markers = { yaml: "-", toml: "+" };
-    function matters(options7) {
-      var settings = options7 || "yaml";
-      var results = [];
-      var index = -1;
-      var length;
-      if (typeof settings === "string" || !("length" in settings)) {
-        settings = [settings];
-      }
-      length = settings.length;
-      while (++index < length) {
-        results[index] = matter(settings[index]);
-      }
-      return results;
-    }
-    function matter(option) {
-      var result = option;
-      if (typeof result === "string") {
-        if (!own3.call(markers, result)) {
-          throw fault("Missing matter definition for `%s`", result);
-        }
-        result = { type: result, marker: markers[result] };
-      } else if (typeof result !== "object") {
-        throw fault("Expected matter to be an object, not `%j`", result);
-      }
-      if (!own3.call(result, "type")) {
-        throw fault("Missing `type` in matter `%j`", result);
-      }
-      if (!own3.call(result, "fence") && !own3.call(result, "marker")) {
-        throw fault("Missing `marker` or `fence` in matter `%j`", result);
-      }
-      return result;
-    }
-  }
-});
-
-// node_modules/micromark-extension-frontmatter/lib/syntax.js
-var require_syntax5 = __commonJS({
-  "node_modules/micromark-extension-frontmatter/lib/syntax.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = create;
-    var matters = require_matters();
-    function create(options7) {
-      var settings = matters(options7);
-      var length = settings.length;
-      var index = -1;
-      var flow3 = {};
-      var matter;
-      var code19;
-      while (++index < length) {
-        matter = settings[index];
-        code19 = fence2(matter, "open").charCodeAt(0);
-        if (code19 in flow3) {
-          flow3[code19].push(parse11(matter));
-        } else {
-          flow3[code19] = [parse11(matter)];
-        }
-      }
-      return { flow: flow3 };
-    }
-    function parse11(matter) {
-      var name = matter.type;
-      var anywhere = matter.anywhere;
-      var valueType = name + "Value";
-      var fenceType = name + "Fence";
-      var sequenceType = fenceType + "Sequence";
-      var fenceConstruct = { tokenize: tokenizeFence, partial: true };
-      var buffer3;
-      return { tokenize: tokenizeFrontmatter, concrete: true };
-      function tokenizeFrontmatter(effects, ok2, nok) {
-        var self = this;
-        return start;
-        function start(code19) {
-          var position = self.now();
-          if (position.column !== 1 || !anywhere && position.line !== 1) {
-            return nok(code19);
-          }
-          effects.enter(name);
-          buffer3 = fence2(matter, "open");
-          return effects.attempt(fenceConstruct, afterOpeningFence, nok)(code19);
-        }
-        function afterOpeningFence(code19) {
-          buffer3 = fence2(matter, "close");
-          return lineEnd2(code19);
-        }
-        function lineStart(code19) {
-          if (code19 === -5 || code19 === -4 || code19 === -3 || code19 === null) {
-            return lineEnd2(code19);
-          }
-          effects.enter(valueType);
-          return lineData(code19);
-        }
-        function lineData(code19) {
-          if (code19 === -5 || code19 === -4 || code19 === -3 || code19 === null) {
-            effects.exit(valueType);
-            return lineEnd2(code19);
-          }
-          effects.consume(code19);
-          return lineData;
-        }
-        function lineEnd2(code19) {
-          if (code19 === null) {
-            return nok(code19);
-          }
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          return effects.attempt(fenceConstruct, after, lineStart);
-        }
-        function after(code19) {
-          effects.exit(name);
-          return ok2(code19);
-        }
-      }
-      function tokenizeFence(effects, ok2, nok) {
-        var bufferIndex = 0;
-        return start;
-        function start(code19) {
-          if (code19 === buffer3.charCodeAt(bufferIndex)) {
-            effects.enter(fenceType);
-            effects.enter(sequenceType);
-            return insideSequence(code19);
-          }
-          return nok(code19);
-        }
-        function insideSequence(code19) {
-          if (bufferIndex === buffer3.length) {
-            effects.exit(sequenceType);
-            if (code19 === -2 || code19 === -1 || code19 === 32) {
-              effects.enter("whitespace");
-              return insideWhitespace(code19);
-            }
-            return fenceEnd(code19);
-          }
-          if (code19 === buffer3.charCodeAt(bufferIndex)) {
-            effects.consume(code19);
-            bufferIndex++;
-            return insideSequence;
-          }
-          return nok(code19);
-        }
-        function insideWhitespace(code19) {
-          if (code19 === -2 || code19 === -1 || code19 === 32) {
-            effects.consume(code19);
-            return insideWhitespace;
-          }
-          effects.exit("whitespace");
-          return fenceEnd(code19);
-        }
-        function fenceEnd(code19) {
-          if (code19 === -5 || code19 === -4 || code19 === -3 || code19 === null) {
-            effects.exit(fenceType);
-            return ok2(code19);
-          }
-          return nok(code19);
-        }
-      }
-    }
-    function fence2(matter, prop) {
-      var marker;
-      if (matter.marker) {
-        marker = pick2(matter.marker, prop);
-        return marker + marker + marker;
-      }
-      return pick2(matter.fence, prop);
-    }
-    function pick2(schema, prop) {
-      return typeof schema === "string" ? schema : schema[prop];
-    }
-  }
-});
-
-// node_modules/micromark-extension-frontmatter/index.js
-var require_micromark_extension_frontmatter = __commonJS({
-  "node_modules/micromark-extension-frontmatter/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = require_syntax5();
-  }
-});
-
-// node_modules/mdast-util-frontmatter/from-markdown.js
-var require_from_markdown6 = __commonJS({
-  "node_modules/mdast-util-frontmatter/from-markdown.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = createFromMarkdown;
-    var matters = require_matters();
-    function createFromMarkdown(options7) {
-      var settings = matters(options7);
-      var length = settings.length;
-      var index = -1;
-      var enter = {};
-      var exit2 = {};
-      var matter;
-      while (++index < length) {
-        matter = settings[index];
-        enter[matter.type] = opener(matter);
-        exit2[matter.type] = close;
-        exit2[matter.type + "Value"] = value;
-      }
-      return { enter, exit: exit2 };
-    }
-    function opener(matter) {
-      return open;
-      function open(token3) {
-        this.enter({ type: matter.type, value: "" }, token3);
-        this.buffer();
-      }
-    }
-    function close(token3) {
-      var data = this.resume();
-      this.exit(token3).value = data.replace(/^(\r?\n|\r)|(\r?\n|\r)$/g, "");
-    }
-    function value(token3) {
-      this.config.enter.data.call(this, token3);
-      this.config.exit.data.call(this, token3);
-    }
-  }
-});
-
-// node_modules/mdast-util-frontmatter/to-markdown.js
-var require_to_markdown6 = __commonJS({
-  "node_modules/mdast-util-frontmatter/to-markdown.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = createToMarkdown;
-    var matters = require_matters();
-    function createToMarkdown(options7) {
-      var unsafe = [];
-      var handlers = {};
-      var settings = matters(options7);
-      var length = settings.length;
-      var index = -1;
-      var matter;
-      while (++index < length) {
-        matter = settings[index];
-        handlers[matter.type] = handler(matter);
-        unsafe.push({ atBreak: true, character: fence2(matter, "open").charAt(0) });
-      }
-      return { unsafe, handlers };
-    }
-    function handler(matter) {
-      var open = fence2(matter, "open");
-      var close = fence2(matter, "close");
-      return handle;
-      function handle(node) {
-        return open + (node.value ? "\n" + node.value : "") + "\n" + close;
-      }
-    }
-    function fence2(matter, prop) {
-      var marker;
-      if (matter.marker) {
-        marker = pick2(matter.marker, prop);
-        return marker + marker + marker;
-      }
-      return pick2(matter.fence, prop);
-    }
-    function pick2(schema, prop) {
-      return typeof schema === "string" ? schema : schema[prop];
-    }
-  }
-});
-
-// node_modules/remark-frontmatter/index.js
-var require_remark_frontmatter = __commonJS({
-  "node_modules/remark-frontmatter/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var syntax = require_micromark_extension_frontmatter();
-    var fromMarkdown = require_from_markdown6();
-    var toMarkdown = require_to_markdown6();
-    module.exports = frontmatter;
-    function frontmatter(options7) {
-      var data = this.data();
-      add("micromarkExtensions", syntax(options7));
-      add("fromMarkdownExtensions", fromMarkdown(options7));
-      add("toMarkdownExtensions", toMarkdown(options7));
-      function add(field, value) {
-        if (data[field]) data[field].push(value);
-        else data[field] = [value];
-      }
-    }
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/normalize-identifier.js
-var require_normalize_identifier2 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/normalize-identifier.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function normalizeIdentifier2(value) {
-      return value.replace(/[\t\n\r ]+/g, " ").replace(/^ | $/g, "").toLowerCase().toUpperCase();
-    }
-    module.exports = normalizeIdentifier2;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/character/markdown-line-ending.js
-var require_markdown_line_ending3 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/character/markdown-line-ending.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownLineEnding2(code19) {
-      return code19 < -2;
-    }
-    module.exports = markdownLineEnding2;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/character/markdown-space.js
-var require_markdown_space4 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/character/markdown-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function markdownSpace2(code19) {
-      return code19 === -2 || code19 === -1 || code19 === 32;
-    }
-    module.exports = markdownSpace2;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/tokenize/factory-space.js
-var require_factory_space4 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/tokenize/factory-space.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownSpace2 = require_markdown_space4();
-    function spaceFactory(effects, ok2, type, max) {
-      var limit = max ? max - 1 : Infinity;
-      var size = 0;
-      return start;
-      function start(code19) {
-        if (markdownSpace2(code19)) {
-          effects.enter(type);
-          return prefix2(code19);
-        }
-        return ok2(code19);
-      }
-      function prefix2(code19) {
-        if (markdownSpace2(code19) && size++ < limit) {
-          effects.consume(code19);
-          return prefix2;
-        }
-        effects.exit(type);
-        return ok2(code19);
-      }
-    }
-    module.exports = spaceFactory;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/tokenize/partial-blank-line.js
-var require_partial_blank_line2 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/tokenize/partial-blank-line.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var markdownLineEnding2 = require_markdown_line_ending3();
-    var factorySpace2 = require_factory_space4();
-    var partialBlankLine = {
-      tokenize: tokenizePartialBlankLine,
-      partial: true
-    };
-    function tokenizePartialBlankLine(effects, ok2, nok) {
-      return factorySpace2(effects, afterWhitespace, "linePrefix");
-      function afterWhitespace(code19) {
-        return code19 === null || markdownLineEnding2(code19) ? ok2(code19) : nok(code19);
-      }
-    }
-    module.exports = partialBlankLine;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/constant/splice.js
-var require_splice4 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/constant/splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = [].splice;
-    module.exports = splice2;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/chunked-splice.js
-var require_chunked_splice4 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/chunked-splice.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var splice2 = require_splice4();
-    function chunkedSplice(list3, start, remove, items) {
-      var end = list3.length;
-      var chunkStart = 0;
-      var parameters;
-      if (start < 0) {
-        start = -start > end ? 0 : end + start;
-      } else {
-        start = start > end ? end : start;
-      }
-      remove = remove > 0 ? remove : 0;
-      if (items.length < 1e4) {
-        parameters = Array.from(items);
-        parameters.unshift(start, remove);
-        splice2.apply(list3, parameters);
-      } else {
-        if (remove) splice2.apply(list3, [start, remove]);
-        while (chunkStart < items.length) {
-          parameters = items.slice(chunkStart, chunkStart + 1e4);
-          parameters.unshift(start, 0);
-          splice2.apply(list3, parameters);
-          chunkStart += 1e4;
-          start += 1e4;
-        }
-      }
-    }
-    module.exports = chunkedSplice;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/size-chunks.js
-var require_size_chunks3 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/size-chunks.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function sizeChunks(chunks) {
-      var index = -1;
-      var size = 0;
-      while (++index < chunks.length) {
-        size += typeof chunks[index] === "string" ? chunks[index].length : 1;
-      }
-      return size;
-    }
-    module.exports = sizeChunks;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/prefix-size.js
-var require_prefix_size3 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/prefix-size.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var sizeChunks = require_size_chunks3();
-    function prefixSize(events, type) {
-      var tail = events[events.length - 1];
-      if (!tail || tail[1].type !== type) return 0;
-      return sizeChunks(tail[2].sliceStream(tail[1]));
-    }
-    module.exports = prefixSize;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/constant/assign.js
-var require_assign3 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/constant/assign.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = Object.assign;
-    module.exports = assign;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/shallow.js
-var require_shallow3 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/shallow.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var assign = require_assign3();
-    function shallow(object) {
-      return assign({}, object);
-    }
-    module.exports = shallow;
-  }
-});
-
-// node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/resolve-all.js
-var require_resolve_all3 = __commonJS({
-  "node_modules/micromark-extension-footnote/node_modules/micromark/dist/util/resolve-all.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function resolveAll2(constructs2, events, context) {
-      var called = [];
-      var index = -1;
-      var resolve4;
-      while (++index < constructs2.length) {
-        resolve4 = constructs2[index].resolveAll;
-        if (resolve4 && called.indexOf(resolve4) < 0) {
-          events = resolve4(events, context);
-          called.push(resolve4);
-        }
-      }
-      return events;
-    }
-    module.exports = resolveAll2;
-  }
-});
-
-// node_modules/micromark-extension-footnote/index.js
-var require_micromark_extension_footnote = __commonJS({
-  "node_modules/micromark-extension-footnote/index.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = footnote;
-    var normalizeIdentifier2 = require_normalize_identifier2();
-    var blank = require_partial_blank_line2();
-    var createSpace = require_factory_space4();
-    var chunkedSplice = require_chunked_splice4();
-    var prefixSize = require_prefix_size3();
-    var shallow = require_shallow3();
-    var resolveAll2 = require_resolve_all3();
-    var indent4 = { tokenize: tokenizeIndent3, partial: true };
-    function footnote(options7) {
-      var settings = options7 || {};
-      var call = { tokenize: tokenizeFootnoteCall };
-      var noteStart = { tokenize: tokenizeNoteStart, resolveAll: resolveAllNote };
-      var noteEnd = {
-        add: "after",
-        tokenize: tokenizeNoteEnd,
-        resolveAll: resolveAllNote,
-        resolveTo: resolveToNoteEnd
-      };
-      var definition2 = {
-        tokenize: tokenizeDefinitionStart2,
-        continuation: { tokenize: tokenizeDefinitionContinuation2 },
-        exit: footnoteDefinitionEnd
-      };
-      var text5 = { 91: call };
-      if (settings.inlineNotes) {
-        text5[93] = noteEnd;
-        text5[94] = noteStart;
-      }
-      return {
-        _hiddenFootnoteSupport: {},
-        document: { 91: definition2 },
-        text: text5
-      };
-    }
-    function resolveAllNote(events) {
-      var length = events.length;
-      var index = -1;
-      var token3;
-      while (++index < length) {
-        token3 = events[index][1];
-        if (events[index][0] === "enter" && token3.type === "inlineNoteStart") {
-          token3.type = "data";
-          events.splice(index + 1, 4);
-          length -= 4;
-        }
-      }
-      return events;
-    }
-    function resolveToNoteEnd(events, context) {
-      var index = events.length - 4;
-      var group2;
-      var text5;
-      var token3;
-      var type;
-      var openIndex;
-      while (index--) {
-        token3 = events[index][1];
-        if (events[index][0] === "enter" && token3.type === "inlineNoteStart") {
-          openIndex = index;
-          type = "inlineNote";
           break;
         }
-      }
-      group2 = {
-        type,
-        start: shallow(events[openIndex][1].start),
-        end: shallow(events[events.length - 1][1].end)
-      };
-      text5 = {
-        type: "inlineNoteText",
-        start: shallow(events[openIndex + 4][1].end),
-        end: shallow(events[events.length - 3][1].start)
-      };
-      var note = [
-        ["enter", group2, context],
-        events[openIndex + 1],
-        events[openIndex + 2],
-        events[openIndex + 3],
-        events[openIndex + 4],
-        ["enter", text5, context]
-      ];
-      chunkedSplice(
-        note,
-        note.length,
-        0,
-        resolveAll2(
-          context.parser.constructs.insideSpan.null,
-          events.slice(openIndex + 6, -4),
-          context
-        )
-      );
-      note.push(
-        ["exit", text5, context],
-        events[events.length - 2],
-        events[events.length - 3],
-        ["exit", group2, context]
-      );
-      chunkedSplice(events, index, events.length - index, note);
-      return events;
-    }
-    function tokenizeFootnoteCall(effects, ok2, nok) {
-      var self = this;
-      var defined = self.parser.footnotes || (self.parser.footnotes = []);
-      var size = 0;
-      var data;
-      return start;
-      function start(code19) {
-        if (code19 !== 91) return nok(code19);
-        effects.enter("footnoteCall");
-        effects.enter("footnoteCallLabelMarker");
-        effects.consume(code19);
-        effects.exit("footnoteCallLabelMarker");
-        return callStart;
-      }
-      function callStart(code19) {
-        if (code19 !== 94) return nok(code19);
-        effects.enter("footnoteCallMarker");
-        effects.consume(code19);
-        effects.exit("footnoteCallMarker");
-        effects.enter("footnoteCallString");
-        effects.enter("chunkString").contentType = "string";
-        return callData;
-      }
-      function callData(code19) {
-        var token3;
-        if (code19 === null || code19 === 91 || size++ > 999) {
-          return nok(code19);
+        if (p7 > textStart) {
+          addText(block2, textStart, p7, complex);
+          complex = false;
         }
-        if (code19 === 93) {
-          if (!data) {
-            return nok(code19);
+        const bracket = brNode[opener];
+        resolveDelimiters(brDelim[opener]);
+        const linkHeight = isImage ? 0 : heightBetween(bracket, -1) + 1;
+        if (linkHeight > MAX_NESTING) {
+          brN--;
+          textStart = p7;
+          p7++;
+          break;
+        }
+        const node = newNode(referenceType === -1 ? isImage ? Image : Link : isImage ? ImageReference : LinkReference, nStart[bracket], end);
+        moveBetween(bracket, -1, node);
+        insertAfter(bracket, node);
+        unlink(bracket);
+        if (referenceType === -1) {
+          nA[node] = addSide(url3);
+          nB2[node] = title === null ? -1 : addSide(title);
+          if (isImage) {
+            nC[node] = addSide(textOfChildren(node));
           }
-          effects.exit("chunkString");
-          token3 = effects.exit("footnoteCallString");
-          return defined.indexOf(normalizeIdentifier2(self.sliceSerialize(token3))) < 0 ? nok(code19) : end(code19);
+        } else {
+          nA[node] = addSide(normalizeIdentifier2(referenceLabel).toLowerCase());
+          nB2[node] = addSide(decodeString(referenceLabel));
+          nC[node] = referenceType;
+          if (isImage) {
+            nD3[node] = addSide(textOfChildren(node));
+          }
         }
-        effects.consume(code19);
-        if (!(code19 < 0 || code19 === 32)) {
-          data = true;
+        if (!isImage) {
+          nD3[node] = linkHeight;
         }
-        return code19 === 92 ? callEscape : callData;
-      }
-      function callEscape(code19) {
-        if (code19 === 91 || code19 === 92 || code19 === 93) {
-          effects.consume(code19);
-          size++;
-          return callData;
+        if (isImage) {
+          nFirst[node] = -1;
+          nLast[node] = -1;
+        } else {
+          for (let i = 0; i < opener; i++) {
+            if (!brImage[i]) {
+              brActive[i] = false;
+            }
+          }
         }
-        return callData(code19);
+        brN = opener;
+        while (ntN > 0 && ntBr[ntN - 1] > opener) {
+          ntN--;
+        }
+        p7 = end;
+        textStart = p7;
+        break;
       }
-      function end(code19) {
-        effects.enter("footnoteCallLabelMarker");
-        effects.consume(code19);
-        effects.exit("footnoteCallLabelMarker");
-        effects.exit("footnoteCall");
-        return ok2;
-      }
-    }
-    function tokenizeNoteStart(effects, ok2, nok) {
-      return start;
-      function start(code19) {
-        if (code19 !== 94) return nok(code19);
-        effects.enter("inlineNoteStart");
-        effects.enter("inlineNoteMarker");
-        effects.consume(code19);
-        effects.exit("inlineNoteMarker");
-        return noteStart;
-      }
-      function noteStart(code19) {
-        if (code19 !== 91) return nok(code19);
-        effects.enter("inlineNoteStartMarker");
-        effects.consume(code19);
-        effects.exit("inlineNoteStartMarker");
-        effects.exit("inlineNoteStart");
-        return ok2;
-      }
-    }
-    function tokenizeNoteEnd(effects, ok2, nok) {
-      var self = this;
-      return start;
-      function start(code19) {
-        var index = self.events.length;
-        var hasStart;
-        while (index--) {
-          if (self.events[index][1].type === "inlineNoteStart") {
-            hasStart = true;
+      default: {
+        if (brN === 0) {
+          const prev = p7 > s02 ? buf.charCodeAt(p7 - 1) : -1;
+          let end = -1;
+          let www = false;
+          if (c8 === 119 || c8 === 87) {
+            if (prev === -1 || prev === 40 || prev === 42 || prev === 95 || prev === 91 || prev === 93 || prev === 126 || prev === 32 || prev === 9 || prev === 10) {
+              end = scanWwwAutolink(p7, e4);
+              www = true;
+            }
+          } else if (prev === -1 || !isAlpha2(prev)) {
+            end = scanProtocolAutolink(p7, e4);
+          }
+          if (end !== -1) {
+            if (p7 > textStart) {
+              addText(block2, textStart, p7, complex);
+              complex = false;
+            }
+            const link2 = newNode(Link, p7, end);
+            const value = buf.slice(p7, end);
+            nA[link2] = addSide(www ? `http://${value}` : value);
+            append(block2, link2);
+            const text5 = newNode(Str, p7, end);
+            nA[text5] = 0;
+            append(link2, text5);
+            p7 = end;
+            textStart = p7;
             break;
           }
         }
-        if (code19 !== 93 || !hasStart) {
-          return nok(code19);
-        }
-        effects.enter("inlineNoteEnd");
-        effects.enter("inlineNoteEndMarker");
-        effects.consume(code19);
-        effects.exit("inlineNoteEndMarker");
-        effects.exit("inlineNoteEnd");
-        return ok2;
-      }
-    }
-    function tokenizeDefinitionStart2(effects, ok2, nok) {
-      var self = this;
-      var defined = self.parser.footnotes || (self.parser.footnotes = []);
-      var identifier;
-      var size = 0;
-      var data;
-      return start;
-      function start(code19) {
-        if (code19 !== 91) {
-          return nok(code19);
-        }
-        effects.enter("footnoteDefinition")._container = true;
-        effects.enter("footnoteDefinitionLabel");
-        effects.enter("footnoteDefinitionLabelMarker");
-        effects.consume(code19);
-        effects.exit("footnoteDefinitionLabelMarker");
-        return labelStart;
-      }
-      function labelStart(code19) {
-        if (code19 !== 94) return nok(code19);
-        effects.enter("footnoteDefinitionMarker");
-        effects.consume(code19);
-        effects.exit("footnoteDefinitionMarker");
-        effects.enter("footnoteDefinitionLabelString");
-        return atBreak;
-      }
-      function atBreak(code19) {
-        var token3;
-        if (code19 === null || code19 === 91 || size > 999) {
-          return nok(code19);
-        }
-        if (code19 === 93) {
-          if (!data) {
-            return nok(code19);
-          }
-          token3 = effects.exit("footnoteDefinitionLabelString");
-          identifier = normalizeIdentifier2(self.sliceSerialize(token3));
-          effects.enter("footnoteDefinitionLabelMarker");
-          effects.consume(code19);
-          effects.exit("footnoteDefinitionLabelMarker");
-          effects.exit("footnoteDefinitionLabel");
-          return labelAfter;
-        }
-        if (code19 === -5 || code19 === -4 || code19 === -3) {
-          effects.enter("lineEnding");
-          effects.consume(code19);
-          effects.exit("lineEnding");
-          size++;
-          return atBreak;
-        }
-        effects.enter("chunkString").contentType = "string";
-        return label5(code19);
-      }
-      function label5(code19) {
-        if (code19 === null || code19 === -5 || code19 === -4 || code19 === -3 || code19 === 91 || code19 === 93 || size > 999) {
-          effects.exit("chunkString");
-          return atBreak(code19);
-        }
-        if (!(code19 < 0 || code19 === 32)) {
-          data = true;
-        }
-        size++;
-        effects.consume(code19);
-        return code19 === 92 ? labelEscape : label5;
-      }
-      function labelEscape(code19) {
-        if (code19 === 91 || code19 === 92 || code19 === 93) {
-          effects.consume(code19);
-          size++;
-          return label5;
-        }
-        return label5(code19);
-      }
-      function labelAfter(code19) {
-        if (code19 !== 58) {
-          return nok(code19);
-        }
-        effects.enter("definitionMarker");
-        effects.consume(code19);
-        effects.exit("definitionMarker");
-        return effects.check(blank, onBlank, nonBlank);
-      }
-      function onBlank(code19) {
-        self.containerState.initialBlankLine = true;
-        return done(code19);
-      }
-      function nonBlank(code19) {
-        if (code19 === -2 || code19 === -1 || code19 === 32) {
-          effects.enter("footnoteDefinitionWhitespace");
-          effects.consume(code19);
-          effects.exit("footnoteDefinitionWhitespace");
-          return done(code19);
-        }
-        return done(code19);
-      }
-      function done(code19) {
-        if (defined.indexOf(identifier) < 0) {
-          defined.push(identifier);
-        }
-        return ok2(code19);
-      }
-    }
-    function tokenizeDefinitionContinuation2(effects, ok2, nok) {
-      var self = this;
-      return effects.check(blank, onBlank, notBlank);
-      function onBlank(code19) {
-        if (self.containerState.initialBlankLine) {
-          self.containerState.furtherBlankLines = true;
-        }
-        return ok2(code19);
-      }
-      function notBlank(code19) {
-        if (self.containerState.furtherBlankLines || !(code19 === -2 || code19 === -1 || code19 === 32)) {
-          return nok(code19);
-        }
-        self.containerState.initialBlankLine = void 0;
-        self.containerState.furtherBlankLines = void 0;
-        return effects.attempt(indent4, ok2, nok)(code19);
-      }
-    }
-    function footnoteDefinitionEnd(effects) {
-      effects.exit("footnoteDefinition");
-    }
-    function tokenizeIndent3(effects, ok2, nok) {
-      var self = this;
-      return createSpace(effects, afterPrefix, "footnoteDefinitionIndent", 5);
-      function afterPrefix(code19) {
-        return prefixSize(self.events, "footnoteDefinitionIndent") === 4 ? ok2(code19) : nok(code19);
+        p7++;
       }
     }
   }
-});
-
-// node_modules/mdast-util-footnote/node_modules/micromark/dist/util/normalize-identifier.js
-var require_normalize_identifier3 = __commonJS({
-  "node_modules/mdast-util-footnote/node_modules/micromark/dist/util/normalize-identifier.js"(exports, module) {
-    "use strict";
+  if (e4 > textStart) {
+    addText(block2, textStart, e4, complex);
+  }
+  resolveDelimiters(-1);
+  finishInline(block2);
+}
+function finishInline(root3) {
+  let c8 = nFirst[root3];
+  while (c8 !== -1) {
+    const kind = nKind[c8];
+    let next;
+    if (kind === Str) {
+      next = nNext[c8];
+      let complex = nA[c8] === 1;
+      while (next !== -1 && nKind[next] === Str) {
+        nEnd[c8] = nEnd[next];
+        complex = complex || nA[next] === 1;
+        const after = nNext[next];
+        unlink(next);
+        next = after;
+      }
+      const s = nStart[c8];
+      const e4 = nEnd[c8];
+      if (complex) {
+        nA[c8] = addSide(decodeText(s, e4));
+      } else if (bMulti) {
+        nA[c8] = addSide(buf.slice(s, e4));
+      } else {
+        nA[c8] = -1;
+      }
+      nStart[c8] = mapPos(s);
+      nEnd[c8] = mapEnd(e4);
+    } else if (kind === Break) {
+      nStart[c8] = mapPos(nStart[c8]);
+      nEnd[c8] = mapEnd(nEnd[c8]);
+      next = nNext[c8];
+    } else {
+      nStart[c8] = mapPos(nStart[c8]);
+      nEnd[c8] = mapPos(nEnd[c8]);
+      if (nFirst[c8] !== -1) {
+        c8 = nFirst[c8];
+        continue;
+      }
+      next = nNext[c8];
+    }
+    while (next === -1) {
+      c8 = nParent[c8];
+      if (c8 === root3) {
+        return;
+      }
+      next = nNext[c8];
+    }
+    c8 = next;
+  }
+}
+function parseInlines() {
+  const n4 = nCount;
+  for (let i = 1; i < n4; i++) {
+    const kind = nKind[i];
+    if (kind === Paragraph || kind === Header || kind === TableCell) {
+      parseInline(i, kind);
+    }
+  }
+}
+function hasChildren(kind) {
+  return kind <= TableCell && kind !== CodeBlock && kind !== HtmlBlock && kind !== HorizontalRule && kind !== Definition || kind >= Emphasis && kind <= Delete || kind === Link || kind === LinkReference || kind === Footnote;
+}
+function emit(root3) {
+  let sp2 = 0;
+  let i = root3;
+  for (; ; ) {
+    let startLine = lineOf(nStart[i]);
+    let children;
+    if (hasChildren(nKind[i])) {
+      children = [];
+      if (nFirst[i] !== -1) {
+        if (sp2 === emNode.length) {
+          emNode = growInt32(emNode);
+          emLine = growInt32(emLine);
+        }
+        emNode[sp2] = i;
+        emLine[sp2] = startLine;
+        emChildren[sp2] = children;
+        sp2++;
+        i = nFirst[i];
+        continue;
+      }
+    }
+    for (; ; ) {
+      const node = createTxtNode(i, startLine, children);
+      if (sp2 === 0) {
+        emChildren.length = 0;
+        return node;
+      }
+      emChildren[sp2 - 1].push(node);
+      if (nNext[i] !== -1) {
+        i = nNext[i];
+        break;
+      }
+      sp2--;
+      i = emNode[sp2];
+      startLine = emLine[sp2];
+      children = emChildren[sp2];
+    }
+  }
+}
+function createTxtNode(i, startLine, children) {
+  const kind = nKind[i];
+  const s = nStart[i];
+  const e4 = nEnd[i];
+  const startColumn = s - LS[startLine];
+  const endLine = lineOf(e4);
+  const loc = {
+    start: { line: startLine + 1, column: startColumn },
+    end: { line: endLine + 1, column: e4 - LS[endLine] }
+  };
+  const range2 = [s, e4];
+  const raw = rawSrc.slice(s, e4);
+  const type = TYPE_NAMES[kind];
+  switch (kind) {
+    case Str:
+      return {
+        type,
+        value: nA[i] !== -1 ? side[nA[i]] : srcReplaced ? src.slice(s, e4) : raw,
+        loc,
+        range: range2,
+        raw
+      };
+    case Paragraph:
+    case BlockQuote:
+    case Emphasis:
+    case Strong:
+    case Delete:
+    case TableRow:
+    case TableCell:
+    case Document:
+    case Footnote:
+      return { type, children, loc, range: range2, raw };
+    case Header:
+      return { type, depth: nA[i], children, loc, range: range2, raw };
+    case List:
+      return {
+        type,
+        ordered: nA[i] === 1,
+        start: nA[i] === 1 ? nB2[i] : null,
+        spread: nD3[i] === 1,
+        children,
+        loc,
+        range: range2,
+        raw
+      };
+    case ListItem:
+      return { type, spread: nB2[i] === 1, checked: nA[i] === -1 ? null : nA[i] === 1, children, loc, range: range2, raw };
+    case CodeBlock:
+      return {
+        type,
+        lang: nA[i] === -1 ? null : side[nA[i]],
+        meta: nB2[i] === -1 ? null : side[nB2[i]],
+        value: side[nC[i]],
+        loc,
+        range: range2,
+        raw
+      };
+    case Code:
+    case Html:
+    case HtmlBlock:
+    case Yaml:
+    case Toml:
+    case Json:
+      return { type, value: side[nA[i]], loc, range: range2, raw };
+    case Break:
+    case HorizontalRule:
+      return { type, loc, range: range2, raw };
+    case Link:
+      return { type, title: nB2[i] === -1 ? null : side[nB2[i]], url: side[nA[i]], children, loc, range: range2, raw };
+    case Image:
+      return {
+        type,
+        title: nB2[i] === -1 ? null : side[nB2[i]],
+        url: side[nA[i]],
+        alt: side[nC[i]],
+        loc,
+        range: range2,
+        raw
+      };
+    case LinkReference:
+      return {
+        type,
+        children,
+        label: side[nB2[i]],
+        identifier: side[nA[i]],
+        referenceType: REFERENCE_TYPES[nC[i]],
+        loc,
+        range: range2,
+        raw
+      };
+    case ImageReference:
+      return {
+        type,
+        alt: side[nD3[i]],
+        label: side[nB2[i]],
+        identifier: side[nA[i]],
+        referenceType: REFERENCE_TYPES[nC[i]],
+        loc,
+        range: range2,
+        raw
+      };
+    case Definition:
+      return {
+        type,
+        identifier: side[nA[i]],
+        label: side[nB2[i]],
+        title: nC[i] === -1 ? null : side[nC[i]],
+        url: side[nD3[i]],
+        loc,
+        range: range2,
+        raw
+      };
+    case FootnoteDefinition:
+      return { type, identifier: side[nA[i]], label: side[nB2[i]], children, loc, range: range2, raw };
+    case FootnoteReference:
+      return { type, identifier: side[nA[i]], label: side[nB2[i]], loc, range: range2, raw };
+    case Table:
+      return { type, align: side[nA[i]], children, loc, range: range2, raw };
+  }
+  throw new Error(`Unknown node kind: ${kind}`);
+}
+function parseMarkdown(text5, options7 = {}) {
+  cjkFriendly = options7.cjkFriendlyEmphasis === true;
+  rawSrc = text5;
+  srcReplaced = text5.indexOf("\0") !== -1;
+  src = srcReplaced ? text5.split("\0").join("\uFFFD") : text5;
+  len = text5.length;
+  hasCR = text5.indexOf("\r") !== -1;
+  nCount = 0;
+  segN = 0;
+  side = [];
+  lineCache = 0;
+  atCache = -1;
+  if (definitions.size > 0) {
+    definitions = /* @__PURE__ */ new Set();
+  }
+  if (footnotes.size > 0) {
+    footnotes = /* @__PURE__ */ new Set();
+  }
+  try {
+    buildLines();
+    parseBlocks();
+    parseInlines();
+    lineCache = 0;
+    return emit(0);
+  } finally {
+    src = "";
+    rawSrc = "";
+    buf = "";
+    side = [];
+  }
+}
+var Document, Paragraph, Header, BlockQuote, List, ListItem, CodeBlock, HtmlBlock, HorizontalRule, Definition, FootnoteDefinition, Table, TableRow, TableCell, Yaml, Toml, Json, Str, Break, Emphasis, Strong, Delete, Code, Html, Link, Image, LinkReference, ImageReference, FootnoteReference, Footnote, Dead, TYPE_NAMES, MAX_NESTING, REFERENCE_TYPES, src, rawSrc, srcReplaced, len, hasCR, LS, LN, lineCache, cap, nKind, nStart, nEnd, nParent, nFirst, nLast, nNext, nPrev, nA, nB2, nC, nD3, nCount, side, segCap, segS, segE, segL, segN, ASCII_PUNCT, SPECIAL, NON_ASCII_CLASS, UNICODE_PUNCTUATION, UNICODE_WHITESPACE, cjkFriendly, cjkBefore, cjkAfter, cjkEither, cNode, cIndent, depth, closePos, leaf, leafKind, curLine, lineStart, lineEnd2, off, col, ptab, nns, nnsCol, indent4, blank, leafSeg0, leafContig, fenced, fChar, fLen, fIndent, hType, codeSegEnd, pDefsDone, definitions, footnotes, HTML_BLOCK_NAMES, RE_HTML_1, RE_HTML_1_END, RE_HTML_4, RE_HTML_6, ATTRIBUTE, RE_HTML_7, tableAlign, FRONTMATTERS, buf, bStart, bEnd, bMulti, bSeg0, vLines, vStart, vCache, entityValue, defLabel, defLabelRaw, defUrl, defTitle, partStart, partEnd, parenTitleFrom, parenTitleEnd, dNode, dCh, dNum, dOpen, dClose, dPrev, dNext, dN, dLast, brNode, brImage, brActive, brDelim, brTextStart, brN, ntNode, ntDelim, ntBr, ntN, RE_AUTOLINK, RE_EMAIL_AUTOLINK, TAG_NAME, INLINE_ATTRIBUTE, RE_HTML_INLINE, tickLast, ticksScanned, noHtmlEnd, literalEnd, trailFrom, trailTo, trailEnd, trailResult, atCache, emNode, emLine, emChildren;
+var init_parser2 = __esm({
+  "node_modules/@textlint/markdown-to-ast/lib/src/parser.js"() {
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    function normalizeIdentifier2(value) {
-      return value.replace(/[\t\n\r ]+/g, " ").replace(/^ | $/g, "").toLowerCase().toUpperCase();
-    }
-    module.exports = normalizeIdentifier2;
-  }
-});
-
-// node_modules/mdast-util-footnote/from-markdown.js
-var require_from_markdown7 = __commonJS({
-  "node_modules/mdast-util-footnote/from-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var normalizeIdentifier2 = require_normalize_identifier3();
-    exports.canContainEols = ["footnote"];
-    exports.enter = {
-      footnoteDefinition: enterFootnoteDefinition,
-      footnoteDefinitionLabelString: enterFootnoteDefinitionLabelString,
-      footnoteCall: enterFootnoteCall,
-      footnoteCallString: enterFootnoteCallString,
-      inlineNote: enterNote
-    };
-    exports.exit = {
-      footnoteDefinition: exitFootnoteDefinition,
-      footnoteDefinitionLabelString: exitFootnoteDefinitionLabelString,
-      footnoteCall: exitFootnoteCall,
-      footnoteCallString: exitFootnoteCallString,
-      inlineNote: exitNote
-    };
-    function enterFootnoteDefinition(token3) {
-      this.enter(
-        { type: "footnoteDefinition", identifier: "", label: "", children: [] },
-        token3
-      );
-    }
-    function enterFootnoteDefinitionLabelString() {
-      this.buffer();
-    }
-    function exitFootnoteDefinitionLabelString(token3) {
-      var label5 = this.resume();
-      this.stack[this.stack.length - 1].label = label5;
-      this.stack[this.stack.length - 1].identifier = normalizeIdentifier2(
-        this.sliceSerialize(token3)
-      ).toLowerCase();
-    }
-    function exitFootnoteDefinition(token3) {
-      this.exit(token3);
-    }
-    function enterFootnoteCall(token3) {
-      this.enter({ type: "footnoteReference", identifier: "", label: "" }, token3);
-    }
-    function enterFootnoteCallString() {
-      this.buffer();
-    }
-    function exitFootnoteCallString(token3) {
-      var label5 = this.resume();
-      this.stack[this.stack.length - 1].label = label5;
-      this.stack[this.stack.length - 1].identifier = normalizeIdentifier2(
-        this.sliceSerialize(token3)
-      ).toLowerCase();
-    }
-    function exitFootnoteCall(token3) {
-      this.exit(token3);
-    }
-    function enterNote(token3) {
-      this.enter({ type: "footnote", children: [] }, token3);
-    }
-    function exitNote(token3) {
-      this.exit(token3);
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/node_modules/character-entities/index.json
-var require_character_entities2 = __commonJS({
-  "node_modules/mdast-util-to-markdown/node_modules/character-entities/index.json"(exports, module) {
-    module.exports = {
-      AEli: "\xC6",
-      AElig: "\xC6",
-      AM: "&",
-      AMP: "&",
-      Aacut: "\xC1",
-      Aacute: "\xC1",
-      Abreve: "\u0102",
-      Acir: "\xC2",
-      Acirc: "\xC2",
-      Acy: "\u0410",
-      Afr: "\u{1D504}",
-      Agrav: "\xC0",
-      Agrave: "\xC0",
-      Alpha: "\u0391",
-      Amacr: "\u0100",
-      And: "\u2A53",
-      Aogon: "\u0104",
-      Aopf: "\u{1D538}",
-      ApplyFunction: "\u2061",
-      Arin: "\xC5",
-      Aring: "\xC5",
-      Ascr: "\u{1D49C}",
-      Assign: "\u2254",
-      Atild: "\xC3",
-      Atilde: "\xC3",
-      Aum: "\xC4",
-      Auml: "\xC4",
-      Backslash: "\u2216",
-      Barv: "\u2AE7",
-      Barwed: "\u2306",
-      Bcy: "\u0411",
-      Because: "\u2235",
-      Bernoullis: "\u212C",
-      Beta: "\u0392",
-      Bfr: "\u{1D505}",
-      Bopf: "\u{1D539}",
-      Breve: "\u02D8",
-      Bscr: "\u212C",
-      Bumpeq: "\u224E",
-      CHcy: "\u0427",
-      COP: "\xA9",
-      COPY: "\xA9",
-      Cacute: "\u0106",
-      Cap: "\u22D2",
-      CapitalDifferentialD: "\u2145",
-      Cayleys: "\u212D",
-      Ccaron: "\u010C",
-      Ccedi: "\xC7",
-      Ccedil: "\xC7",
-      Ccirc: "\u0108",
-      Cconint: "\u2230",
-      Cdot: "\u010A",
-      Cedilla: "\xB8",
-      CenterDot: "\xB7",
-      Cfr: "\u212D",
-      Chi: "\u03A7",
-      CircleDot: "\u2299",
-      CircleMinus: "\u2296",
-      CirclePlus: "\u2295",
-      CircleTimes: "\u2297",
-      ClockwiseContourIntegral: "\u2232",
-      CloseCurlyDoubleQuote: "\u201D",
-      CloseCurlyQuote: "\u2019",
-      Colon: "\u2237",
-      Colone: "\u2A74",
-      Congruent: "\u2261",
-      Conint: "\u222F",
-      ContourIntegral: "\u222E",
-      Copf: "\u2102",
-      Coproduct: "\u2210",
-      CounterClockwiseContourIntegral: "\u2233",
-      Cross: "\u2A2F",
-      Cscr: "\u{1D49E}",
-      Cup: "\u22D3",
-      CupCap: "\u224D",
-      DD: "\u2145",
-      DDotrahd: "\u2911",
-      DJcy: "\u0402",
-      DScy: "\u0405",
-      DZcy: "\u040F",
-      Dagger: "\u2021",
-      Darr: "\u21A1",
-      Dashv: "\u2AE4",
-      Dcaron: "\u010E",
-      Dcy: "\u0414",
-      Del: "\u2207",
-      Delta: "\u0394",
-      Dfr: "\u{1D507}",
-      DiacriticalAcute: "\xB4",
-      DiacriticalDot: "\u02D9",
-      DiacriticalDoubleAcute: "\u02DD",
-      DiacriticalGrave: "`",
-      DiacriticalTilde: "\u02DC",
-      Diamond: "\u22C4",
-      DifferentialD: "\u2146",
-      Dopf: "\u{1D53B}",
-      Dot: "\xA8",
-      DotDot: "\u20DC",
-      DotEqual: "\u2250",
-      DoubleContourIntegral: "\u222F",
-      DoubleDot: "\xA8",
-      DoubleDownArrow: "\u21D3",
-      DoubleLeftArrow: "\u21D0",
-      DoubleLeftRightArrow: "\u21D4",
-      DoubleLeftTee: "\u2AE4",
-      DoubleLongLeftArrow: "\u27F8",
-      DoubleLongLeftRightArrow: "\u27FA",
-      DoubleLongRightArrow: "\u27F9",
-      DoubleRightArrow: "\u21D2",
-      DoubleRightTee: "\u22A8",
-      DoubleUpArrow: "\u21D1",
-      DoubleUpDownArrow: "\u21D5",
-      DoubleVerticalBar: "\u2225",
-      DownArrow: "\u2193",
-      DownArrowBar: "\u2913",
-      DownArrowUpArrow: "\u21F5",
-      DownBreve: "\u0311",
-      DownLeftRightVector: "\u2950",
-      DownLeftTeeVector: "\u295E",
-      DownLeftVector: "\u21BD",
-      DownLeftVectorBar: "\u2956",
-      DownRightTeeVector: "\u295F",
-      DownRightVector: "\u21C1",
-      DownRightVectorBar: "\u2957",
-      DownTee: "\u22A4",
-      DownTeeArrow: "\u21A7",
-      Downarrow: "\u21D3",
-      Dscr: "\u{1D49F}",
-      Dstrok: "\u0110",
-      ENG: "\u014A",
-      ET: "\xD0",
-      ETH: "\xD0",
-      Eacut: "\xC9",
-      Eacute: "\xC9",
-      Ecaron: "\u011A",
-      Ecir: "\xCA",
-      Ecirc: "\xCA",
-      Ecy: "\u042D",
-      Edot: "\u0116",
-      Efr: "\u{1D508}",
-      Egrav: "\xC8",
-      Egrave: "\xC8",
-      Element: "\u2208",
-      Emacr: "\u0112",
-      EmptySmallSquare: "\u25FB",
-      EmptyVerySmallSquare: "\u25AB",
-      Eogon: "\u0118",
-      Eopf: "\u{1D53C}",
-      Epsilon: "\u0395",
-      Equal: "\u2A75",
-      EqualTilde: "\u2242",
-      Equilibrium: "\u21CC",
-      Escr: "\u2130",
-      Esim: "\u2A73",
-      Eta: "\u0397",
-      Eum: "\xCB",
-      Euml: "\xCB",
-      Exists: "\u2203",
-      ExponentialE: "\u2147",
-      Fcy: "\u0424",
-      Ffr: "\u{1D509}",
-      FilledSmallSquare: "\u25FC",
-      FilledVerySmallSquare: "\u25AA",
-      Fopf: "\u{1D53D}",
-      ForAll: "\u2200",
-      Fouriertrf: "\u2131",
-      Fscr: "\u2131",
-      GJcy: "\u0403",
-      G: ">",
-      GT: ">",
-      Gamma: "\u0393",
-      Gammad: "\u03DC",
-      Gbreve: "\u011E",
-      Gcedil: "\u0122",
-      Gcirc: "\u011C",
-      Gcy: "\u0413",
-      Gdot: "\u0120",
-      Gfr: "\u{1D50A}",
-      Gg: "\u22D9",
-      Gopf: "\u{1D53E}",
-      GreaterEqual: "\u2265",
-      GreaterEqualLess: "\u22DB",
-      GreaterFullEqual: "\u2267",
-      GreaterGreater: "\u2AA2",
-      GreaterLess: "\u2277",
-      GreaterSlantEqual: "\u2A7E",
-      GreaterTilde: "\u2273",
-      Gscr: "\u{1D4A2}",
-      Gt: "\u226B",
-      HARDcy: "\u042A",
-      Hacek: "\u02C7",
-      Hat: "^",
-      Hcirc: "\u0124",
-      Hfr: "\u210C",
-      HilbertSpace: "\u210B",
-      Hopf: "\u210D",
-      HorizontalLine: "\u2500",
-      Hscr: "\u210B",
-      Hstrok: "\u0126",
-      HumpDownHump: "\u224E",
-      HumpEqual: "\u224F",
-      IEcy: "\u0415",
-      IJlig: "\u0132",
-      IOcy: "\u0401",
-      Iacut: "\xCD",
-      Iacute: "\xCD",
-      Icir: "\xCE",
-      Icirc: "\xCE",
-      Icy: "\u0418",
-      Idot: "\u0130",
-      Ifr: "\u2111",
-      Igrav: "\xCC",
-      Igrave: "\xCC",
-      Im: "\u2111",
-      Imacr: "\u012A",
-      ImaginaryI: "\u2148",
-      Implies: "\u21D2",
-      Int: "\u222C",
-      Integral: "\u222B",
-      Intersection: "\u22C2",
-      InvisibleComma: "\u2063",
-      InvisibleTimes: "\u2062",
-      Iogon: "\u012E",
-      Iopf: "\u{1D540}",
-      Iota: "\u0399",
-      Iscr: "\u2110",
-      Itilde: "\u0128",
-      Iukcy: "\u0406",
-      Ium: "\xCF",
-      Iuml: "\xCF",
-      Jcirc: "\u0134",
-      Jcy: "\u0419",
-      Jfr: "\u{1D50D}",
-      Jopf: "\u{1D541}",
-      Jscr: "\u{1D4A5}",
-      Jsercy: "\u0408",
-      Jukcy: "\u0404",
-      KHcy: "\u0425",
-      KJcy: "\u040C",
-      Kappa: "\u039A",
-      Kcedil: "\u0136",
-      Kcy: "\u041A",
-      Kfr: "\u{1D50E}",
-      Kopf: "\u{1D542}",
-      Kscr: "\u{1D4A6}",
-      LJcy: "\u0409",
-      L: "<",
-      LT: "<",
-      Lacute: "\u0139",
-      Lambda: "\u039B",
-      Lang: "\u27EA",
-      Laplacetrf: "\u2112",
-      Larr: "\u219E",
-      Lcaron: "\u013D",
-      Lcedil: "\u013B",
-      Lcy: "\u041B",
-      LeftAngleBracket: "\u27E8",
-      LeftArrow: "\u2190",
-      LeftArrowBar: "\u21E4",
-      LeftArrowRightArrow: "\u21C6",
-      LeftCeiling: "\u2308",
-      LeftDoubleBracket: "\u27E6",
-      LeftDownTeeVector: "\u2961",
-      LeftDownVector: "\u21C3",
-      LeftDownVectorBar: "\u2959",
-      LeftFloor: "\u230A",
-      LeftRightArrow: "\u2194",
-      LeftRightVector: "\u294E",
-      LeftTee: "\u22A3",
-      LeftTeeArrow: "\u21A4",
-      LeftTeeVector: "\u295A",
-      LeftTriangle: "\u22B2",
-      LeftTriangleBar: "\u29CF",
-      LeftTriangleEqual: "\u22B4",
-      LeftUpDownVector: "\u2951",
-      LeftUpTeeVector: "\u2960",
-      LeftUpVector: "\u21BF",
-      LeftUpVectorBar: "\u2958",
-      LeftVector: "\u21BC",
-      LeftVectorBar: "\u2952",
-      Leftarrow: "\u21D0",
-      Leftrightarrow: "\u21D4",
-      LessEqualGreater: "\u22DA",
-      LessFullEqual: "\u2266",
-      LessGreater: "\u2276",
-      LessLess: "\u2AA1",
-      LessSlantEqual: "\u2A7D",
-      LessTilde: "\u2272",
-      Lfr: "\u{1D50F}",
-      Ll: "\u22D8",
-      Lleftarrow: "\u21DA",
-      Lmidot: "\u013F",
-      LongLeftArrow: "\u27F5",
-      LongLeftRightArrow: "\u27F7",
-      LongRightArrow: "\u27F6",
-      Longleftarrow: "\u27F8",
-      Longleftrightarrow: "\u27FA",
-      Longrightarrow: "\u27F9",
-      Lopf: "\u{1D543}",
-      LowerLeftArrow: "\u2199",
-      LowerRightArrow: "\u2198",
-      Lscr: "\u2112",
-      Lsh: "\u21B0",
-      Lstrok: "\u0141",
-      Lt: "\u226A",
-      Map: "\u2905",
-      Mcy: "\u041C",
-      MediumSpace: "\u205F",
-      Mellintrf: "\u2133",
-      Mfr: "\u{1D510}",
-      MinusPlus: "\u2213",
-      Mopf: "\u{1D544}",
-      Mscr: "\u2133",
-      Mu: "\u039C",
-      NJcy: "\u040A",
-      Nacute: "\u0143",
-      Ncaron: "\u0147",
-      Ncedil: "\u0145",
-      Ncy: "\u041D",
-      NegativeMediumSpace: "\u200B",
-      NegativeThickSpace: "\u200B",
-      NegativeThinSpace: "\u200B",
-      NegativeVeryThinSpace: "\u200B",
-      NestedGreaterGreater: "\u226B",
-      NestedLessLess: "\u226A",
-      NewLine: "\n",
-      Nfr: "\u{1D511}",
-      NoBreak: "\u2060",
-      NonBreakingSpace: "\xA0",
-      Nopf: "\u2115",
-      Not: "\u2AEC",
-      NotCongruent: "\u2262",
-      NotCupCap: "\u226D",
-      NotDoubleVerticalBar: "\u2226",
-      NotElement: "\u2209",
-      NotEqual: "\u2260",
-      NotEqualTilde: "\u2242\u0338",
-      NotExists: "\u2204",
-      NotGreater: "\u226F",
-      NotGreaterEqual: "\u2271",
-      NotGreaterFullEqual: "\u2267\u0338",
-      NotGreaterGreater: "\u226B\u0338",
-      NotGreaterLess: "\u2279",
-      NotGreaterSlantEqual: "\u2A7E\u0338",
-      NotGreaterTilde: "\u2275",
-      NotHumpDownHump: "\u224E\u0338",
-      NotHumpEqual: "\u224F\u0338",
-      NotLeftTriangle: "\u22EA",
-      NotLeftTriangleBar: "\u29CF\u0338",
-      NotLeftTriangleEqual: "\u22EC",
-      NotLess: "\u226E",
-      NotLessEqual: "\u2270",
-      NotLessGreater: "\u2278",
-      NotLessLess: "\u226A\u0338",
-      NotLessSlantEqual: "\u2A7D\u0338",
-      NotLessTilde: "\u2274",
-      NotNestedGreaterGreater: "\u2AA2\u0338",
-      NotNestedLessLess: "\u2AA1\u0338",
-      NotPrecedes: "\u2280",
-      NotPrecedesEqual: "\u2AAF\u0338",
-      NotPrecedesSlantEqual: "\u22E0",
-      NotReverseElement: "\u220C",
-      NotRightTriangle: "\u22EB",
-      NotRightTriangleBar: "\u29D0\u0338",
-      NotRightTriangleEqual: "\u22ED",
-      NotSquareSubset: "\u228F\u0338",
-      NotSquareSubsetEqual: "\u22E2",
-      NotSquareSuperset: "\u2290\u0338",
-      NotSquareSupersetEqual: "\u22E3",
-      NotSubset: "\u2282\u20D2",
-      NotSubsetEqual: "\u2288",
-      NotSucceeds: "\u2281",
-      NotSucceedsEqual: "\u2AB0\u0338",
-      NotSucceedsSlantEqual: "\u22E1",
-      NotSucceedsTilde: "\u227F\u0338",
-      NotSuperset: "\u2283\u20D2",
-      NotSupersetEqual: "\u2289",
-      NotTilde: "\u2241",
-      NotTildeEqual: "\u2244",
-      NotTildeFullEqual: "\u2247",
-      NotTildeTilde: "\u2249",
-      NotVerticalBar: "\u2224",
-      Nscr: "\u{1D4A9}",
-      Ntild: "\xD1",
-      Ntilde: "\xD1",
-      Nu: "\u039D",
-      OElig: "\u0152",
-      Oacut: "\xD3",
-      Oacute: "\xD3",
-      Ocir: "\xD4",
-      Ocirc: "\xD4",
-      Ocy: "\u041E",
-      Odblac: "\u0150",
-      Ofr: "\u{1D512}",
-      Ograv: "\xD2",
-      Ograve: "\xD2",
-      Omacr: "\u014C",
-      Omega: "\u03A9",
-      Omicron: "\u039F",
-      Oopf: "\u{1D546}",
-      OpenCurlyDoubleQuote: "\u201C",
-      OpenCurlyQuote: "\u2018",
-      Or: "\u2A54",
-      Oscr: "\u{1D4AA}",
-      Oslas: "\xD8",
-      Oslash: "\xD8",
-      Otild: "\xD5",
-      Otilde: "\xD5",
-      Otimes: "\u2A37",
-      Oum: "\xD6",
-      Ouml: "\xD6",
-      OverBar: "\u203E",
-      OverBrace: "\u23DE",
-      OverBracket: "\u23B4",
-      OverParenthesis: "\u23DC",
-      PartialD: "\u2202",
-      Pcy: "\u041F",
-      Pfr: "\u{1D513}",
-      Phi: "\u03A6",
-      Pi: "\u03A0",
-      PlusMinus: "\xB1",
-      Poincareplane: "\u210C",
-      Popf: "\u2119",
-      Pr: "\u2ABB",
-      Precedes: "\u227A",
-      PrecedesEqual: "\u2AAF",
-      PrecedesSlantEqual: "\u227C",
-      PrecedesTilde: "\u227E",
-      Prime: "\u2033",
-      Product: "\u220F",
-      Proportion: "\u2237",
-      Proportional: "\u221D",
-      Pscr: "\u{1D4AB}",
-      Psi: "\u03A8",
-      QUO: '"',
-      QUOT: '"',
-      Qfr: "\u{1D514}",
-      Qopf: "\u211A",
-      Qscr: "\u{1D4AC}",
-      RBarr: "\u2910",
-      RE: "\xAE",
-      REG: "\xAE",
-      Racute: "\u0154",
-      Rang: "\u27EB",
-      Rarr: "\u21A0",
-      Rarrtl: "\u2916",
-      Rcaron: "\u0158",
-      Rcedil: "\u0156",
-      Rcy: "\u0420",
-      Re: "\u211C",
-      ReverseElement: "\u220B",
-      ReverseEquilibrium: "\u21CB",
-      ReverseUpEquilibrium: "\u296F",
-      Rfr: "\u211C",
-      Rho: "\u03A1",
-      RightAngleBracket: "\u27E9",
-      RightArrow: "\u2192",
-      RightArrowBar: "\u21E5",
-      RightArrowLeftArrow: "\u21C4",
-      RightCeiling: "\u2309",
-      RightDoubleBracket: "\u27E7",
-      RightDownTeeVector: "\u295D",
-      RightDownVector: "\u21C2",
-      RightDownVectorBar: "\u2955",
-      RightFloor: "\u230B",
-      RightTee: "\u22A2",
-      RightTeeArrow: "\u21A6",
-      RightTeeVector: "\u295B",
-      RightTriangle: "\u22B3",
-      RightTriangleBar: "\u29D0",
-      RightTriangleEqual: "\u22B5",
-      RightUpDownVector: "\u294F",
-      RightUpTeeVector: "\u295C",
-      RightUpVector: "\u21BE",
-      RightUpVectorBar: "\u2954",
-      RightVector: "\u21C0",
-      RightVectorBar: "\u2953",
-      Rightarrow: "\u21D2",
-      Ropf: "\u211D",
-      RoundImplies: "\u2970",
-      Rrightarrow: "\u21DB",
-      Rscr: "\u211B",
-      Rsh: "\u21B1",
-      RuleDelayed: "\u29F4",
-      SHCHcy: "\u0429",
-      SHcy: "\u0428",
-      SOFTcy: "\u042C",
-      Sacute: "\u015A",
-      Sc: "\u2ABC",
-      Scaron: "\u0160",
-      Scedil: "\u015E",
-      Scirc: "\u015C",
-      Scy: "\u0421",
-      Sfr: "\u{1D516}",
-      ShortDownArrow: "\u2193",
-      ShortLeftArrow: "\u2190",
-      ShortRightArrow: "\u2192",
-      ShortUpArrow: "\u2191",
-      Sigma: "\u03A3",
-      SmallCircle: "\u2218",
-      Sopf: "\u{1D54A}",
-      Sqrt: "\u221A",
-      Square: "\u25A1",
-      SquareIntersection: "\u2293",
-      SquareSubset: "\u228F",
-      SquareSubsetEqual: "\u2291",
-      SquareSuperset: "\u2290",
-      SquareSupersetEqual: "\u2292",
-      SquareUnion: "\u2294",
-      Sscr: "\u{1D4AE}",
-      Star: "\u22C6",
-      Sub: "\u22D0",
-      Subset: "\u22D0",
-      SubsetEqual: "\u2286",
-      Succeeds: "\u227B",
-      SucceedsEqual: "\u2AB0",
-      SucceedsSlantEqual: "\u227D",
-      SucceedsTilde: "\u227F",
-      SuchThat: "\u220B",
-      Sum: "\u2211",
-      Sup: "\u22D1",
-      Superset: "\u2283",
-      SupersetEqual: "\u2287",
-      Supset: "\u22D1",
-      THOR: "\xDE",
-      THORN: "\xDE",
-      TRADE: "\u2122",
-      TSHcy: "\u040B",
-      TScy: "\u0426",
-      Tab: "	",
-      Tau: "\u03A4",
-      Tcaron: "\u0164",
-      Tcedil: "\u0162",
-      Tcy: "\u0422",
-      Tfr: "\u{1D517}",
-      Therefore: "\u2234",
-      Theta: "\u0398",
-      ThickSpace: "\u205F\u200A",
-      ThinSpace: "\u2009",
-      Tilde: "\u223C",
-      TildeEqual: "\u2243",
-      TildeFullEqual: "\u2245",
-      TildeTilde: "\u2248",
-      Topf: "\u{1D54B}",
-      TripleDot: "\u20DB",
-      Tscr: "\u{1D4AF}",
-      Tstrok: "\u0166",
-      Uacut: "\xDA",
-      Uacute: "\xDA",
-      Uarr: "\u219F",
-      Uarrocir: "\u2949",
-      Ubrcy: "\u040E",
-      Ubreve: "\u016C",
-      Ucir: "\xDB",
-      Ucirc: "\xDB",
-      Ucy: "\u0423",
-      Udblac: "\u0170",
-      Ufr: "\u{1D518}",
-      Ugrav: "\xD9",
-      Ugrave: "\xD9",
-      Umacr: "\u016A",
-      UnderBar: "_",
-      UnderBrace: "\u23DF",
-      UnderBracket: "\u23B5",
-      UnderParenthesis: "\u23DD",
-      Union: "\u22C3",
-      UnionPlus: "\u228E",
-      Uogon: "\u0172",
-      Uopf: "\u{1D54C}",
-      UpArrow: "\u2191",
-      UpArrowBar: "\u2912",
-      UpArrowDownArrow: "\u21C5",
-      UpDownArrow: "\u2195",
-      UpEquilibrium: "\u296E",
-      UpTee: "\u22A5",
-      UpTeeArrow: "\u21A5",
-      Uparrow: "\u21D1",
-      Updownarrow: "\u21D5",
-      UpperLeftArrow: "\u2196",
-      UpperRightArrow: "\u2197",
-      Upsi: "\u03D2",
-      Upsilon: "\u03A5",
-      Uring: "\u016E",
-      Uscr: "\u{1D4B0}",
-      Utilde: "\u0168",
-      Uum: "\xDC",
-      Uuml: "\xDC",
-      VDash: "\u22AB",
-      Vbar: "\u2AEB",
-      Vcy: "\u0412",
-      Vdash: "\u22A9",
-      Vdashl: "\u2AE6",
-      Vee: "\u22C1",
-      Verbar: "\u2016",
-      Vert: "\u2016",
-      VerticalBar: "\u2223",
-      VerticalLine: "|",
-      VerticalSeparator: "\u2758",
-      VerticalTilde: "\u2240",
-      VeryThinSpace: "\u200A",
-      Vfr: "\u{1D519}",
-      Vopf: "\u{1D54D}",
-      Vscr: "\u{1D4B1}",
-      Vvdash: "\u22AA",
-      Wcirc: "\u0174",
-      Wedge: "\u22C0",
-      Wfr: "\u{1D51A}",
-      Wopf: "\u{1D54E}",
-      Wscr: "\u{1D4B2}",
-      Xfr: "\u{1D51B}",
-      Xi: "\u039E",
-      Xopf: "\u{1D54F}",
-      Xscr: "\u{1D4B3}",
-      YAcy: "\u042F",
-      YIcy: "\u0407",
-      YUcy: "\u042E",
-      Yacut: "\xDD",
-      Yacute: "\xDD",
-      Ycirc: "\u0176",
-      Ycy: "\u042B",
-      Yfr: "\u{1D51C}",
-      Yopf: "\u{1D550}",
-      Yscr: "\u{1D4B4}",
-      Yuml: "\u0178",
-      ZHcy: "\u0416",
-      Zacute: "\u0179",
-      Zcaron: "\u017D",
-      Zcy: "\u0417",
-      Zdot: "\u017B",
-      ZeroWidthSpace: "\u200B",
-      Zeta: "\u0396",
-      Zfr: "\u2128",
-      Zopf: "\u2124",
-      Zscr: "\u{1D4B5}",
-      aacut: "\xE1",
-      aacute: "\xE1",
-      abreve: "\u0103",
-      ac: "\u223E",
-      acE: "\u223E\u0333",
-      acd: "\u223F",
-      acir: "\xE2",
-      acirc: "\xE2",
-      acut: "\xB4",
-      acute: "\xB4",
-      acy: "\u0430",
-      aeli: "\xE6",
-      aelig: "\xE6",
-      af: "\u2061",
-      afr: "\u{1D51E}",
-      agrav: "\xE0",
-      agrave: "\xE0",
-      alefsym: "\u2135",
-      aleph: "\u2135",
-      alpha: "\u03B1",
-      amacr: "\u0101",
-      amalg: "\u2A3F",
-      am: "&",
-      amp: "&",
-      and: "\u2227",
-      andand: "\u2A55",
-      andd: "\u2A5C",
-      andslope: "\u2A58",
-      andv: "\u2A5A",
-      ang: "\u2220",
-      ange: "\u29A4",
-      angle: "\u2220",
-      angmsd: "\u2221",
-      angmsdaa: "\u29A8",
-      angmsdab: "\u29A9",
-      angmsdac: "\u29AA",
-      angmsdad: "\u29AB",
-      angmsdae: "\u29AC",
-      angmsdaf: "\u29AD",
-      angmsdag: "\u29AE",
-      angmsdah: "\u29AF",
-      angrt: "\u221F",
-      angrtvb: "\u22BE",
-      angrtvbd: "\u299D",
-      angsph: "\u2222",
-      angst: "\xC5",
-      angzarr: "\u237C",
-      aogon: "\u0105",
-      aopf: "\u{1D552}",
-      ap: "\u2248",
-      apE: "\u2A70",
-      apacir: "\u2A6F",
-      ape: "\u224A",
-      apid: "\u224B",
-      apos: "'",
-      approx: "\u2248",
-      approxeq: "\u224A",
-      arin: "\xE5",
-      aring: "\xE5",
-      ascr: "\u{1D4B6}",
-      ast: "*",
-      asymp: "\u2248",
-      asympeq: "\u224D",
-      atild: "\xE3",
-      atilde: "\xE3",
-      aum: "\xE4",
-      auml: "\xE4",
-      awconint: "\u2233",
-      awint: "\u2A11",
-      bNot: "\u2AED",
-      backcong: "\u224C",
-      backepsilon: "\u03F6",
-      backprime: "\u2035",
-      backsim: "\u223D",
-      backsimeq: "\u22CD",
-      barvee: "\u22BD",
-      barwed: "\u2305",
-      barwedge: "\u2305",
-      bbrk: "\u23B5",
-      bbrktbrk: "\u23B6",
-      bcong: "\u224C",
-      bcy: "\u0431",
-      bdquo: "\u201E",
-      becaus: "\u2235",
-      because: "\u2235",
-      bemptyv: "\u29B0",
-      bepsi: "\u03F6",
-      bernou: "\u212C",
-      beta: "\u03B2",
-      beth: "\u2136",
-      between: "\u226C",
-      bfr: "\u{1D51F}",
-      bigcap: "\u22C2",
-      bigcirc: "\u25EF",
-      bigcup: "\u22C3",
-      bigodot: "\u2A00",
-      bigoplus: "\u2A01",
-      bigotimes: "\u2A02",
-      bigsqcup: "\u2A06",
-      bigstar: "\u2605",
-      bigtriangledown: "\u25BD",
-      bigtriangleup: "\u25B3",
-      biguplus: "\u2A04",
-      bigvee: "\u22C1",
-      bigwedge: "\u22C0",
-      bkarow: "\u290D",
-      blacklozenge: "\u29EB",
-      blacksquare: "\u25AA",
-      blacktriangle: "\u25B4",
-      blacktriangledown: "\u25BE",
-      blacktriangleleft: "\u25C2",
-      blacktriangleright: "\u25B8",
-      blank: "\u2423",
-      blk12: "\u2592",
-      blk14: "\u2591",
-      blk34: "\u2593",
-      block: "\u2588",
-      bne: "=\u20E5",
-      bnequiv: "\u2261\u20E5",
-      bnot: "\u2310",
-      bopf: "\u{1D553}",
-      bot: "\u22A5",
-      bottom: "\u22A5",
-      bowtie: "\u22C8",
-      boxDL: "\u2557",
-      boxDR: "\u2554",
-      boxDl: "\u2556",
-      boxDr: "\u2553",
-      boxH: "\u2550",
-      boxHD: "\u2566",
-      boxHU: "\u2569",
-      boxHd: "\u2564",
-      boxHu: "\u2567",
-      boxUL: "\u255D",
-      boxUR: "\u255A",
-      boxUl: "\u255C",
-      boxUr: "\u2559",
-      boxV: "\u2551",
-      boxVH: "\u256C",
-      boxVL: "\u2563",
-      boxVR: "\u2560",
-      boxVh: "\u256B",
-      boxVl: "\u2562",
-      boxVr: "\u255F",
-      boxbox: "\u29C9",
-      boxdL: "\u2555",
-      boxdR: "\u2552",
-      boxdl: "\u2510",
-      boxdr: "\u250C",
-      boxh: "\u2500",
-      boxhD: "\u2565",
-      boxhU: "\u2568",
-      boxhd: "\u252C",
-      boxhu: "\u2534",
-      boxminus: "\u229F",
-      boxplus: "\u229E",
-      boxtimes: "\u22A0",
-      boxuL: "\u255B",
-      boxuR: "\u2558",
-      boxul: "\u2518",
-      boxur: "\u2514",
-      boxv: "\u2502",
-      boxvH: "\u256A",
-      boxvL: "\u2561",
-      boxvR: "\u255E",
-      boxvh: "\u253C",
-      boxvl: "\u2524",
-      boxvr: "\u251C",
-      bprime: "\u2035",
-      breve: "\u02D8",
-      brvba: "\xA6",
-      brvbar: "\xA6",
-      bscr: "\u{1D4B7}",
-      bsemi: "\u204F",
-      bsim: "\u223D",
-      bsime: "\u22CD",
-      bsol: "\\",
-      bsolb: "\u29C5",
-      bsolhsub: "\u27C8",
-      bull: "\u2022",
-      bullet: "\u2022",
-      bump: "\u224E",
-      bumpE: "\u2AAE",
-      bumpe: "\u224F",
-      bumpeq: "\u224F",
-      cacute: "\u0107",
-      cap: "\u2229",
-      capand: "\u2A44",
-      capbrcup: "\u2A49",
-      capcap: "\u2A4B",
-      capcup: "\u2A47",
-      capdot: "\u2A40",
-      caps: "\u2229\uFE00",
-      caret: "\u2041",
-      caron: "\u02C7",
-      ccaps: "\u2A4D",
-      ccaron: "\u010D",
-      ccedi: "\xE7",
-      ccedil: "\xE7",
-      ccirc: "\u0109",
-      ccups: "\u2A4C",
-      ccupssm: "\u2A50",
-      cdot: "\u010B",
-      cedi: "\xB8",
-      cedil: "\xB8",
-      cemptyv: "\u29B2",
-      cen: "\xA2",
-      cent: "\xA2",
-      centerdot: "\xB7",
-      cfr: "\u{1D520}",
-      chcy: "\u0447",
-      check: "\u2713",
-      checkmark: "\u2713",
-      chi: "\u03C7",
-      cir: "\u25CB",
-      cirE: "\u29C3",
-      circ: "\u02C6",
-      circeq: "\u2257",
-      circlearrowleft: "\u21BA",
-      circlearrowright: "\u21BB",
-      circledR: "\xAE",
-      circledS: "\u24C8",
-      circledast: "\u229B",
-      circledcirc: "\u229A",
-      circleddash: "\u229D",
-      cire: "\u2257",
-      cirfnint: "\u2A10",
-      cirmid: "\u2AEF",
-      cirscir: "\u29C2",
-      clubs: "\u2663",
-      clubsuit: "\u2663",
-      colon: ":",
-      colone: "\u2254",
-      coloneq: "\u2254",
-      comma: ",",
-      commat: "@",
-      comp: "\u2201",
-      compfn: "\u2218",
-      complement: "\u2201",
-      complexes: "\u2102",
-      cong: "\u2245",
-      congdot: "\u2A6D",
-      conint: "\u222E",
-      copf: "\u{1D554}",
-      coprod: "\u2210",
-      cop: "\xA9",
-      copy: "\xA9",
-      copysr: "\u2117",
-      crarr: "\u21B5",
-      cross: "\u2717",
-      cscr: "\u{1D4B8}",
-      csub: "\u2ACF",
-      csube: "\u2AD1",
-      csup: "\u2AD0",
-      csupe: "\u2AD2",
-      ctdot: "\u22EF",
-      cudarrl: "\u2938",
-      cudarrr: "\u2935",
-      cuepr: "\u22DE",
-      cuesc: "\u22DF",
-      cularr: "\u21B6",
-      cularrp: "\u293D",
-      cup: "\u222A",
-      cupbrcap: "\u2A48",
-      cupcap: "\u2A46",
-      cupcup: "\u2A4A",
-      cupdot: "\u228D",
-      cupor: "\u2A45",
-      cups: "\u222A\uFE00",
-      curarr: "\u21B7",
-      curarrm: "\u293C",
-      curlyeqprec: "\u22DE",
-      curlyeqsucc: "\u22DF",
-      curlyvee: "\u22CE",
-      curlywedge: "\u22CF",
-      curre: "\xA4",
-      curren: "\xA4",
-      curvearrowleft: "\u21B6",
-      curvearrowright: "\u21B7",
-      cuvee: "\u22CE",
-      cuwed: "\u22CF",
-      cwconint: "\u2232",
-      cwint: "\u2231",
-      cylcty: "\u232D",
-      dArr: "\u21D3",
-      dHar: "\u2965",
-      dagger: "\u2020",
-      daleth: "\u2138",
-      darr: "\u2193",
-      dash: "\u2010",
-      dashv: "\u22A3",
-      dbkarow: "\u290F",
-      dblac: "\u02DD",
-      dcaron: "\u010F",
-      dcy: "\u0434",
-      dd: "\u2146",
-      ddagger: "\u2021",
-      ddarr: "\u21CA",
-      ddotseq: "\u2A77",
-      de: "\xB0",
-      deg: "\xB0",
-      delta: "\u03B4",
-      demptyv: "\u29B1",
-      dfisht: "\u297F",
-      dfr: "\u{1D521}",
-      dharl: "\u21C3",
-      dharr: "\u21C2",
-      diam: "\u22C4",
-      diamond: "\u22C4",
-      diamondsuit: "\u2666",
-      diams: "\u2666",
-      die: "\xA8",
-      digamma: "\u03DD",
-      disin: "\u22F2",
-      div: "\xF7",
-      divid: "\xF7",
-      divide: "\xF7",
-      divideontimes: "\u22C7",
-      divonx: "\u22C7",
-      djcy: "\u0452",
-      dlcorn: "\u231E",
-      dlcrop: "\u230D",
-      dollar: "$",
-      dopf: "\u{1D555}",
-      dot: "\u02D9",
-      doteq: "\u2250",
-      doteqdot: "\u2251",
-      dotminus: "\u2238",
-      dotplus: "\u2214",
-      dotsquare: "\u22A1",
-      doublebarwedge: "\u2306",
-      downarrow: "\u2193",
-      downdownarrows: "\u21CA",
-      downharpoonleft: "\u21C3",
-      downharpoonright: "\u21C2",
-      drbkarow: "\u2910",
-      drcorn: "\u231F",
-      drcrop: "\u230C",
-      dscr: "\u{1D4B9}",
-      dscy: "\u0455",
-      dsol: "\u29F6",
-      dstrok: "\u0111",
-      dtdot: "\u22F1",
-      dtri: "\u25BF",
-      dtrif: "\u25BE",
-      duarr: "\u21F5",
-      duhar: "\u296F",
-      dwangle: "\u29A6",
-      dzcy: "\u045F",
-      dzigrarr: "\u27FF",
-      eDDot: "\u2A77",
-      eDot: "\u2251",
-      eacut: "\xE9",
-      eacute: "\xE9",
-      easter: "\u2A6E",
-      ecaron: "\u011B",
-      ecir: "\xEA",
-      ecirc: "\xEA",
-      ecolon: "\u2255",
-      ecy: "\u044D",
-      edot: "\u0117",
-      ee: "\u2147",
-      efDot: "\u2252",
-      efr: "\u{1D522}",
-      eg: "\u2A9A",
-      egrav: "\xE8",
-      egrave: "\xE8",
-      egs: "\u2A96",
-      egsdot: "\u2A98",
-      el: "\u2A99",
-      elinters: "\u23E7",
-      ell: "\u2113",
-      els: "\u2A95",
-      elsdot: "\u2A97",
-      emacr: "\u0113",
-      empty: "\u2205",
-      emptyset: "\u2205",
-      emptyv: "\u2205",
-      emsp13: "\u2004",
-      emsp14: "\u2005",
-      emsp: "\u2003",
-      eng: "\u014B",
-      ensp: "\u2002",
-      eogon: "\u0119",
-      eopf: "\u{1D556}",
-      epar: "\u22D5",
-      eparsl: "\u29E3",
-      eplus: "\u2A71",
-      epsi: "\u03B5",
-      epsilon: "\u03B5",
-      epsiv: "\u03F5",
-      eqcirc: "\u2256",
-      eqcolon: "\u2255",
-      eqsim: "\u2242",
-      eqslantgtr: "\u2A96",
-      eqslantless: "\u2A95",
-      equals: "=",
-      equest: "\u225F",
-      equiv: "\u2261",
-      equivDD: "\u2A78",
-      eqvparsl: "\u29E5",
-      erDot: "\u2253",
-      erarr: "\u2971",
-      escr: "\u212F",
-      esdot: "\u2250",
-      esim: "\u2242",
-      eta: "\u03B7",
-      et: "\xF0",
-      eth: "\xF0",
-      eum: "\xEB",
-      euml: "\xEB",
-      euro: "\u20AC",
-      excl: "!",
-      exist: "\u2203",
-      expectation: "\u2130",
-      exponentiale: "\u2147",
-      fallingdotseq: "\u2252",
-      fcy: "\u0444",
-      female: "\u2640",
-      ffilig: "\uFB03",
-      fflig: "\uFB00",
-      ffllig: "\uFB04",
-      ffr: "\u{1D523}",
-      filig: "\uFB01",
-      fjlig: "fj",
-      flat: "\u266D",
-      fllig: "\uFB02",
-      fltns: "\u25B1",
-      fnof: "\u0192",
-      fopf: "\u{1D557}",
-      forall: "\u2200",
-      fork: "\u22D4",
-      forkv: "\u2AD9",
-      fpartint: "\u2A0D",
-      frac1: "\xBC",
-      frac12: "\xBD",
-      frac13: "\u2153",
-      frac14: "\xBC",
-      frac15: "\u2155",
-      frac16: "\u2159",
-      frac18: "\u215B",
-      frac23: "\u2154",
-      frac25: "\u2156",
-      frac3: "\xBE",
-      frac34: "\xBE",
-      frac35: "\u2157",
-      frac38: "\u215C",
-      frac45: "\u2158",
-      frac56: "\u215A",
-      frac58: "\u215D",
-      frac78: "\u215E",
-      frasl: "\u2044",
-      frown: "\u2322",
-      fscr: "\u{1D4BB}",
-      gE: "\u2267",
-      gEl: "\u2A8C",
-      gacute: "\u01F5",
-      gamma: "\u03B3",
-      gammad: "\u03DD",
-      gap: "\u2A86",
-      gbreve: "\u011F",
-      gcirc: "\u011D",
-      gcy: "\u0433",
-      gdot: "\u0121",
-      ge: "\u2265",
-      gel: "\u22DB",
-      geq: "\u2265",
-      geqq: "\u2267",
-      geqslant: "\u2A7E",
-      ges: "\u2A7E",
-      gescc: "\u2AA9",
-      gesdot: "\u2A80",
-      gesdoto: "\u2A82",
-      gesdotol: "\u2A84",
-      gesl: "\u22DB\uFE00",
-      gesles: "\u2A94",
-      gfr: "\u{1D524}",
-      gg: "\u226B",
-      ggg: "\u22D9",
-      gimel: "\u2137",
-      gjcy: "\u0453",
-      gl: "\u2277",
-      glE: "\u2A92",
-      gla: "\u2AA5",
-      glj: "\u2AA4",
-      gnE: "\u2269",
-      gnap: "\u2A8A",
-      gnapprox: "\u2A8A",
-      gne: "\u2A88",
-      gneq: "\u2A88",
-      gneqq: "\u2269",
-      gnsim: "\u22E7",
-      gopf: "\u{1D558}",
-      grave: "`",
-      gscr: "\u210A",
-      gsim: "\u2273",
-      gsime: "\u2A8E",
-      gsiml: "\u2A90",
-      g: ">",
-      gt: ">",
-      gtcc: "\u2AA7",
-      gtcir: "\u2A7A",
-      gtdot: "\u22D7",
-      gtlPar: "\u2995",
-      gtquest: "\u2A7C",
-      gtrapprox: "\u2A86",
-      gtrarr: "\u2978",
-      gtrdot: "\u22D7",
-      gtreqless: "\u22DB",
-      gtreqqless: "\u2A8C",
-      gtrless: "\u2277",
-      gtrsim: "\u2273",
-      gvertneqq: "\u2269\uFE00",
-      gvnE: "\u2269\uFE00",
-      hArr: "\u21D4",
-      hairsp: "\u200A",
-      half: "\xBD",
-      hamilt: "\u210B",
-      hardcy: "\u044A",
-      harr: "\u2194",
-      harrcir: "\u2948",
-      harrw: "\u21AD",
-      hbar: "\u210F",
-      hcirc: "\u0125",
-      hearts: "\u2665",
-      heartsuit: "\u2665",
-      hellip: "\u2026",
-      hercon: "\u22B9",
-      hfr: "\u{1D525}",
-      hksearow: "\u2925",
-      hkswarow: "\u2926",
-      hoarr: "\u21FF",
-      homtht: "\u223B",
-      hookleftarrow: "\u21A9",
-      hookrightarrow: "\u21AA",
-      hopf: "\u{1D559}",
-      horbar: "\u2015",
-      hscr: "\u{1D4BD}",
-      hslash: "\u210F",
-      hstrok: "\u0127",
-      hybull: "\u2043",
-      hyphen: "\u2010",
-      iacut: "\xED",
-      iacute: "\xED",
-      ic: "\u2063",
-      icir: "\xEE",
-      icirc: "\xEE",
-      icy: "\u0438",
-      iecy: "\u0435",
-      iexc: "\xA1",
-      iexcl: "\xA1",
-      iff: "\u21D4",
-      ifr: "\u{1D526}",
-      igrav: "\xEC",
-      igrave: "\xEC",
-      ii: "\u2148",
-      iiiint: "\u2A0C",
-      iiint: "\u222D",
-      iinfin: "\u29DC",
-      iiota: "\u2129",
-      ijlig: "\u0133",
-      imacr: "\u012B",
-      image: "\u2111",
-      imagline: "\u2110",
-      imagpart: "\u2111",
-      imath: "\u0131",
-      imof: "\u22B7",
-      imped: "\u01B5",
-      in: "\u2208",
-      incare: "\u2105",
-      infin: "\u221E",
-      infintie: "\u29DD",
-      inodot: "\u0131",
-      int: "\u222B",
-      intcal: "\u22BA",
-      integers: "\u2124",
-      intercal: "\u22BA",
-      intlarhk: "\u2A17",
-      intprod: "\u2A3C",
-      iocy: "\u0451",
-      iogon: "\u012F",
-      iopf: "\u{1D55A}",
-      iota: "\u03B9",
-      iprod: "\u2A3C",
-      iques: "\xBF",
-      iquest: "\xBF",
-      iscr: "\u{1D4BE}",
-      isin: "\u2208",
-      isinE: "\u22F9",
-      isindot: "\u22F5",
-      isins: "\u22F4",
-      isinsv: "\u22F3",
-      isinv: "\u2208",
-      it: "\u2062",
-      itilde: "\u0129",
-      iukcy: "\u0456",
-      ium: "\xEF",
-      iuml: "\xEF",
-      jcirc: "\u0135",
-      jcy: "\u0439",
-      jfr: "\u{1D527}",
-      jmath: "\u0237",
-      jopf: "\u{1D55B}",
-      jscr: "\u{1D4BF}",
-      jsercy: "\u0458",
-      jukcy: "\u0454",
-      kappa: "\u03BA",
-      kappav: "\u03F0",
-      kcedil: "\u0137",
-      kcy: "\u043A",
-      kfr: "\u{1D528}",
-      kgreen: "\u0138",
-      khcy: "\u0445",
-      kjcy: "\u045C",
-      kopf: "\u{1D55C}",
-      kscr: "\u{1D4C0}",
-      lAarr: "\u21DA",
-      lArr: "\u21D0",
-      lAtail: "\u291B",
-      lBarr: "\u290E",
-      lE: "\u2266",
-      lEg: "\u2A8B",
-      lHar: "\u2962",
-      lacute: "\u013A",
-      laemptyv: "\u29B4",
-      lagran: "\u2112",
-      lambda: "\u03BB",
-      lang: "\u27E8",
-      langd: "\u2991",
-      langle: "\u27E8",
-      lap: "\u2A85",
-      laqu: "\xAB",
-      laquo: "\xAB",
-      larr: "\u2190",
-      larrb: "\u21E4",
-      larrbfs: "\u291F",
-      larrfs: "\u291D",
-      larrhk: "\u21A9",
-      larrlp: "\u21AB",
-      larrpl: "\u2939",
-      larrsim: "\u2973",
-      larrtl: "\u21A2",
-      lat: "\u2AAB",
-      latail: "\u2919",
-      late: "\u2AAD",
-      lates: "\u2AAD\uFE00",
-      lbarr: "\u290C",
-      lbbrk: "\u2772",
-      lbrace: "{",
-      lbrack: "[",
-      lbrke: "\u298B",
-      lbrksld: "\u298F",
-      lbrkslu: "\u298D",
-      lcaron: "\u013E",
-      lcedil: "\u013C",
-      lceil: "\u2308",
-      lcub: "{",
-      lcy: "\u043B",
-      ldca: "\u2936",
-      ldquo: "\u201C",
-      ldquor: "\u201E",
-      ldrdhar: "\u2967",
-      ldrushar: "\u294B",
-      ldsh: "\u21B2",
-      le: "\u2264",
-      leftarrow: "\u2190",
-      leftarrowtail: "\u21A2",
-      leftharpoondown: "\u21BD",
-      leftharpoonup: "\u21BC",
-      leftleftarrows: "\u21C7",
-      leftrightarrow: "\u2194",
-      leftrightarrows: "\u21C6",
-      leftrightharpoons: "\u21CB",
-      leftrightsquigarrow: "\u21AD",
-      leftthreetimes: "\u22CB",
-      leg: "\u22DA",
-      leq: "\u2264",
-      leqq: "\u2266",
-      leqslant: "\u2A7D",
-      les: "\u2A7D",
-      lescc: "\u2AA8",
-      lesdot: "\u2A7F",
-      lesdoto: "\u2A81",
-      lesdotor: "\u2A83",
-      lesg: "\u22DA\uFE00",
-      lesges: "\u2A93",
-      lessapprox: "\u2A85",
-      lessdot: "\u22D6",
-      lesseqgtr: "\u22DA",
-      lesseqqgtr: "\u2A8B",
-      lessgtr: "\u2276",
-      lesssim: "\u2272",
-      lfisht: "\u297C",
-      lfloor: "\u230A",
-      lfr: "\u{1D529}",
-      lg: "\u2276",
-      lgE: "\u2A91",
-      lhard: "\u21BD",
-      lharu: "\u21BC",
-      lharul: "\u296A",
-      lhblk: "\u2584",
-      ljcy: "\u0459",
-      ll: "\u226A",
-      llarr: "\u21C7",
-      llcorner: "\u231E",
-      llhard: "\u296B",
-      lltri: "\u25FA",
-      lmidot: "\u0140",
-      lmoust: "\u23B0",
-      lmoustache: "\u23B0",
-      lnE: "\u2268",
-      lnap: "\u2A89",
-      lnapprox: "\u2A89",
-      lne: "\u2A87",
-      lneq: "\u2A87",
-      lneqq: "\u2268",
-      lnsim: "\u22E6",
-      loang: "\u27EC",
-      loarr: "\u21FD",
-      lobrk: "\u27E6",
-      longleftarrow: "\u27F5",
-      longleftrightarrow: "\u27F7",
-      longmapsto: "\u27FC",
-      longrightarrow: "\u27F6",
-      looparrowleft: "\u21AB",
-      looparrowright: "\u21AC",
-      lopar: "\u2985",
-      lopf: "\u{1D55D}",
-      loplus: "\u2A2D",
-      lotimes: "\u2A34",
-      lowast: "\u2217",
-      lowbar: "_",
-      loz: "\u25CA",
-      lozenge: "\u25CA",
-      lozf: "\u29EB",
-      lpar: "(",
-      lparlt: "\u2993",
-      lrarr: "\u21C6",
-      lrcorner: "\u231F",
-      lrhar: "\u21CB",
-      lrhard: "\u296D",
-      lrm: "\u200E",
-      lrtri: "\u22BF",
-      lsaquo: "\u2039",
-      lscr: "\u{1D4C1}",
-      lsh: "\u21B0",
-      lsim: "\u2272",
-      lsime: "\u2A8D",
-      lsimg: "\u2A8F",
-      lsqb: "[",
-      lsquo: "\u2018",
-      lsquor: "\u201A",
-      lstrok: "\u0142",
-      l: "<",
-      lt: "<",
-      ltcc: "\u2AA6",
-      ltcir: "\u2A79",
-      ltdot: "\u22D6",
-      lthree: "\u22CB",
-      ltimes: "\u22C9",
-      ltlarr: "\u2976",
-      ltquest: "\u2A7B",
-      ltrPar: "\u2996",
-      ltri: "\u25C3",
-      ltrie: "\u22B4",
-      ltrif: "\u25C2",
-      lurdshar: "\u294A",
-      luruhar: "\u2966",
-      lvertneqq: "\u2268\uFE00",
-      lvnE: "\u2268\uFE00",
-      mDDot: "\u223A",
-      mac: "\xAF",
-      macr: "\xAF",
-      male: "\u2642",
-      malt: "\u2720",
-      maltese: "\u2720",
-      map: "\u21A6",
-      mapsto: "\u21A6",
-      mapstodown: "\u21A7",
-      mapstoleft: "\u21A4",
-      mapstoup: "\u21A5",
-      marker: "\u25AE",
-      mcomma: "\u2A29",
-      mcy: "\u043C",
-      mdash: "\u2014",
-      measuredangle: "\u2221",
-      mfr: "\u{1D52A}",
-      mho: "\u2127",
-      micr: "\xB5",
-      micro: "\xB5",
-      mid: "\u2223",
-      midast: "*",
-      midcir: "\u2AF0",
-      middo: "\xB7",
-      middot: "\xB7",
-      minus: "\u2212",
-      minusb: "\u229F",
-      minusd: "\u2238",
-      minusdu: "\u2A2A",
-      mlcp: "\u2ADB",
-      mldr: "\u2026",
-      mnplus: "\u2213",
-      models: "\u22A7",
-      mopf: "\u{1D55E}",
-      mp: "\u2213",
-      mscr: "\u{1D4C2}",
-      mstpos: "\u223E",
-      mu: "\u03BC",
-      multimap: "\u22B8",
-      mumap: "\u22B8",
-      nGg: "\u22D9\u0338",
-      nGt: "\u226B\u20D2",
-      nGtv: "\u226B\u0338",
-      nLeftarrow: "\u21CD",
-      nLeftrightarrow: "\u21CE",
-      nLl: "\u22D8\u0338",
-      nLt: "\u226A\u20D2",
-      nLtv: "\u226A\u0338",
-      nRightarrow: "\u21CF",
-      nVDash: "\u22AF",
-      nVdash: "\u22AE",
-      nabla: "\u2207",
-      nacute: "\u0144",
-      nang: "\u2220\u20D2",
-      nap: "\u2249",
-      napE: "\u2A70\u0338",
-      napid: "\u224B\u0338",
-      napos: "\u0149",
-      napprox: "\u2249",
-      natur: "\u266E",
-      natural: "\u266E",
-      naturals: "\u2115",
-      nbs: "\xA0",
-      nbsp: "\xA0",
-      nbump: "\u224E\u0338",
-      nbumpe: "\u224F\u0338",
-      ncap: "\u2A43",
-      ncaron: "\u0148",
-      ncedil: "\u0146",
-      ncong: "\u2247",
-      ncongdot: "\u2A6D\u0338",
-      ncup: "\u2A42",
-      ncy: "\u043D",
-      ndash: "\u2013",
-      ne: "\u2260",
-      neArr: "\u21D7",
-      nearhk: "\u2924",
-      nearr: "\u2197",
-      nearrow: "\u2197",
-      nedot: "\u2250\u0338",
-      nequiv: "\u2262",
-      nesear: "\u2928",
-      nesim: "\u2242\u0338",
-      nexist: "\u2204",
-      nexists: "\u2204",
-      nfr: "\u{1D52B}",
-      ngE: "\u2267\u0338",
-      nge: "\u2271",
-      ngeq: "\u2271",
-      ngeqq: "\u2267\u0338",
-      ngeqslant: "\u2A7E\u0338",
-      nges: "\u2A7E\u0338",
-      ngsim: "\u2275",
-      ngt: "\u226F",
-      ngtr: "\u226F",
-      nhArr: "\u21CE",
-      nharr: "\u21AE",
-      nhpar: "\u2AF2",
-      ni: "\u220B",
-      nis: "\u22FC",
-      nisd: "\u22FA",
-      niv: "\u220B",
-      njcy: "\u045A",
-      nlArr: "\u21CD",
-      nlE: "\u2266\u0338",
-      nlarr: "\u219A",
-      nldr: "\u2025",
-      nle: "\u2270",
-      nleftarrow: "\u219A",
-      nleftrightarrow: "\u21AE",
-      nleq: "\u2270",
-      nleqq: "\u2266\u0338",
-      nleqslant: "\u2A7D\u0338",
-      nles: "\u2A7D\u0338",
-      nless: "\u226E",
-      nlsim: "\u2274",
-      nlt: "\u226E",
-      nltri: "\u22EA",
-      nltrie: "\u22EC",
-      nmid: "\u2224",
-      nopf: "\u{1D55F}",
-      no: "\xAC",
-      not: "\xAC",
-      notin: "\u2209",
-      notinE: "\u22F9\u0338",
-      notindot: "\u22F5\u0338",
-      notinva: "\u2209",
-      notinvb: "\u22F7",
-      notinvc: "\u22F6",
-      notni: "\u220C",
-      notniva: "\u220C",
-      notnivb: "\u22FE",
-      notnivc: "\u22FD",
-      npar: "\u2226",
-      nparallel: "\u2226",
-      nparsl: "\u2AFD\u20E5",
-      npart: "\u2202\u0338",
-      npolint: "\u2A14",
-      npr: "\u2280",
-      nprcue: "\u22E0",
-      npre: "\u2AAF\u0338",
-      nprec: "\u2280",
-      npreceq: "\u2AAF\u0338",
-      nrArr: "\u21CF",
-      nrarr: "\u219B",
-      nrarrc: "\u2933\u0338",
-      nrarrw: "\u219D\u0338",
-      nrightarrow: "\u219B",
-      nrtri: "\u22EB",
-      nrtrie: "\u22ED",
-      nsc: "\u2281",
-      nsccue: "\u22E1",
-      nsce: "\u2AB0\u0338",
-      nscr: "\u{1D4C3}",
-      nshortmid: "\u2224",
-      nshortparallel: "\u2226",
-      nsim: "\u2241",
-      nsime: "\u2244",
-      nsimeq: "\u2244",
-      nsmid: "\u2224",
-      nspar: "\u2226",
-      nsqsube: "\u22E2",
-      nsqsupe: "\u22E3",
-      nsub: "\u2284",
-      nsubE: "\u2AC5\u0338",
-      nsube: "\u2288",
-      nsubset: "\u2282\u20D2",
-      nsubseteq: "\u2288",
-      nsubseteqq: "\u2AC5\u0338",
-      nsucc: "\u2281",
-      nsucceq: "\u2AB0\u0338",
-      nsup: "\u2285",
-      nsupE: "\u2AC6\u0338",
-      nsupe: "\u2289",
-      nsupset: "\u2283\u20D2",
-      nsupseteq: "\u2289",
-      nsupseteqq: "\u2AC6\u0338",
-      ntgl: "\u2279",
-      ntild: "\xF1",
-      ntilde: "\xF1",
-      ntlg: "\u2278",
-      ntriangleleft: "\u22EA",
-      ntrianglelefteq: "\u22EC",
-      ntriangleright: "\u22EB",
-      ntrianglerighteq: "\u22ED",
-      nu: "\u03BD",
-      num: "#",
-      numero: "\u2116",
-      numsp: "\u2007",
-      nvDash: "\u22AD",
-      nvHarr: "\u2904",
-      nvap: "\u224D\u20D2",
-      nvdash: "\u22AC",
-      nvge: "\u2265\u20D2",
-      nvgt: ">\u20D2",
-      nvinfin: "\u29DE",
-      nvlArr: "\u2902",
-      nvle: "\u2264\u20D2",
-      nvlt: "<\u20D2",
-      nvltrie: "\u22B4\u20D2",
-      nvrArr: "\u2903",
-      nvrtrie: "\u22B5\u20D2",
-      nvsim: "\u223C\u20D2",
-      nwArr: "\u21D6",
-      nwarhk: "\u2923",
-      nwarr: "\u2196",
-      nwarrow: "\u2196",
-      nwnear: "\u2927",
-      oS: "\u24C8",
-      oacut: "\xF3",
-      oacute: "\xF3",
-      oast: "\u229B",
-      ocir: "\xF4",
-      ocirc: "\xF4",
-      ocy: "\u043E",
-      odash: "\u229D",
-      odblac: "\u0151",
-      odiv: "\u2A38",
-      odot: "\u2299",
-      odsold: "\u29BC",
-      oelig: "\u0153",
-      ofcir: "\u29BF",
-      ofr: "\u{1D52C}",
-      ogon: "\u02DB",
-      ograv: "\xF2",
-      ograve: "\xF2",
-      ogt: "\u29C1",
-      ohbar: "\u29B5",
-      ohm: "\u03A9",
-      oint: "\u222E",
-      olarr: "\u21BA",
-      olcir: "\u29BE",
-      olcross: "\u29BB",
-      oline: "\u203E",
-      olt: "\u29C0",
-      omacr: "\u014D",
-      omega: "\u03C9",
-      omicron: "\u03BF",
-      omid: "\u29B6",
-      ominus: "\u2296",
-      oopf: "\u{1D560}",
-      opar: "\u29B7",
-      operp: "\u29B9",
-      oplus: "\u2295",
-      or: "\u2228",
-      orarr: "\u21BB",
-      ord: "\xBA",
-      order: "\u2134",
-      orderof: "\u2134",
-      ordf: "\xAA",
-      ordm: "\xBA",
-      origof: "\u22B6",
-      oror: "\u2A56",
-      orslope: "\u2A57",
-      orv: "\u2A5B",
-      oscr: "\u2134",
-      oslas: "\xF8",
-      oslash: "\xF8",
-      osol: "\u2298",
-      otild: "\xF5",
-      otilde: "\xF5",
-      otimes: "\u2297",
-      otimesas: "\u2A36",
-      oum: "\xF6",
-      ouml: "\xF6",
-      ovbar: "\u233D",
-      par: "\xB6",
-      para: "\xB6",
-      parallel: "\u2225",
-      parsim: "\u2AF3",
-      parsl: "\u2AFD",
-      part: "\u2202",
-      pcy: "\u043F",
-      percnt: "%",
-      period: ".",
-      permil: "\u2030",
-      perp: "\u22A5",
-      pertenk: "\u2031",
-      pfr: "\u{1D52D}",
-      phi: "\u03C6",
-      phiv: "\u03D5",
-      phmmat: "\u2133",
-      phone: "\u260E",
-      pi: "\u03C0",
-      pitchfork: "\u22D4",
-      piv: "\u03D6",
-      planck: "\u210F",
-      planckh: "\u210E",
-      plankv: "\u210F",
-      plus: "+",
-      plusacir: "\u2A23",
-      plusb: "\u229E",
-      pluscir: "\u2A22",
-      plusdo: "\u2214",
-      plusdu: "\u2A25",
-      pluse: "\u2A72",
-      plusm: "\xB1",
-      plusmn: "\xB1",
-      plussim: "\u2A26",
-      plustwo: "\u2A27",
-      pm: "\xB1",
-      pointint: "\u2A15",
-      popf: "\u{1D561}",
-      poun: "\xA3",
-      pound: "\xA3",
-      pr: "\u227A",
-      prE: "\u2AB3",
-      prap: "\u2AB7",
-      prcue: "\u227C",
-      pre: "\u2AAF",
-      prec: "\u227A",
-      precapprox: "\u2AB7",
-      preccurlyeq: "\u227C",
-      preceq: "\u2AAF",
-      precnapprox: "\u2AB9",
-      precneqq: "\u2AB5",
-      precnsim: "\u22E8",
-      precsim: "\u227E",
-      prime: "\u2032",
-      primes: "\u2119",
-      prnE: "\u2AB5",
-      prnap: "\u2AB9",
-      prnsim: "\u22E8",
-      prod: "\u220F",
-      profalar: "\u232E",
-      profline: "\u2312",
-      profsurf: "\u2313",
-      prop: "\u221D",
-      propto: "\u221D",
-      prsim: "\u227E",
-      prurel: "\u22B0",
-      pscr: "\u{1D4C5}",
-      psi: "\u03C8",
-      puncsp: "\u2008",
-      qfr: "\u{1D52E}",
-      qint: "\u2A0C",
-      qopf: "\u{1D562}",
-      qprime: "\u2057",
-      qscr: "\u{1D4C6}",
-      quaternions: "\u210D",
-      quatint: "\u2A16",
-      quest: "?",
-      questeq: "\u225F",
-      quo: '"',
-      quot: '"',
-      rAarr: "\u21DB",
-      rArr: "\u21D2",
-      rAtail: "\u291C",
-      rBarr: "\u290F",
-      rHar: "\u2964",
-      race: "\u223D\u0331",
-      racute: "\u0155",
-      radic: "\u221A",
-      raemptyv: "\u29B3",
-      rang: "\u27E9",
-      rangd: "\u2992",
-      range: "\u29A5",
-      rangle: "\u27E9",
-      raqu: "\xBB",
-      raquo: "\xBB",
-      rarr: "\u2192",
-      rarrap: "\u2975",
-      rarrb: "\u21E5",
-      rarrbfs: "\u2920",
-      rarrc: "\u2933",
-      rarrfs: "\u291E",
-      rarrhk: "\u21AA",
-      rarrlp: "\u21AC",
-      rarrpl: "\u2945",
-      rarrsim: "\u2974",
-      rarrtl: "\u21A3",
-      rarrw: "\u219D",
-      ratail: "\u291A",
-      ratio: "\u2236",
-      rationals: "\u211A",
-      rbarr: "\u290D",
-      rbbrk: "\u2773",
-      rbrace: "}",
-      rbrack: "]",
-      rbrke: "\u298C",
-      rbrksld: "\u298E",
-      rbrkslu: "\u2990",
-      rcaron: "\u0159",
-      rcedil: "\u0157",
-      rceil: "\u2309",
-      rcub: "}",
-      rcy: "\u0440",
-      rdca: "\u2937",
-      rdldhar: "\u2969",
-      rdquo: "\u201D",
-      rdquor: "\u201D",
-      rdsh: "\u21B3",
-      real: "\u211C",
-      realine: "\u211B",
-      realpart: "\u211C",
-      reals: "\u211D",
-      rect: "\u25AD",
-      re: "\xAE",
-      reg: "\xAE",
-      rfisht: "\u297D",
-      rfloor: "\u230B",
-      rfr: "\u{1D52F}",
-      rhard: "\u21C1",
-      rharu: "\u21C0",
-      rharul: "\u296C",
-      rho: "\u03C1",
-      rhov: "\u03F1",
-      rightarrow: "\u2192",
-      rightarrowtail: "\u21A3",
-      rightharpoondown: "\u21C1",
-      rightharpoonup: "\u21C0",
-      rightleftarrows: "\u21C4",
-      rightleftharpoons: "\u21CC",
-      rightrightarrows: "\u21C9",
-      rightsquigarrow: "\u219D",
-      rightthreetimes: "\u22CC",
-      ring: "\u02DA",
-      risingdotseq: "\u2253",
-      rlarr: "\u21C4",
-      rlhar: "\u21CC",
-      rlm: "\u200F",
-      rmoust: "\u23B1",
-      rmoustache: "\u23B1",
-      rnmid: "\u2AEE",
-      roang: "\u27ED",
-      roarr: "\u21FE",
-      robrk: "\u27E7",
-      ropar: "\u2986",
-      ropf: "\u{1D563}",
-      roplus: "\u2A2E",
-      rotimes: "\u2A35",
-      rpar: ")",
-      rpargt: "\u2994",
-      rppolint: "\u2A12",
-      rrarr: "\u21C9",
-      rsaquo: "\u203A",
-      rscr: "\u{1D4C7}",
-      rsh: "\u21B1",
-      rsqb: "]",
-      rsquo: "\u2019",
-      rsquor: "\u2019",
-      rthree: "\u22CC",
-      rtimes: "\u22CA",
-      rtri: "\u25B9",
-      rtrie: "\u22B5",
-      rtrif: "\u25B8",
-      rtriltri: "\u29CE",
-      ruluhar: "\u2968",
-      rx: "\u211E",
-      sacute: "\u015B",
-      sbquo: "\u201A",
-      sc: "\u227B",
-      scE: "\u2AB4",
-      scap: "\u2AB8",
-      scaron: "\u0161",
-      sccue: "\u227D",
-      sce: "\u2AB0",
-      scedil: "\u015F",
-      scirc: "\u015D",
-      scnE: "\u2AB6",
-      scnap: "\u2ABA",
-      scnsim: "\u22E9",
-      scpolint: "\u2A13",
-      scsim: "\u227F",
-      scy: "\u0441",
-      sdot: "\u22C5",
-      sdotb: "\u22A1",
-      sdote: "\u2A66",
-      seArr: "\u21D8",
-      searhk: "\u2925",
-      searr: "\u2198",
-      searrow: "\u2198",
-      sec: "\xA7",
-      sect: "\xA7",
-      semi: ";",
-      seswar: "\u2929",
-      setminus: "\u2216",
-      setmn: "\u2216",
-      sext: "\u2736",
-      sfr: "\u{1D530}",
-      sfrown: "\u2322",
-      sharp: "\u266F",
-      shchcy: "\u0449",
-      shcy: "\u0448",
-      shortmid: "\u2223",
-      shortparallel: "\u2225",
-      sh: "\xAD",
-      shy: "\xAD",
-      sigma: "\u03C3",
-      sigmaf: "\u03C2",
-      sigmav: "\u03C2",
-      sim: "\u223C",
-      simdot: "\u2A6A",
-      sime: "\u2243",
-      simeq: "\u2243",
-      simg: "\u2A9E",
-      simgE: "\u2AA0",
-      siml: "\u2A9D",
-      simlE: "\u2A9F",
-      simne: "\u2246",
-      simplus: "\u2A24",
-      simrarr: "\u2972",
-      slarr: "\u2190",
-      smallsetminus: "\u2216",
-      smashp: "\u2A33",
-      smeparsl: "\u29E4",
-      smid: "\u2223",
-      smile: "\u2323",
-      smt: "\u2AAA",
-      smte: "\u2AAC",
-      smtes: "\u2AAC\uFE00",
-      softcy: "\u044C",
-      sol: "/",
-      solb: "\u29C4",
-      solbar: "\u233F",
-      sopf: "\u{1D564}",
-      spades: "\u2660",
-      spadesuit: "\u2660",
-      spar: "\u2225",
-      sqcap: "\u2293",
-      sqcaps: "\u2293\uFE00",
-      sqcup: "\u2294",
-      sqcups: "\u2294\uFE00",
-      sqsub: "\u228F",
-      sqsube: "\u2291",
-      sqsubset: "\u228F",
-      sqsubseteq: "\u2291",
-      sqsup: "\u2290",
-      sqsupe: "\u2292",
-      sqsupset: "\u2290",
-      sqsupseteq: "\u2292",
-      squ: "\u25A1",
-      square: "\u25A1",
-      squarf: "\u25AA",
-      squf: "\u25AA",
-      srarr: "\u2192",
-      sscr: "\u{1D4C8}",
-      ssetmn: "\u2216",
-      ssmile: "\u2323",
-      sstarf: "\u22C6",
-      star: "\u2606",
-      starf: "\u2605",
-      straightepsilon: "\u03F5",
-      straightphi: "\u03D5",
-      strns: "\xAF",
-      sub: "\u2282",
-      subE: "\u2AC5",
-      subdot: "\u2ABD",
-      sube: "\u2286",
-      subedot: "\u2AC3",
-      submult: "\u2AC1",
-      subnE: "\u2ACB",
-      subne: "\u228A",
-      subplus: "\u2ABF",
-      subrarr: "\u2979",
-      subset: "\u2282",
-      subseteq: "\u2286",
-      subseteqq: "\u2AC5",
-      subsetneq: "\u228A",
-      subsetneqq: "\u2ACB",
-      subsim: "\u2AC7",
-      subsub: "\u2AD5",
-      subsup: "\u2AD3",
-      succ: "\u227B",
-      succapprox: "\u2AB8",
-      succcurlyeq: "\u227D",
-      succeq: "\u2AB0",
-      succnapprox: "\u2ABA",
-      succneqq: "\u2AB6",
-      succnsim: "\u22E9",
-      succsim: "\u227F",
-      sum: "\u2211",
-      sung: "\u266A",
-      sup: "\u2283",
-      sup1: "\xB9",
-      sup2: "\xB2",
-      sup3: "\xB3",
-      supE: "\u2AC6",
-      supdot: "\u2ABE",
-      supdsub: "\u2AD8",
-      supe: "\u2287",
-      supedot: "\u2AC4",
-      suphsol: "\u27C9",
-      suphsub: "\u2AD7",
-      suplarr: "\u297B",
-      supmult: "\u2AC2",
-      supnE: "\u2ACC",
-      supne: "\u228B",
-      supplus: "\u2AC0",
-      supset: "\u2283",
-      supseteq: "\u2287",
-      supseteqq: "\u2AC6",
-      supsetneq: "\u228B",
-      supsetneqq: "\u2ACC",
-      supsim: "\u2AC8",
-      supsub: "\u2AD4",
-      supsup: "\u2AD6",
-      swArr: "\u21D9",
-      swarhk: "\u2926",
-      swarr: "\u2199",
-      swarrow: "\u2199",
-      swnwar: "\u292A",
-      szli: "\xDF",
-      szlig: "\xDF",
-      target: "\u2316",
-      tau: "\u03C4",
-      tbrk: "\u23B4",
-      tcaron: "\u0165",
-      tcedil: "\u0163",
-      tcy: "\u0442",
-      tdot: "\u20DB",
-      telrec: "\u2315",
-      tfr: "\u{1D531}",
-      there4: "\u2234",
-      therefore: "\u2234",
-      theta: "\u03B8",
-      thetasym: "\u03D1",
-      thetav: "\u03D1",
-      thickapprox: "\u2248",
-      thicksim: "\u223C",
-      thinsp: "\u2009",
-      thkap: "\u2248",
-      thksim: "\u223C",
-      thor: "\xFE",
-      thorn: "\xFE",
-      tilde: "\u02DC",
-      time: "\xD7",
-      times: "\xD7",
-      timesb: "\u22A0",
-      timesbar: "\u2A31",
-      timesd: "\u2A30",
-      tint: "\u222D",
-      toea: "\u2928",
-      top: "\u22A4",
-      topbot: "\u2336",
-      topcir: "\u2AF1",
-      topf: "\u{1D565}",
-      topfork: "\u2ADA",
-      tosa: "\u2929",
-      tprime: "\u2034",
-      trade: "\u2122",
-      triangle: "\u25B5",
-      triangledown: "\u25BF",
-      triangleleft: "\u25C3",
-      trianglelefteq: "\u22B4",
-      triangleq: "\u225C",
-      triangleright: "\u25B9",
-      trianglerighteq: "\u22B5",
-      tridot: "\u25EC",
-      trie: "\u225C",
-      triminus: "\u2A3A",
-      triplus: "\u2A39",
-      trisb: "\u29CD",
-      tritime: "\u2A3B",
-      trpezium: "\u23E2",
-      tscr: "\u{1D4C9}",
-      tscy: "\u0446",
-      tshcy: "\u045B",
-      tstrok: "\u0167",
-      twixt: "\u226C",
-      twoheadleftarrow: "\u219E",
-      twoheadrightarrow: "\u21A0",
-      uArr: "\u21D1",
-      uHar: "\u2963",
-      uacut: "\xFA",
-      uacute: "\xFA",
-      uarr: "\u2191",
-      ubrcy: "\u045E",
-      ubreve: "\u016D",
-      ucir: "\xFB",
-      ucirc: "\xFB",
-      ucy: "\u0443",
-      udarr: "\u21C5",
-      udblac: "\u0171",
-      udhar: "\u296E",
-      ufisht: "\u297E",
-      ufr: "\u{1D532}",
-      ugrav: "\xF9",
-      ugrave: "\xF9",
-      uharl: "\u21BF",
-      uharr: "\u21BE",
-      uhblk: "\u2580",
-      ulcorn: "\u231C",
-      ulcorner: "\u231C",
-      ulcrop: "\u230F",
-      ultri: "\u25F8",
-      umacr: "\u016B",
-      um: "\xA8",
-      uml: "\xA8",
-      uogon: "\u0173",
-      uopf: "\u{1D566}",
-      uparrow: "\u2191",
-      updownarrow: "\u2195",
-      upharpoonleft: "\u21BF",
-      upharpoonright: "\u21BE",
-      uplus: "\u228E",
-      upsi: "\u03C5",
-      upsih: "\u03D2",
-      upsilon: "\u03C5",
-      upuparrows: "\u21C8",
-      urcorn: "\u231D",
-      urcorner: "\u231D",
-      urcrop: "\u230E",
-      uring: "\u016F",
-      urtri: "\u25F9",
-      uscr: "\u{1D4CA}",
-      utdot: "\u22F0",
-      utilde: "\u0169",
-      utri: "\u25B5",
-      utrif: "\u25B4",
-      uuarr: "\u21C8",
-      uum: "\xFC",
-      uuml: "\xFC",
-      uwangle: "\u29A7",
-      vArr: "\u21D5",
-      vBar: "\u2AE8",
-      vBarv: "\u2AE9",
-      vDash: "\u22A8",
-      vangrt: "\u299C",
-      varepsilon: "\u03F5",
-      varkappa: "\u03F0",
-      varnothing: "\u2205",
-      varphi: "\u03D5",
-      varpi: "\u03D6",
-      varpropto: "\u221D",
-      varr: "\u2195",
-      varrho: "\u03F1",
-      varsigma: "\u03C2",
-      varsubsetneq: "\u228A\uFE00",
-      varsubsetneqq: "\u2ACB\uFE00",
-      varsupsetneq: "\u228B\uFE00",
-      varsupsetneqq: "\u2ACC\uFE00",
-      vartheta: "\u03D1",
-      vartriangleleft: "\u22B2",
-      vartriangleright: "\u22B3",
-      vcy: "\u0432",
-      vdash: "\u22A2",
-      vee: "\u2228",
-      veebar: "\u22BB",
-      veeeq: "\u225A",
-      vellip: "\u22EE",
-      verbar: "|",
-      vert: "|",
-      vfr: "\u{1D533}",
-      vltri: "\u22B2",
-      vnsub: "\u2282\u20D2",
-      vnsup: "\u2283\u20D2",
-      vopf: "\u{1D567}",
-      vprop: "\u221D",
-      vrtri: "\u22B3",
-      vscr: "\u{1D4CB}",
-      vsubnE: "\u2ACB\uFE00",
-      vsubne: "\u228A\uFE00",
-      vsupnE: "\u2ACC\uFE00",
-      vsupne: "\u228B\uFE00",
-      vzigzag: "\u299A",
-      wcirc: "\u0175",
-      wedbar: "\u2A5F",
-      wedge: "\u2227",
-      wedgeq: "\u2259",
-      weierp: "\u2118",
-      wfr: "\u{1D534}",
-      wopf: "\u{1D568}",
-      wp: "\u2118",
-      wr: "\u2240",
-      wreath: "\u2240",
-      wscr: "\u{1D4CC}",
-      xcap: "\u22C2",
-      xcirc: "\u25EF",
-      xcup: "\u22C3",
-      xdtri: "\u25BD",
-      xfr: "\u{1D535}",
-      xhArr: "\u27FA",
-      xharr: "\u27F7",
-      xi: "\u03BE",
-      xlArr: "\u27F8",
-      xlarr: "\u27F5",
-      xmap: "\u27FC",
-      xnis: "\u22FB",
-      xodot: "\u2A00",
-      xopf: "\u{1D569}",
-      xoplus: "\u2A01",
-      xotime: "\u2A02",
-      xrArr: "\u27F9",
-      xrarr: "\u27F6",
-      xscr: "\u{1D4CD}",
-      xsqcup: "\u2A06",
-      xuplus: "\u2A04",
-      xutri: "\u25B3",
-      xvee: "\u22C1",
-      xwedge: "\u22C0",
-      yacut: "\xFD",
-      yacute: "\xFD",
-      yacy: "\u044F",
-      ycirc: "\u0177",
-      ycy: "\u044B",
-      ye: "\xA5",
-      yen: "\xA5",
-      yfr: "\u{1D536}",
-      yicy: "\u0457",
-      yopf: "\u{1D56A}",
-      yscr: "\u{1D4CE}",
-      yucy: "\u044E",
-      yum: "\xFF",
-      yuml: "\xFF",
-      zacute: "\u017A",
-      zcaron: "\u017E",
-      zcy: "\u0437",
-      zdot: "\u017C",
-      zeetrf: "\u2128",
-      zeta: "\u03B6",
-      zfr: "\u{1D537}",
-      zhcy: "\u0436",
-      zigrarr: "\u21DD",
-      zopf: "\u{1D56B}",
-      zscr: "\u{1D4CF}",
-      zwj: "\u200D",
-      zwnj: "\u200C"
-    };
-  }
-});
-
-// node_modules/mdast-util-to-markdown/node_modules/parse-entities/decode-entity.js
-var require_decode_entity2 = __commonJS({
-  "node_modules/mdast-util-to-markdown/node_modules/parse-entities/decode-entity.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var characterEntities2 = require_character_entities2();
-    module.exports = decodeEntity;
-    var own3 = {}.hasOwnProperty;
-    function decodeEntity(characters) {
-      return own3.call(characterEntities2, characters) ? characterEntities2[characters] : false;
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/association.js
-var require_association = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/association.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = association;
-    var decode3 = require_decode_entity2();
-    var characterEscape2 = /\\([!-/:-@[-`{-~])/g;
-    var characterReference2 = /&(#(\d{1,7}|x[\da-f]{1,6})|[\da-z]{1,31});/gi;
-    function association(node) {
-      if (node.label || !node.identifier) {
-        return node.label || "";
-      }
-      return node.identifier.replace(characterEscape2, "$1").replace(characterReference2, decodeIfPossible);
-    }
-    function decodeIfPossible($0, $12) {
-      return decode3($12) || $0;
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/pattern-in-scope.js
-var require_pattern_in_scope = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/pattern-in-scope.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = patternInScope;
-    function patternInScope(stack3, pattern2) {
-      return listInScope(stack3, pattern2.inConstruct, true) && !listInScope(stack3, pattern2.notInConstruct);
-    }
-    function listInScope(stack3, list3, none) {
-      var index;
-      if (!list3) {
-        return none;
-      }
-      if (typeof list3 === "string") {
-        list3 = [list3];
-      }
-      index = -1;
-      while (++index < list3.length) {
-        if (stack3.indexOf(list3[index]) !== -1) {
-          return true;
-        }
-      }
-      return false;
-    }
-  }
-});
-
-// node_modules/mdast-util-to-markdown/lib/util/safe.js
-var require_safe = __commonJS({
-  "node_modules/mdast-util-to-markdown/lib/util/safe.js"(exports, module) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    module.exports = safe;
-    var patternCompile = require_pattern_compile();
-    var patternInScope = require_pattern_in_scope();
-    function safe(context, input, config2) {
-      var value = (config2.before || "") + (input || "") + (config2.after || "");
-      var positions = [];
-      var result = [];
-      var infos = {};
-      var index = -1;
-      var before;
-      var after;
-      var position;
-      var pattern2;
-      var expression;
-      var match2;
-      var start;
-      var end;
-      while (++index < context.unsafe.length) {
-        pattern2 = context.unsafe[index];
-        if (!patternInScope(context.stack, pattern2)) {
-          continue;
-        }
-        expression = patternCompile(pattern2);
-        while (match2 = expression.exec(value)) {
-          before = "before" in pattern2 || pattern2.atBreak;
-          after = "after" in pattern2;
-          position = match2.index + (before ? match2[1].length : 0);
-          if (positions.indexOf(position) === -1) {
-            positions.push(position);
-            infos[position] = { before, after };
-          } else {
-            if (infos[position].before && !before) {
-              infos[position].before = false;
-            }
-            if (infos[position].after && !after) {
-              infos[position].after = false;
-            }
-          }
-        }
-      }
-      positions.sort(numerical);
-      start = config2.before ? config2.before.length : 0;
-      end = value.length - (config2.after ? config2.after.length : 0);
-      index = -1;
-      while (++index < positions.length) {
-        position = positions[index];
-        if (
-          // Character before or after matched:
-          position < start || position >= end
-        ) {
-          continue;
-        }
-        if (position + 1 < end && positions[index + 1] === position + 1 && infos[position].after && !infos[position + 1].before && !infos[position + 1].after) {
-          continue;
-        }
-        if (start !== position) {
-          result.push(escapeBackslashes(value.slice(start, position), "\\"));
-        }
-        start = position;
-        if (/[!-/:-@[-`{-~]/.test(value.charAt(position)) && (!config2.encode || config2.encode.indexOf(value.charAt(position)) === -1)) {
-          result.push("\\");
-        } else {
-          result.push(
-            "&#x" + value.charCodeAt(position).toString(16).toUpperCase() + ";"
-          );
-          start++;
-        }
-      }
-      result.push(escapeBackslashes(value.slice(start, end), config2.after));
-      return result.join("");
-    }
-    function numerical(a4, b8) {
-      return a4 - b8;
-    }
-    function escapeBackslashes(value, after) {
-      var expression = /\\(?=[!-/:-@[-`{-~])/g;
-      var positions = [];
-      var results = [];
-      var index = -1;
-      var start = 0;
-      var whole = value + after;
-      var match2;
-      while (match2 = expression.exec(whole)) {
-        positions.push(match2.index);
-      }
-      while (++index < positions.length) {
-        if (start !== positions[index]) {
-          results.push(value.slice(start, positions[index]));
-        }
-        results.push("\\");
-        start = positions[index];
-      }
-      results.push(value.slice(start));
-      return results.join("");
-    }
-  }
-});
-
-// node_modules/mdast-util-footnote/to-markdown.js
-var require_to_markdown7 = __commonJS({
-  "node_modules/mdast-util-footnote/to-markdown.js"(exports) {
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    exports.unsafe = [
-      // This is on by default already.
-      { character: "[", inConstruct: ["phrasing", "label", "reference"] }
-    ];
-    exports.handlers = {
-      footnote,
-      footnoteDefinition,
-      footnoteReference
-    };
-    var association = require_association();
-    var phrasing = require_container_phrasing();
-    var flow3 = require_container_flow();
-    var indentLines = require_indent_lines();
-    var safe = require_safe();
-    footnoteReference.peek = footnoteReferencePeek;
-    footnote.peek = footnotePeek;
-    function footnoteReference(node, _10, context) {
-      var exit2 = context.enter("footnoteReference");
-      var subexit = context.enter("reference");
-      var reference2 = safe(context, association(node), { before: "^", after: "]" });
-      subexit();
-      exit2();
-      return "[^" + reference2 + "]";
-    }
-    function footnoteReferencePeek() {
-      return "[";
-    }
-    function footnote(node, _10, context) {
-      var exit2 = context.enter("footnote");
-      var subexit = context.enter("label");
-      var value = "^[" + phrasing(node, context, { before: "[", after: "]" }) + "]";
-      subexit();
-      exit2();
-      return value;
-    }
-    function footnotePeek() {
-      return "^";
-    }
-    function footnoteDefinition(node, _10, context) {
-      var exit2 = context.enter("footnoteDefinition");
-      var subexit = context.enter("label");
-      var label5 = "[^" + safe(context, association(node), { before: "^", after: "]" }) + "]:";
-      var value;
-      subexit();
-      value = indentLines(flow3(node, context), map3);
-      exit2();
-      return value;
-      function map3(line4, index, blank) {
-        if (index) {
-          return (blank ? "" : "    ") + line4;
-        }
-        return (blank ? label5 : label5 + " ") + line4;
-      }
-    }
-  }
-});
-
-// node_modules/remark-footnotes/index.js
-var require_remark_footnotes = __commonJS({
-  "node_modules/remark-footnotes/index.js"(exports, module) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var syntax = require_micromark_extension_footnote();
-    var fromMarkdown = require_from_markdown7();
-    var toMarkdown = require_to_markdown7();
-    var warningIssued;
-    module.exports = footnotes;
-    function footnotes(options7) {
-      var data = this.data();
-      if (!warningIssued && (this.Parser && this.Parser.prototype && this.Parser.prototype.blockTokenizers || this.Compiler && this.Compiler.prototype && this.Compiler.prototype.visitors)) {
-        warningIssued = true;
-        console.warn(
-          "[remark-footnotes] Warning: please upgrade to remark 13 to use this plugin"
-        );
-      }
-      add("micromarkExtensions", syntax(options7));
-      add("fromMarkdownExtensions", fromMarkdown);
-      add("toMarkdownExtensions", toMarkdown);
-      function add(field, value) {
-        if (data[field]) data[field].push(value);
-        else data[field] = [value];
-      }
-    }
-  }
-});
-
-// node_modules/@textlint/markdown-to-ast/lib/src/parse-markdown.js
-var require_parse_markdown = __commonJS({
-  "node_modules/@textlint/markdown-to-ast/lib/src/parse-markdown.js"(exports) {
-    "use strict";
-    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var __importDefault = exports && exports.__importDefault || function(mod) {
-      return mod && mod.__esModule ? mod : { "default": mod };
-    };
-    Object.defineProperty(exports, "__esModule", { value: true });
-    exports.parseMarkdown = void 0;
-    var unified_1 = __importDefault(require_unified());
-    var from_markdown_1 = __importDefault(require_from_markdown());
-    from_markdown_1.default.transforms = [];
-    var remark_gfm_1 = __importDefault(require_remark_gfm());
-    var remark_parse_1 = __importDefault(require_remark_parse());
-    var remark_frontmatter_1 = __importDefault(require_remark_frontmatter());
-    var remark_footnotes_1 = __importDefault(require_remark_footnotes());
-    var remark = (0, unified_1.default)().use(remark_parse_1.default).use(remark_frontmatter_1.default, [
+    init_cjk();
+    init_entities();
+    Document = 0;
+    Paragraph = 1;
+    Header = 2;
+    BlockQuote = 3;
+    List = 4;
+    ListItem = 5;
+    CodeBlock = 6;
+    HtmlBlock = 7;
+    HorizontalRule = 8;
+    Definition = 9;
+    FootnoteDefinition = 10;
+    Table = 11;
+    TableRow = 12;
+    TableCell = 13;
+    Yaml = 14;
+    Toml = 15;
+    Json = 16;
+    Str = 17;
+    Break = 18;
+    Emphasis = 19;
+    Strong = 20;
+    Delete = 21;
+    Code = 22;
+    Html = 23;
+    Link = 24;
+    Image = 25;
+    LinkReference = 26;
+    ImageReference = 27;
+    FootnoteReference = 28;
+    Footnote = 29;
+    Dead = 255;
+    TYPE_NAMES = [
+      "Document",
+      "Paragraph",
+      "Header",
+      "BlockQuote",
+      "List",
+      "ListItem",
+      "CodeBlock",
+      "Html",
+      "HorizontalRule",
+      "Definition",
+      "footnoteDefinition",
+      "Table",
+      "TableRow",
+      "TableCell",
+      // Front matter is not part of CommonMark/GFM spec and not defined in @textlint/ast-node-types.
+      // These types are lowercase: yaml, toml, json
       "yaml",
       "toml",
+      "json",
+      "Str",
+      "Break",
+      "Emphasis",
+      "Strong",
+      "Delete",
+      "Code",
+      "Html",
+      "Link",
+      "Image",
+      "LinkReference",
+      "ImageReference",
+      // Footnotes are not part of CommonMark/GFM spec and not defined in @textlint/ast-node-types.
+      // These types are lowercase: footnoteReference, footnoteDefinition, footnote
+      "footnoteReference",
+      // Pandoc-style inline note. The previous parser(remark-footnotes) outputs this type
+      "footnote"
+    ];
+    MAX_NESTING = 100;
+    REFERENCE_TYPES = ["shortcut", "collapsed", "full"];
+    src = "";
+    rawSrc = "";
+    srcReplaced = false;
+    len = 0;
+    hasCR = false;
+    LS = new Int32Array(256);
+    LN = 0;
+    lineCache = 0;
+    cap = 1024;
+    nKind = new Uint8Array(cap);
+    nStart = new Int32Array(cap);
+    nEnd = new Int32Array(cap);
+    nParent = new Int32Array(cap);
+    nFirst = new Int32Array(cap);
+    nLast = new Int32Array(cap);
+    nNext = new Int32Array(cap);
+    nPrev = new Int32Array(cap);
+    nA = new Int32Array(cap);
+    nB2 = new Int32Array(cap);
+    nC = new Int32Array(cap);
+    nD3 = new Int32Array(cap);
+    nCount = 0;
+    side = [];
+    segCap = 1024;
+    segS = new Int32Array(segCap);
+    segE = new Int32Array(segCap);
+    segL = new Int32Array(segCap);
+    segN = 0;
+    ASCII_PUNCT = new Uint8Array(128);
+    for (const ch3 of "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~") {
+      ASCII_PUNCT[ch3.charCodeAt(0)] = 1;
+    }
+    SPECIAL = new Uint8Array(128);
+    for (const ch3 of "\n\\`*_~[]!<&hHwW^") {
+      SPECIAL[ch3.charCodeAt(0)] = 1;
+    }
+    NON_ASCII_CLASS = new Uint8Array(65536);
+    UNICODE_PUNCTUATION = new RegExp("\\p{P}|\\p{S}", "u");
+    UNICODE_WHITESPACE = /\s/;
+    cjkFriendly = false;
+    cjkBefore = 0;
+    cjkAfter = 0;
+    cjkEither = false;
+    cNode = [];
+    cIndent = [];
+    depth = 0;
+    closePos = 0;
+    leaf = -1;
+    leafKind = 0;
+    curLine = 0;
+    lineStart = 0;
+    lineEnd2 = 0;
+    off = 0;
+    col = 0;
+    ptab = false;
+    nns = 0;
+    nnsCol = 0;
+    indent4 = 0;
+    blank = false;
+    leafSeg0 = 0;
+    leafContig = true;
+    fenced = false;
+    fChar = 0;
+    fLen = 0;
+    fIndent = 0;
+    hType = 0;
+    codeSegEnd = 0;
+    pDefsDone = false;
+    definitions = /* @__PURE__ */ new Set();
+    footnotes = /* @__PURE__ */ new Set();
+    HTML_BLOCK_NAMES = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul";
+    RE_HTML_1 = /^<(?:script|pre|style|textarea)(?:[ \t>]|$)/i;
+    RE_HTML_1_END = /<\/(?:script|pre|style|textarea)>/i;
+    RE_HTML_4 = /^<![A-Za-z]/;
+    RE_HTML_6 = new RegExp(`^</?(?:${HTML_BLOCK_NAMES})(?:[ \\t]|/?>|$)`, "i");
+    ATTRIBUTE = `(?:[ \\t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \\t]*=[ \\t]*(?:[^ \\t"'=<>\`]+|'[^']*'|"[^"]*"))?)`;
+    RE_HTML_7 = new RegExp(`^(?:<[A-Za-z][A-Za-z0-9-]*${ATTRIBUTE}*[ \\t]*/?>|</[A-Za-z][A-Za-z0-9-]*[ \\t]*>)[ \\t]*$`);
+    tableAlign = [];
+    FRONTMATTERS = [
+      ["---", "---", Yaml],
+      ["+++", "+++", Toml],
       // Hexo style
-      { type: "json", fence: { open: ";;;", close: ";;;" } },
+      [";;;", ";;;", Json],
       // 11ty style
-      { type: "json", fence: { open: "---json", close: "---" } },
+      ["---json", "---", Json],
       // Hugo style
-      { type: "json", fence: { open: "{", close: "}" } }
-    ]).use(remark_gfm_1.default).use(remark_footnotes_1.default, {
-      inlineNotes: true
-    });
-    var parseMarkdown = (text5) => {
-      return remark.parse(text5);
-    };
-    exports.parseMarkdown = parseMarkdown;
+      ["{", "}", Json]
+    ];
+    buf = "";
+    bStart = 0;
+    bEnd = 0;
+    bMulti = false;
+    bSeg0 = 0;
+    vLines = 0;
+    vStart = [];
+    vCache = 0;
+    entityValue = "";
+    defLabel = "";
+    defLabelRaw = "";
+    defUrl = "";
+    defTitle = null;
+    partStart = 0;
+    partEnd = 0;
+    parenTitleFrom = -1;
+    parenTitleEnd = -1;
+    dNode = [];
+    dCh = [];
+    dNum = [];
+    dOpen = [];
+    dClose = [];
+    dPrev = [];
+    dNext = [];
+    dN = 0;
+    dLast = -1;
+    brNode = [];
+    brImage = [];
+    brActive = [];
+    brDelim = [];
+    brTextStart = [];
+    brN = 0;
+    ntNode = [];
+    ntDelim = [];
+    ntBr = [];
+    ntN = 0;
+    RE_AUTOLINK = /^<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x00-\x20\x7f]*)>/;
+    RE_EMAIL_AUTOLINK = /^<([a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/;
+    TAG_NAME = "[A-Za-z][A-Za-z0-9-]*";
+    INLINE_ATTRIBUTE = `(?:[ \\t\\n]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \\t\\n]*=[ \\t\\n]*(?:[^ \\t\\n"'=<>\`]+|'[^']*'|"[^"]*"))?)`;
+    RE_HTML_INLINE = new RegExp(`^(?:<${TAG_NAME}${INLINE_ATTRIBUTE}*[ \\t\\n]*/?>|</${TAG_NAME}[ \\t\\n]*>|<!-->|<!--->|<!--[\\s\\S]*?-->|<\\?[\\s\\S]*?\\?>|<![A-Za-z][^>]*>|<!\\[CDATA\\[[\\s\\S]*?\\]\\]>)`);
+    tickLast = /* @__PURE__ */ new Map();
+    ticksScanned = false;
+    noHtmlEnd = 0;
+    literalEnd = 0;
+    trailFrom = -1;
+    trailTo = -1;
+    trailEnd = -1;
+    trailResult = false;
+    atCache = -1;
+    emNode = new Int32Array(64);
+    emLine = new Int32Array(64);
+    emChildren = [];
   }
 });
 
 // node_modules/@textlint/markdown-to-ast/lib/src/index.js
-var require_src12 = __commonJS({
-  "node_modules/@textlint/markdown-to-ast/lib/src/index.js"(exports) {
-    "use strict";
+function parse11(text5, options7) {
+  const hasBOM = text5.charCodeAt(0) === 65279;
+  return parseMarkdown(hasBOM ? text5.slice(1) : text5, options7);
+}
+var import_ast_node_types;
+var init_src = __esm({
+  "node_modules/@textlint/markdown-to-ast/lib/src/index.js"() {
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    var __importDefault = exports && exports.__importDefault || function(mod) {
-      return mod && mod.__esModule ? mod : { "default": mod };
-    };
-    Object.defineProperty(exports, "__esModule", { value: true });
-    exports.Syntax = void 0;
-    exports.parse = parse11;
-    var markdown_syntax_map_1 = require_markdown_syntax_map();
-    var ast_node_types_1 = require_src5();
-    Object.defineProperty(exports, "Syntax", { enumerable: true, get: function() {
-      return ast_node_types_1.ASTNodeTypes;
-    } });
-    var legacy_1 = __importDefault(require_legacy());
-    var debug_1 = __importDefault(require_src3());
-    var parse_markdown_1 = require_parse_markdown();
-    var structured_source_1 = require_structured_source();
-    var debug = (0, debug_1.default)("@textlint/markdown-to-ast");
-    function calculatePositionFromSiblings(targetNode, parentNode, source3, sourceText) {
-      if (!parentNode || !parentNode.children || !Array.isArray(parentNode.children)) {
-        return null;
-      }
-      const children = parentNode.children;
-      const targetIndex = children.indexOf(targetNode);
-      if (targetIndex === -1) {
-        return null;
-      }
-      let referenceNode = null;
-      let referenceIndex = -1;
-      for (let i = targetIndex - 1; i >= 0; i--) {
-        if (children[i] && children[i].position) {
-          referenceNode = children[i];
-          referenceIndex = i;
-          break;
-        }
-      }
-      if (!referenceNode) {
-        for (let i = targetIndex + 1; i < children.length; i++) {
-          if (children[i] && children[i].position) {
-            referenceNode = children[i];
-            referenceIndex = i;
-            break;
-          }
-        }
-      }
-      if (!referenceNode && parentNode.position) {
-        referenceNode = parentNode;
-        referenceIndex = 0;
-      }
-      if (!referenceNode || !referenceNode.position) {
-        return null;
-      }
-      let estimatedStart;
-      const targetValue = targetNode.value || targetNode.url || "";
-      if (referenceIndex < targetIndex) {
-        estimatedStart = referenceNode.position.end.offset;
-        for (let i = referenceIndex + 1; i < targetIndex; i++) {
-          const node = children[i];
-          if (node.value && typeof node.value === "string") {
-            estimatedStart += node.value.length;
-          } else if (node.raw && typeof node.raw === "string") {
-            estimatedStart += node.raw.length;
-          } else {
-            estimatedStart += 1;
-          }
-        }
-      } else if (referenceIndex > targetIndex) {
-        estimatedStart = referenceNode.position.start.offset;
-        for (let i = targetIndex + 1; i < referenceIndex; i++) {
-          const node = children[i];
-          if (node.value && typeof node.value === "string") {
-            estimatedStart -= node.value.length;
-          } else if (node.raw && typeof node.raw === "string") {
-            estimatedStart -= node.raw.length;
-          } else {
-            estimatedStart -= 1;
-          }
-        }
-        estimatedStart -= targetValue.length;
-      } else {
-        const parentContent = sourceText.slice(referenceNode.position.start.offset, referenceNode.position.end.offset);
-        const targetValueIndex = parentContent.indexOf(targetValue);
-        if (targetValueIndex !== -1) {
-          estimatedStart = referenceNode.position.start.offset + targetValueIndex;
-        } else {
-          estimatedStart = referenceNode.position.start.offset;
-        }
-      }
-      estimatedStart = Math.max(0, Math.min(estimatedStart, sourceText.length - targetValue.length));
-      const estimatedEnd = estimatedStart + targetValue.length;
-      const startLoc = source3.indexToPosition(estimatedStart);
-      const endLoc = source3.indexToPosition(estimatedEnd);
-      return {
-        loc: {
-          start: { line: startLoc.line, column: startLoc.column },
-          end: { line: endLoc.line, column: endLoc.column }
-        },
-        range: [estimatedStart, estimatedEnd],
-        raw: sourceText.slice(estimatedStart, estimatedEnd)
-      };
-    }
-    function parse11(text5) {
-      const hasBOM = text5.charCodeAt(0) === 65279;
-      const textWithoutBOM = hasBOM ? text5.slice(1) : text5;
-      const ast = (0, parse_markdown_1.parseMarkdown)(textWithoutBOM);
-      const source3 = new structured_source_1.StructuredSource(textWithoutBOM);
-      const nodesWithoutPosition = [];
-      (0, legacy_1.default)(ast).forEach(function(node) {
-        if (this.notLeaf) {
-          if (node.type) {
-            const replacedType = markdown_syntax_map_1.SyntaxMap[node.type];
-            if (!replacedType) {
-              debug(`replacedType : ${replacedType} , node.type: ${node.type}`);
-            } else {
-              node.type = replacedType;
-            }
-          }
-          if (node.position) {
-            const position = node.position;
-            const positionCompensated = {
-              start: { line: position.start.line, column: Math.max(position.start.column - 1, 0) },
-              end: { line: position.end.line, column: Math.max(position.end.column - 1, 0) }
-            };
-            const range2 = [position.start.offset, position.end.offset];
-            node.loc = positionCompensated;
-            node.range = range2;
-            node.raw = textWithoutBOM.slice(range2[0], range2[1]);
-            Object.defineProperty(node, "position", {
-              enumerable: false,
-              configurable: false,
-              writable: false,
-              value: position
-            });
-          } else if (node.type === "Str" || node.type === "Link") {
-            const parent = this.parent;
-            nodesWithoutPosition.push({ node, parent });
-          }
-        }
-      });
-      for (const { node, parent } of nodesWithoutPosition) {
-        const calculatedPosition = calculatePositionFromSiblings(node, parent, source3, textWithoutBOM);
-        if (calculatedPosition) {
-          node.loc = calculatedPosition.loc;
-          node.range = calculatedPosition.range;
-          node.raw = calculatedPosition.raw;
-        } else {
-          const value = node.value || node.url || "";
-          node.raw = value;
-          node.loc = {
-            start: { line: 1, column: 0 },
-            end: { line: 1, column: value.length }
-          };
-          node.range = [0, value.length];
-        }
-      }
-      return ast;
-    }
+    import_ast_node_types = __toESM(require_src12(), 1);
+    init_parser2();
   }
 });
 
 // node_modules/@textlint/textlint-plugin-markdown/lib/src/MarkdownProcessor.js
-var require_MarkdownProcessor = __commonJS({
-  "node_modules/@textlint/textlint-plugin-markdown/lib/src/MarkdownProcessor.js"(exports) {
+var MarkdownProcessor;
+var init_MarkdownProcessor = __esm({
+  "node_modules/@textlint/textlint-plugin-markdown/lib/src/MarkdownProcessor.js"() {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    exports.MarkdownProcessor = void 0;
-    var markdown_to_ast_1 = require_src12();
-    var MarkdownProcessor = class {
+    init_src();
+    MarkdownProcessor = class {
       constructor(config2 = {}) {
         this.config = config2;
         this.extensions = this.config.extensions ? this.config.extensions : [];
@@ -156776,9 +145059,10 @@ var require_MarkdownProcessor = __commonJS({
         return [".md", ".markdown", ".mdown", ".mkdn", ".mkd", ".mdwn", ".mkdown", ".ron"].concat(this.extensions);
       }
       processor(_ext) {
+        const cjkFriendlyEmphasis = this.config.cjkFriendlyEmphasis === true;
         return {
           preProcess(text5, _filePath) {
-            return (0, markdown_to_ast_1.parse)(text5);
+            return parse11(text5, { cjkFriendlyEmphasis });
           },
           postProcess(messages2, filePath) {
             return {
@@ -156789,19 +145073,18 @@ var require_MarkdownProcessor = __commonJS({
         };
       }
     };
-    exports.MarkdownProcessor = MarkdownProcessor;
   }
 });
 
 // node_modules/@textlint/textlint-plugin-markdown/lib/src/index.js
-var require_src13 = __commonJS({
-  "node_modules/@textlint/textlint-plugin-markdown/lib/src/index.js"(exports) {
+var src_default;
+var init_src2 = __esm({
+  "node_modules/@textlint/textlint-plugin-markdown/lib/src/index.js"() {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
-    Object.defineProperty(exports, "__esModule", { value: true });
-    var MarkdownProcessor_js_1 = require_MarkdownProcessor();
-    exports.default = {
-      Processor: MarkdownProcessor_js_1.MarkdownProcessor
+    init_MarkdownProcessor();
+    src_default = {
+      Processor: MarkdownProcessor
     };
   }
 });
@@ -157111,33 +145394,20 @@ function stripJsonComments(jsonString, { whitespace = true, trailingCommas = fal
     if (isInsideString) {
       continue;
     }
-    if (!isInsideComment && currentCharacter + nextCharacter === "//") {
+    if (!isInsideComment && currentCharacter === "/" && (nextCharacter === "/" || nextCharacter === "*")) {
       buffer3 += jsonString.slice(offset, index);
       offset = index;
-      isInsideComment = singleComment;
+      isInsideComment = nextCharacter === "/" ? singleComment : multiComment;
       index++;
-    } else if (isInsideComment === singleComment && currentCharacter + nextCharacter === "\r\n") {
-      index++;
+    } else if (isInsideComment === singleComment && (currentCharacter === "\n" || currentCharacter === "\r")) {
       isInsideComment = false;
       buffer3 += strip(jsonString, offset, index);
       offset = index;
-      continue;
-    } else if (isInsideComment === singleComment && currentCharacter === "\n") {
-      isInsideComment = false;
-      buffer3 += strip(jsonString, offset, index);
-      offset = index;
-    } else if (!isInsideComment && currentCharacter + nextCharacter === "/*") {
-      buffer3 += jsonString.slice(offset, index);
-      offset = index;
-      isInsideComment = multiComment;
-      index++;
-      continue;
-    } else if (isInsideComment === multiComment && currentCharacter + nextCharacter === "*/") {
+    } else if (isInsideComment === multiComment && currentCharacter === "*" && nextCharacter === "/") {
       index++;
       isInsideComment = false;
       buffer3 += strip(jsonString, offset, index + 1);
       offset = index + 1;
-      continue;
     } else if (trailingCommas && !isInsideComment) {
       if (commaIndex !== -1) {
         if (currentCharacter === "}" || currentCharacter === "]") {
@@ -157169,7 +145439,7 @@ var init_strip_json_comments = __esm({
     singleComment = /* @__PURE__ */ Symbol("singleComment");
     multiComment = /* @__PURE__ */ Symbol("multiComment");
     stripWithoutWhitespace = () => "";
-    stripWithWhitespace = (string3, start, end) => string3.slice(start, end).replace(/[^ \t\r\n]/g, " ");
+    stripWithWhitespace = (string3, start, end) => string3.slice(start, end).replaceAll(/[^\t\n\r ]/g, " ");
     isEscaped = (jsonString, quotePosition) => {
       let index = quotePosition - 1;
       let backslashCount = 0;
@@ -157182,13 +145452,92 @@ var init_strip_json_comments = __esm({
   }
 });
 
+// node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js
+var require_ASTNodeTypes3 = __commonJS({
+  "node_modules/@textlint/ast-node-types/lib/src/ASTNodeTypes.js"(exports) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.ASTNodeTypes = void 0;
+    var ASTNodeTypes2;
+    (function(ASTNodeTypes3) {
+      ASTNodeTypes3["Document"] = "Document";
+      ASTNodeTypes3["DocumentExit"] = "Document:exit";
+      ASTNodeTypes3["Paragraph"] = "Paragraph";
+      ASTNodeTypes3["ParagraphExit"] = "Paragraph:exit";
+      ASTNodeTypes3["BlockQuote"] = "BlockQuote";
+      ASTNodeTypes3["BlockQuoteExit"] = "BlockQuote:exit";
+      ASTNodeTypes3["ListItem"] = "ListItem";
+      ASTNodeTypes3["ListItemExit"] = "ListItem:exit";
+      ASTNodeTypes3["List"] = "List";
+      ASTNodeTypes3["ListExit"] = "List:exit";
+      ASTNodeTypes3["Header"] = "Header";
+      ASTNodeTypes3["HeaderExit"] = "Header:exit";
+      ASTNodeTypes3["CodeBlock"] = "CodeBlock";
+      ASTNodeTypes3["CodeBlockExit"] = "CodeBlock:exit";
+      ASTNodeTypes3["HtmlBlock"] = "HtmlBlock";
+      ASTNodeTypes3["HtmlBlockExit"] = "HtmlBlock:exit";
+      ASTNodeTypes3["HorizontalRule"] = "HorizontalRule";
+      ASTNodeTypes3["HorizontalRuleExit"] = "HorizontalRule:exit";
+      ASTNodeTypes3["Comment"] = "Comment";
+      ASTNodeTypes3["CommentExit"] = "Comment:exit";
+      ASTNodeTypes3["ReferenceDef"] = "ReferenceDef";
+      ASTNodeTypes3["ReferenceDefExit"] = "ReferenceDef:exit";
+      ASTNodeTypes3["Str"] = "Str";
+      ASTNodeTypes3["StrExit"] = "Str:exit";
+      ASTNodeTypes3["Break"] = "Break";
+      ASTNodeTypes3["BreakExit"] = "Break:exit";
+      ASTNodeTypes3["Emphasis"] = "Emphasis";
+      ASTNodeTypes3["EmphasisExit"] = "Emphasis:exit";
+      ASTNodeTypes3["Strong"] = "Strong";
+      ASTNodeTypes3["StrongExit"] = "Strong:exit";
+      ASTNodeTypes3["Html"] = "Html";
+      ASTNodeTypes3["HtmlExit"] = "Html:exit";
+      ASTNodeTypes3["Link"] = "Link";
+      ASTNodeTypes3["LinkExit"] = "Link:exit";
+      ASTNodeTypes3["LinkReference"] = "LinkReference";
+      ASTNodeTypes3["LinkReferenceExit"] = "LinkReference:exit";
+      ASTNodeTypes3["Image"] = "Image";
+      ASTNodeTypes3["ImageExit"] = "Image:exit";
+      ASTNodeTypes3["ImageReference"] = "ImageReference";
+      ASTNodeTypes3["ImageReferenceExit"] = "ImageReference:exit";
+      ASTNodeTypes3["Definition"] = "Definition";
+      ASTNodeTypes3["DefinitionExit"] = "Definition:exit";
+      ASTNodeTypes3["Code"] = "Code";
+      ASTNodeTypes3["CodeExit"] = "Code:exit";
+      ASTNodeTypes3["Delete"] = "Delete";
+      ASTNodeTypes3["DeleteExit"] = "Delete:exit";
+      ASTNodeTypes3["Table"] = "Table";
+      ASTNodeTypes3["TableExit"] = "Table:exit";
+      ASTNodeTypes3["TableRow"] = "TableRow";
+      ASTNodeTypes3["TableRowExit"] = "TableRow:exit";
+      ASTNodeTypes3["TableCell"] = "TableCell";
+      ASTNodeTypes3["TableCellExit"] = "TableCell:exit";
+    })(ASTNodeTypes2 || (exports.ASTNodeTypes = ASTNodeTypes2 = {}));
+  }
+});
+
+// node_modules/@textlint/ast-node-types/lib/src/index.js
+var require_src13 = __commonJS({
+  "node_modules/@textlint/ast-node-types/lib/src/index.js"(exports) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.ASTNodeTypes = void 0;
+    var ASTNodeTypes_js_1 = require_ASTNodeTypes3();
+    Object.defineProperty(exports, "ASTNodeTypes", { enumerable: true, get: function() {
+      return ASTNodeTypes_js_1.ASTNodeTypes;
+    } });
+  }
+});
+
 // node_modules/textlint-rule-helper/lib/textlint-rule-helper.js
 var require_textlint_rule_helper = __commonJS({
   "node_modules/textlint-rule-helper/lib/textlint-rule-helper.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     Object.defineProperty(exports, "__esModule", { value: true });
-    var ast_node_types_1 = require_src5();
+    var ast_node_types_1 = require_src13();
     var RuleHelper2 = (
       /** @class */
       (function() {
@@ -157233,6 +145582,147 @@ var require_textlint_rule_helper = __commonJS({
       })()
     );
     exports.default = RuleHelper2;
+  }
+});
+
+// node_modules/unist-util-is/convert.js
+var require_convert = __commonJS({
+  "node_modules/unist-util-is/convert.js"(exports, module) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    module.exports = convert;
+    function convert(test) {
+      if (test == null) {
+        return ok2;
+      }
+      if (typeof test === "string") {
+        return typeFactory(test);
+      }
+      if (typeof test === "object") {
+        return "length" in test ? anyFactory(test) : allFactory(test);
+      }
+      if (typeof test === "function") {
+        return test;
+      }
+      throw new Error("Expected function, string, or object as test");
+    }
+    function allFactory(test) {
+      return all;
+      function all(node) {
+        var key3;
+        for (key3 in test) {
+          if (node[key3] !== test[key3]) return false;
+        }
+        return true;
+      }
+    }
+    function anyFactory(tests) {
+      var checks = [];
+      var index = -1;
+      while (++index < tests.length) {
+        checks[index] = convert(tests[index]);
+      }
+      return any;
+      function any() {
+        var index2 = -1;
+        while (++index2 < checks.length) {
+          if (checks[index2].apply(this, arguments)) {
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+    function typeFactory(test) {
+      return type;
+      function type(node) {
+        return Boolean(node && node.type === test);
+      }
+    }
+    function ok2() {
+      return true;
+    }
+  }
+});
+
+// node_modules/unist-util-visit-parents/color.js
+var require_color = __commonJS({
+  "node_modules/unist-util-visit-parents/color.js"(exports, module) {
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    module.exports = color;
+    function color(d4) {
+      return "\x1B[33m" + d4 + "\x1B[39m";
+    }
+  }
+});
+
+// node_modules/unist-util-visit-parents/index.js
+var require_unist_util_visit_parents = __commonJS({
+  "node_modules/unist-util-visit-parents/index.js"(exports, module) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    module.exports = visitParents;
+    var convert = require_convert();
+    var color = require_color();
+    var CONTINUE = true;
+    var SKIP = "skip";
+    var EXIT = false;
+    visitParents.CONTINUE = CONTINUE;
+    visitParents.SKIP = SKIP;
+    visitParents.EXIT = EXIT;
+    function visitParents(tree, test, visitor, reverse) {
+      var step;
+      var is10;
+      if (typeof test === "function" && typeof visitor !== "function") {
+        reverse = visitor;
+        visitor = test;
+        test = null;
+      }
+      is10 = convert(test);
+      step = reverse ? -1 : 1;
+      factory(tree, null, [])();
+      function factory(node, index, parents) {
+        var value = typeof node === "object" && node !== null ? node : {};
+        var name;
+        if (typeof value.type === "string") {
+          name = typeof value.tagName === "string" ? value.tagName : typeof value.name === "string" ? value.name : void 0;
+          visit2.displayName = "node (" + color(value.type + (name ? "<" + name + ">" : "")) + ")";
+        }
+        return visit2;
+        function visit2() {
+          var grandparents = parents.concat(node);
+          var result = [];
+          var subresult;
+          var offset;
+          if (!test || is10(node, index, parents[parents.length - 1] || null)) {
+            result = toResult(visitor(node, parents));
+            if (result[0] === EXIT) {
+              return result;
+            }
+          }
+          if (node.children && result[0] !== SKIP) {
+            offset = (reverse ? node.children.length : -1) + step;
+            while (offset > -1 && offset < node.children.length) {
+              subresult = factory(node.children[offset], offset, grandparents)();
+              if (subresult[0] === EXIT) {
+                return subresult;
+              }
+              offset = typeof subresult[1] === "number" ? subresult[1] : offset + step;
+            }
+          }
+          return result;
+        }
+      }
+    }
+    function toResult(value) {
+      if (value !== null && typeof value === "object" && "length" in value) {
+        return value;
+      }
+      if (typeof value === "number") {
+        return [CONTINUE, value];
+      }
+      return [value];
+    }
   }
 });
 
@@ -157321,6 +145811,136 @@ var require_IgnoreNodeManager = __commonJS({
       })()
     );
     exports.default = IgnoreNodeManager;
+  }
+});
+
+// node_modules/boundary/lib/index.js
+var require_lib = __commonJS({
+  "node_modules/boundary/lib/index.js"(exports) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.binarySearch = exports.upperBound = exports.lowerBound = exports.compare = void 0;
+    function compare(v12, v23) {
+      return v12 < v23;
+    }
+    exports.compare = compare;
+    function upperBound(array2, value, comp = compare) {
+      let len2 = array2.length;
+      let i = 0;
+      while (len2) {
+        let diff = len2 >>> 1;
+        let cursor3 = i + diff;
+        if (comp(value, array2[cursor3])) {
+          len2 = diff;
+        } else {
+          i = cursor3 + 1;
+          len2 -= diff + 1;
+        }
+      }
+      return i;
+    }
+    exports.upperBound = upperBound;
+    function lowerBound(array2, value, comp = compare) {
+      let len2 = array2.length;
+      let i = 0;
+      while (len2) {
+        let diff = len2 >>> 1;
+        let cursor3 = i + diff;
+        if (comp(array2[cursor3], value)) {
+          i = cursor3 + 1;
+          len2 -= diff + 1;
+        } else {
+          len2 = diff;
+        }
+      }
+      return i;
+    }
+    exports.lowerBound = lowerBound;
+    function binarySearch(array2, value, comp = compare) {
+      let cursor3 = lowerBound(array2, value, comp);
+      return cursor3 !== array2.length && !comp(value, array2[cursor3]);
+    }
+    exports.binarySearch = binarySearch;
+  }
+});
+
+// node_modules/structured-source/lib/structured-source.js
+var require_structured_source = __commonJS({
+  "node_modules/structured-source/lib/structured-source.js"(exports) {
+    "use strict";
+    init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.StructuredSource = void 0;
+    var boundary_1 = require_lib();
+    var StructuredSource = class {
+      /**
+       * @constructs StructuredSource
+       * @param {string} source - source code text.
+       */
+      constructor(source3) {
+        this.indice = [0];
+        let regexp = /[\r\n\u2028\u2029]/g;
+        const length = source3.length;
+        regexp.lastIndex = 0;
+        while (true) {
+          let result = regexp.exec(source3);
+          if (!result) {
+            break;
+          }
+          let index = result.index;
+          if (source3.charCodeAt(index) === 13 && source3.charCodeAt(index + 1) === 10) {
+            index += 1;
+          }
+          let nextIndex = index + 1;
+          if (length < nextIndex) {
+            break;
+          }
+          this.indice.push(nextIndex);
+          regexp.lastIndex = nextIndex;
+        }
+      }
+      get line() {
+        return this.indice.length;
+      }
+      /**
+       * @param {SourceLocation} loc - location indicator.
+       * @return {[ number, number ]} range.
+       */
+      locationToRange(loc) {
+        return [this.positionToIndex(loc.start), this.positionToIndex(loc.end)];
+      }
+      /**
+       * @param {[ number, number ]} range - pair of indice.
+       * @return {SourceLocation} location.
+       */
+      rangeToLocation(range2) {
+        return {
+          start: this.indexToPosition(range2[0]),
+          end: this.indexToPosition(range2[1])
+        };
+      }
+      /**
+       * @param {SourcePosition} pos - position indicator.
+       * @return {number} index.
+       */
+      positionToIndex(pos3) {
+        let start = this.indice[pos3.line - 1];
+        return start + pos3.column;
+      }
+      /**
+       * @param {number} index - index to the source code.
+       * @return {SourcePosition} position.
+       */
+      indexToPosition(index) {
+        const startLine = (0, boundary_1.upperBound)(this.indice, index);
+        return {
+          line: startLine,
+          column: index - this.indice[startLine - 1]
+        };
+      }
+    };
+    exports.StructuredSource = StructuredSource;
   }
 });
 
@@ -157423,7 +146043,7 @@ var require_wrap_report_handler = __commonJS({
 });
 
 // node_modules/textlint-rule-helper/lib/index.js
-var require_lib3 = __commonJS({
+var require_lib2 = __commonJS({
   "node_modules/textlint-rule-helper/lib/index.js"(exports) {
     "use strict";
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
@@ -157546,7 +146166,7 @@ var init_out = __esm({
   "node_modules/textlint-rule-terminology/out/index.js"() {
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     init_strip_json_comments();
-    import_textlint_rule_helper = __toESM(require_lib3(), 1);
+    import_textlint_rule_helper = __toESM(require_lib2(), 1);
     DEFAULT_OPTIONS = {
       terms: [],
       skip: ["BlockQuote"],
@@ -157606,17 +146226,17 @@ var init_terminology = __esm({
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createRequire as createRequire4 } from "node:module";
 import path18 from "node:path";
-var import_config_loader, import_kernel, import_resolver, import_textlint_plugin_markdown, import_textlint_filter_rule_comments, markdown, bundled, TextlintConfiguration;
+var import_config_loader, import_kernel, import_resolver, import_textlint_filter_rule_comments, markdown, bundled, TextlintConfiguration;
 var init_textlint_configuration = __esm({
   "src/textlint-configuration.js"() {
     init_define_globalThis_HELM_DOCS_DEFAULT_TERMS();
     import_config_loader = __toESM(require_src11(), 1);
     import_kernel = __toESM(require_src8(), 1);
     import_resolver = __toESM(require_src9(), 1);
-    import_textlint_plugin_markdown = __toESM(require_src13(), 1);
+    init_src2();
     import_textlint_filter_rule_comments = __toESM(require_textlint_filter_rule_comments(), 1);
     init_terminology();
-    markdown = import_textlint_plugin_markdown.default.default ?? import_textlint_plugin_markdown.default;
+    markdown = src_default.default ?? src_default;
     bundled = {
       "@textlint/textlint-plugin-markdown": markdown,
       "textlint-filter-rule-comments": import_textlint_filter_rule_comments.default,
@@ -158017,21 +146637,4 @@ js-yaml/dist/js-yaml.mjs:
 
 markdown-it/dist/markdown-it.mjs:
   (*! markdown-it 15.0.3 https://github.com/markdown-it/markdown-it @license MIT *)
-
-is-buffer/index.js:
-is-buffer/index.js:
-  (*!
-   * Determine if an object is a Buffer
-   *
-   * @author   Feross Aboukhadijeh <https://feross.org>
-   * @license  MIT
-   *)
-
-repeat-string/index.js:
-  (*!
-   * repeat-string <https://github.com/jonschlinkert/repeat-string>
-   *
-   * Copyright (c) 2014-2015, Jon Schlinkert.
-   * Licensed under the MIT License.
-   *)
 */
