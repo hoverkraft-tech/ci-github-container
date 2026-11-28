@@ -5,6 +5,7 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -91,6 +92,73 @@ test("distinguishes registry manifests from local configuration IDs and rejects 
 	assert.throws(() => Configuration.platform("windows", "amd64"), /Linux/);
 });
 
+test("rejects a separate readiness file rather than silently skipping its checks", async (t) => {
+	const { root, directory } = fixture(t, {
+		"goss.yaml": "command: {}",
+		"goss_wait.yaml": "port: {}",
+	});
+	const inputs = { image, workingDirectory: directory };
+	const environment = { RUNNER_TEMP: root };
+	await assert.rejects(
+		new Configuration(inputs, environment).prepare(),
+		/goss_wait.yaml is not executed/,
+	);
+});
+
+test("accepts Goss security controls without allowing image, user, ownership or mount replacement", async (t) => {
+	const { root, directory } = fixture(t, { "goss.yaml": "command: {}" });
+	const file = path.join(directory, "docker-args");
+	const args = [
+		"--read-only",
+		"--cap-drop=ALL",
+		"--security-opt=no-new-privileges",
+		"--tmpfs=/certs:uid=10001,gid=10001,mode=0700",
+	];
+	writeFileSync(
+		file,
+		`# Shared with local Docker execution\r\n\r\n${args.join("\r\n")}\r\n`,
+	);
+	const inputs = { image, workingDirectory: directory };
+	const environment = { RUNNER_TEMP: root };
+	assert.deepEqual(
+		(await new Configuration(inputs, environment).prepare()).dockerArgs,
+		args,
+	);
+	for (const arg of [
+		"--entrypoint=/bin/sh",
+		"--user=0",
+		"--name=caller",
+		"--label=io.hoverkraft.container-test=other",
+		"--platform=linux/arm64",
+		"--volume=/tmp:/goss",
+		"--privileged",
+		"--security-opt=seccomp=unconfined",
+		"--tmpfs=/:rw",
+		"--tmpfs=/goss:rw",
+		"--tmpfs=/goss/child:rw",
+		"--tmpfs=/goss-bin:rw",
+		"--tmpfs=/certs/../goss:rw",
+		"--tmpfs=//goss:rw",
+		"--tmpfs=/certs:rw\u0000",
+		"--cap-drop ALL",
+		"another-image",
+		"$(touch /tmp/unsafe)",
+	]) {
+		writeFileSync(file, arg);
+		await assert.rejects(
+			new Configuration(inputs, environment).prepare(),
+			/Unsupported docker-args/,
+		);
+	}
+	writeFileSync(file, args.join("\n"));
+	rmSync(path.join(directory, "goss.yaml"));
+	writeFileSync(path.join(directory, "image.test.js"), "import 'node:test';");
+	await assert.rejects(
+		new Configuration(inputs, environment).prepare(),
+		/only to Goss/,
+	);
+});
+
 test("rejects a repetitive invalid registry without blocking", () => {
 	const result = spawnSync(
 		process.execPath,
@@ -170,6 +238,69 @@ test("requires fresh files for every explicit report selection and preserves ori
 		skipped: 0,
 		failed: 0,
 	});
+});
+
+test("registers the resolved image and maps native paths into the checked-out suite", async (t) => {
+	const { root, directory } = fixture(t, {
+		"image.test.js": "import 'node:test';",
+	});
+	const suite = await ContainerTest.prepare(
+		{ image, workingDirectory: directory },
+		{ RUNNER_TEMP: root },
+	);
+	assert.throws(() => suite.reportDefinition(root), /Resolve the image/);
+	Object.assign(suite.state, { imageId: image, platform: "linux/amd64" });
+	const definition = suite.reportDefinition(root);
+	assert.equal(definition.project, "suite with spaces");
+	assert.deepEqual(definition.subject, {
+		kind: "image",
+		name: image,
+		digest: image,
+		engine: "testcontainers-node",
+		platform: "linux/amd64",
+	});
+	assert.deepEqual(definition.reports, [
+		{ kind: "test", pattern: "junit.xml" },
+	]);
+	assert.deepEqual(definition["path-mapping"], {
+		"/workspace/image": "suite with spaces",
+	});
+	assert.deepEqual(
+		suite.reportDefinition(root, '{"/custom":"src"}')["path-mapping"],
+		{ "/custom": "src" },
+	);
+});
+
+test("retains engine evidence when required extra reports are absent or stale, without duplicating it", async (t) => {
+	const { root, directory } = fixture(t, {
+		"goss.yaml": "command: {}",
+		"extra.xml": passing,
+	});
+	const suite = await ContainerTest.prepare(
+		{ image, workingDirectory: directory, reportFile: "extra.xml" },
+		{ RUNNER_TEMP: root },
+	);
+	const staged = path.join(root, "staged");
+	mkdirSync(staged);
+	writeFileSync(suite.state.junit, passing);
+	await assert.rejects(suite.stageReports(staged), /Stale/);
+	assert.equal(readFileSync(path.join(staged, "junit.xml"), "utf8"), passing);
+	rmSync(path.join(directory, "extra.xml"));
+	await assert.rejects(suite.stageReports(staged), /No current/);
+	const current = passing.replace("ready", "extra check");
+	writeFileSync(path.join(directory, "extra.xml"), current);
+	suite.state.reportFile += `;${suite.state.junit}`;
+	await suite.stageReports(staged);
+	assert.equal(
+		readFileSync(path.join(staged, "additional", "0.xml"), "utf8"),
+		current,
+	);
+	assert.throws(() => readFileSync(path.join(staged, "additional", "1.xml")), {
+		code: "ENOENT",
+	});
+	rmSync(suite.state.junit);
+	symlinkSync(path.join(directory, "extra.xml"), suite.state.junit);
+	await assert.rejects(suite.stageReports(staged), /without symlinks/);
 });
 
 test("rejects malformed, non-JUnit, empty, skipped-only and failed validation results", (t) => {

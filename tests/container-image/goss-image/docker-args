@@ -1,0 +1,4 @@
+--read-only
+--cap-drop=ALL
+--security-opt=no-new-privileges
+--tmpfs=/certs:uid=10001,gid=10001,mode=0700

@@ -53,6 +53,7 @@ jobs:
     needs: lint
     uses: $/.github/workflows/__test-action-docker-test-image.yml
     permissions:
+      actions: read
       contents: read
       id-token: write
       packages: read

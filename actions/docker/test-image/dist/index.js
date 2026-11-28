@@ -7603,6 +7603,42 @@ class Configuration {
 		return [os, normalized, variant].filter(Boolean).join("/");
 	}
 
+	static dockerArgs(directory) {
+		const file = external_node_path_namespaceObject.join(directory, "docker-args");
+		if (!(0,external_node_fs_namespaceObject.existsSync)(file)) return [];
+		const args = (0,external_node_fs_namespaceObject.readFileSync)(file, "utf8")
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter((line) => line && !line.startsWith("#"));
+		for (const arg of args) {
+			if (
+				arg === "--read-only" ||
+				/^--cap-drop=[A-Z_]+$/.test(arg) ||
+				/^--security-opt=no-new-privileges(?:=true)?$/.test(arg)
+			)
+				continue;
+			const tmpfs = /^--tmpfs=(\/[a-zA-Z0-9_./-]+):([a-zA-Z0-9_,=.-]+)$/.exec(
+				arg,
+			);
+			if (tmpfs) {
+				const target = tmpfs[1];
+				if (
+					target === external_node_path_namespaceObject.posix.normalize(target) &&
+					target !== "/" &&
+					target !== "/goss-bin" &&
+					!target.startsWith("/goss-bin/") &&
+					target !== "/goss" &&
+					!target.startsWith("/goss/")
+				)
+					continue;
+			}
+			throw new Error(
+				`Unsupported docker-args entry: ${arg}. Use --read-only, --cap-drop=..., --security-opt=no-new-privileges or --tmpfs=/path:options; /goss and /goss-bin are reserved.`,
+			);
+		}
+		return args;
+	}
+
 	async prepare() {
 		const { inputs, environment } = this;
 		const workingDirectory = (0,external_node_fs_namespaceObject.realpathSync)(inputs.workingDirectory || ".");
@@ -7618,6 +7654,21 @@ class Configuration {
 			workingDirectory,
 			inputs.engine || "auto",
 		);
+		const dockerArgs = Configuration.dockerArgs(workingDirectory);
+		if (
+			selection.engine !== "goss" &&
+			(0,external_node_fs_namespaceObject.existsSync)(external_node_path_namespaceObject.join(workingDirectory, "docker-args"))
+		)
+			throw new Error(
+				"docker-args applies only to Goss suites; configure Testcontainers in the native suite.",
+			);
+		if (
+			selection.engine === "goss" &&
+			(0,external_node_fs_namespaceObject.existsSync)(external_node_path_namespaceObject.join(workingDirectory, "goss_wait.yaml"))
+		)
+			throw new Error(
+				"goss_wait.yaml is not executed. Keep startup, readiness and cleanup in a goss.yaml command or script, then remove this file.",
+			);
 		const timeout = String(inputs.timeout || "300");
 		if (!/^[1-9][0-9]*$/.test(timeout) || Number(timeout) > 3600)
 			throw new Error("timeout must be an integer from 1 to 3600 seconds.");
@@ -7649,6 +7700,7 @@ class Configuration {
 			(0,external_node_fs_namespaceObject.mkdirSync)(external_node_path_namespaceObject.join(directory, child));
 		return {
 			...selection,
+			dockerArgs,
 			image: inputs.image,
 			identityKind,
 			workingDirectory,
@@ -7709,18 +7761,14 @@ class Tooling {
 			state.platform.split("/")[1] === "amd64" ? "x86_64" : "arm64";
 		const archive = `goss_${version.slice(1)}_linux_${architecture}.tar.gz`;
 		const base = `https://github.com/goss-org/goss/releases/download/${version}`;
-		const [binary, sums, script, scriptSum] = await Promise.all([
+		const [binary, sums] = await Promise.all([
 			Tooling.download(`${base}/${archive}`),
 			Tooling.download(`${base}/goss_${version.slice(1)}_SHA256SUMS`),
-			Tooling.download(`${base}/dgoss`),
-			Tooling.download(`${base}/dgoss.sha256`),
 		]);
 		Tooling.verify(binary, sums.toString(), archive);
-		Tooling.verify(script, scriptSum.toString(), "dgoss");
 		const directory = external_node_path_namespaceObject.join(state.directory, "tools");
 		const tarball = external_node_path_namespaceObject.join(directory, archive);
 		(0,external_node_fs_namespaceObject.writeFileSync)(tarball, binary, { mode: 0o600 });
-		(0,external_node_fs_namespaceObject.writeFileSync)(external_node_path_namespaceObject.join(directory, "dgoss"), script, { mode: 0o700 });
 		await command.run("tar", [
 			"--extract",
 			"--gzip",
@@ -7732,7 +7780,8 @@ class Tooling {
 			"--no-same-permissions",
 			"goss",
 		]);
-		(0,external_node_fs_namespaceObject.chmodSync)(external_node_path_namespaceObject.join(directory, "goss"), 0o700);
+		// The tested image's user must be able to execute the read-only bind mount.
+		(0,external_node_fs_namespaceObject.chmodSync)(external_node_path_namespaceObject.join(directory, "goss"), 0o755);
 		return directory;
 	}
 }
@@ -7791,7 +7840,7 @@ class ContainerTest {
 		);
 	}
 
-	async resolve(command) {
+	async resolve(command = new Command({ timeout: 180_000 })) {
 		const { state } = this;
 		let endpoint = process.env.DOCKER_HOST;
 		if (!endpoint || process.env.DOCKER_CONTEXT) {
@@ -7840,6 +7889,64 @@ class ContainerTest {
 		if (state.identityKind === "local" && state.image !== state.imageId)
 			throw new Error("Local image identity changed.");
 		this.save();
+	}
+
+	reportDefinition(workspace, mapping) {
+		const { state } = this;
+		if (!state.imageId || !state.platform)
+			throw new Error("Resolve the image before registering its test reports.");
+		const project =
+			external_node_path_namespaceObject.relative((0,external_node_fs_namespaceObject.realpathSync)(workspace), state.workingDirectory)
+				.split(external_node_path_namespaceObject.sep)
+				.join("/") || ".";
+		return {
+			name: "Container image tests",
+			project,
+			variant: {
+				engine: state.engine,
+				platform: state.platform,
+			},
+			subject: {
+				kind: "image",
+				name: state.image,
+				digest: state.imageId,
+				engine: state.engine,
+				platform: state.platform,
+			},
+			reports: [
+				{ kind: "test", pattern: "junit.xml" },
+				...(state.reportFile
+					? [{ kind: "test", pattern: "additional/*.xml", optional: true }]
+					: []),
+			],
+			"path-mapping": mapping
+				? JSON.parse(mapping)
+				: state.engine === "testcontainers-node"
+					? { "/workspace/image": project }
+					: {},
+		};
+	}
+
+	async stageReports(directory) {
+		const copy = (source, destination) => {
+			if (!(0,external_node_fs_namespaceObject.lstatSync)(source).isFile())
+				throw new Error(
+					"Native reports must be regular files without symlinks.",
+				);
+			Reports.fingerprint(source);
+			(0,external_node_fs_namespaceObject.copyFileSync)(source, destination);
+		};
+		// Keep the engine's evidence even if an additional required report is missing.
+		if ((0,external_node_fs_namespaceObject.existsSync)(this.state.junit))
+			copy(this.state.junit, external_node_path_namespaceObject.join(directory, "junit.xml"));
+		const files = await this.reportFiles();
+		const additional = files.filter(
+			(file) => external_node_path_namespaceObject.resolve(file) !== external_node_path_namespaceObject.resolve(this.state.junit),
+		);
+		if (additional.length) (0,external_node_fs_namespaceObject.mkdirSync)(external_node_path_namespaceObject.join(directory, "additional"));
+		for (const [index, file] of additional.entries())
+			copy(file, external_node_path_namespaceObject.join(directory, "additional", `${index}.xml`));
+		return files;
 	}
 
 	async node(tooling, command) {
@@ -7905,45 +8012,31 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 	async goss(command) {
 		const { state } = this;
 		const directory = external_node_path_namespaceObject.join(state.directory, "tools");
-		await command.run(
-			"bash",
+		await this.docker(
+			command,
 			[
-				external_node_path_namespaceObject.join(directory, "dgoss"),
 				"run",
+				...state.dockerArgs,
 				"--name",
 				state.runnerName,
 				"--label",
 				`${ownerLabel}=${state.id}`,
 				"--platform",
 				state.platform,
+				"--volume",
+				`${external_node_path_namespaceObject.join(directory, "goss")}:/goss-bin:ro`,
+				"--volume",
+				`${state.workingDirectory}:/goss:ro`,
+				"--entrypoint",
+				"/goss-bin",
 				state.imageId,
+				"-g",
+				"/goss/goss.yaml",
+				"validate",
+				"--format",
+				"junit",
 			],
-			{
-				cwd: state.workingDirectory,
-				log: state.log,
-				stdoutFile: state.junit,
-				quiet: false,
-				env: {
-					DOCKER_HOST: `unix://${state.socket}`,
-					DOCKER_CONTEXT: "",
-					CONTAINER_RUNTIME: "docker",
-					DEBUG: "",
-					GOSS_PATH: external_node_path_namespaceObject.join(directory, "goss"),
-					GOSS_FILES_PATH: state.workingDirectory,
-					GOSS_FILE: "goss.yaml",
-					GOSS_FILES_STRATEGY: "mount",
-					GOSS_VARS: "",
-					GOSS_ADDITIONAL_COPY_PATH: "",
-					GOSS_OPTS: "--format junit",
-					GOSS_WAIT_OPTS: `-r ${Math.min(30, state.timeout)}s -s 1s > /dev/null`,
-					DGOSS_TEMP_DIR: directory,
-					CONTAINER_LOG_OUTPUT: external_node_path_namespaceObject.join(
-						state.directory,
-						"diagnostics",
-						"container.log",
-					),
-				},
-			},
+			{ stdoutFile: state.junit, quiet: false },
 		);
 	}
 
@@ -7956,7 +8049,7 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 		let failure;
 		try {
 			const setup = new Command({ signal: abort.signal, timeout: 180_000 });
-			await this.resolve(setup);
+			if (!state.imageId) await this.resolve(setup);
 			if (state.engine === "testcontainers-node") {
 				for (const image of [tooling.nodeRunner, tooling.reaper])
 					await this.docker(setup, [
