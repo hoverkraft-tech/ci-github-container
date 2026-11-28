@@ -35,18 +35,21 @@ explicitly for mixed directories. A failed run never switches engines.
   and optional `goss_wait.yaml`. The image must stay running and provide `sh`;
   use Node for CLI or shell-less images. Goss keeps the image's user and entrypoint.
 
-Native JUnit report bundles and diagnostics are retained for seven days, including after
+Native JUnit reports and diagnostics are retained for seven days, including after
 failures. Missing, stale, invalid, empty or all-skipped results fail validation.
-Use the common `ci-reports` workflow with producer jobs in `needs`, `if: always()`
-and `job-results` set to the JSON representation of `needs`. Forward the action's `report-plan` output from the calling job.
-The action posts no PR comments and cleans only its own resources; cancellation
+Producer jobs require actions: read and contents: read, with Git and source checked out.
+Register expected reports before running the suite; validate and retain native evidence
+after execution. Call common `ci-reports` once after all producer jobs using
+`job-results: toJSON(needs)`. No report plans or artifact IDs need forwarding.
+The action leaves annotations, summaries and comments to the terminal reporter and cleans only its own resources; cancellation
 cleanup is best effort. Keep native suite cleanup in place.
 
 `validation` is available only after successful execution, reporting and cleanup.
 For promotion, forward the original producer entry matching the tested registry
 digest and require every suite/platform job. Local image IDs and single-platform
 checks do not certify a later push or an entire multi-platform index.
-See [ADR 0014](../../../docs/adr/0014-standardize-container-image-tests.md) for the contract.
+See [ADR 0014](../../../docs/adr/0014-standardize-container-image-tests.md) for image validation
+and [ADR 0016](../../../docs/adr/0016-register-native-container-reports.md) for reporting.
 
 Run the same suites locally from a checkout with Node.js 24+ and Docker. Set
 `IMAGE_DIGEST_REFERENCE` to the candidate's digest reference; tool versions come
@@ -65,7 +68,7 @@ node actions/docker/test-image/bin/test-image.mjs \
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/test-image@3515f6f4736151728e2e6e7d8b8c39bb3faf5753
+- uses: hoverkraft-tech/ci-github-container/actions/docker/test-image@4c5b4192dbeb65dc275485450af4ebd2f39ff7a5
   with:
     # Fully qualified registry reference containing @sha256, or an exact local Docker sha256 image ID. Tag-only references are rejected.
     # This input is required.
@@ -93,12 +96,9 @@ node actions/docker/test-image/bin/test-image.mjs \
     # Defaults to the adapter's own JUnit report, which is always required for validation.
     report-file: ""
 
-    # Report path mappings forwarded to the common parser. Defaults to mapping the Node runner suite path into
-    # working-directory. An explicit value replaces that mapping.
+    # Optional JSON object mapping native report source prefixes to repository-relative paths.
+    # Defaults to mapping the Node runner's /workspace/image prefix into working-directory.
     path-mapping: ""
-
-    # Expected producer metadata supplied by orchestration. Leave empty for standalone use.
-    report-plan: ""
 ```
 
 <!-- usage:end -->
@@ -118,9 +118,8 @@ node actions/docker/test-image/bin/test-image.mjs \
 | **`report-file`**       | Optional native JUnit paths or globs, relative to working-directory or absolute, separated by newlines,                            | **false**    | -           |
 |                         | commas or semicolons. Every explicit entry must match a new or changed report from this invocation.                                |              |             |
 |                         | Defaults to the adapter's own JUnit report, which is always required for validation.                                               |              |             |
-| **`path-mapping`**      | Report path mappings forwarded to the common parser. Defaults to mapping the Node runner suite path into                           | **false**    | -           |
-|                         | working-directory. An explicit value replaces that mapping.                                                                        |              |             |
-| **`report-plan`**       | Expected producer metadata supplied by orchestration. Leave empty for standalone use.                                              | **false**    | -           |
+| **`path-mapping`**      | Optional JSON object mapping native report source prefixes to repository-relative paths.                                           | **false**    | -           |
+|                         | Defaults to mapping the Node runner's /workspace/image prefix into working-directory.                                              |              |             |
 
 <!-- inputs:end -->
 <!-- secrets:start -->
@@ -136,7 +135,6 @@ node actions/docker/test-image/bin/test-image.mjs \
 | **`validation`**             | Successful image validation JSON with image identity, resolved engine, suite, observed platform,      |
 |                              | run/attempt, executed test counts and report/log paths. Empty on failure; a diagnostic artifact never |
 |                              | establishes success.                                                                                  |
-| **`report-plan`**            | Expected native report plan. Forward this from the calling job to ci-reports.                         |
 
 <!-- outputs:end -->
 <!-- examples:start -->

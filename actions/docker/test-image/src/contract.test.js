@@ -5,6 +5,7 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -170,6 +171,69 @@ test("requires fresh files for every explicit report selection and preserves ori
 		skipped: 0,
 		failed: 0,
 	});
+});
+
+test("registers the resolved image and maps native paths into the checked-out suite", async (t) => {
+	const { root, directory } = fixture(t, {
+		"image.test.js": "import 'node:test';",
+	});
+	const suite = await ContainerTest.prepare(
+		{ image, workingDirectory: directory },
+		{ RUNNER_TEMP: root },
+	);
+	assert.throws(() => suite.reportDefinition(root), /Resolve the image/);
+	Object.assign(suite.state, { imageId: image, platform: "linux/amd64" });
+	const definition = suite.reportDefinition(root);
+	assert.equal(definition.project, "suite with spaces");
+	assert.deepEqual(definition.subject, {
+		kind: "image",
+		name: image,
+		digest: image,
+		engine: "testcontainers-node",
+		platform: "linux/amd64",
+	});
+	assert.deepEqual(definition.reports, [
+		{ kind: "test", pattern: "junit.xml" },
+	]);
+	assert.deepEqual(definition["path-mapping"], {
+		"/workspace/image": "suite with spaces",
+	});
+	assert.deepEqual(
+		suite.reportDefinition(root, '{"/custom":"src"}')["path-mapping"],
+		{ "/custom": "src" },
+	);
+});
+
+test("retains engine evidence when required extra reports are absent or stale, without duplicating it", async (t) => {
+	const { root, directory } = fixture(t, {
+		"goss.yaml": "command: {}",
+		"extra.xml": passing,
+	});
+	const suite = await ContainerTest.prepare(
+		{ image, workingDirectory: directory, reportFile: "extra.xml" },
+		{ RUNNER_TEMP: root },
+	);
+	const staged = path.join(root, "staged");
+	mkdirSync(staged);
+	writeFileSync(suite.state.junit, passing);
+	await assert.rejects(suite.stageReports(staged), /Stale/);
+	assert.equal(readFileSync(path.join(staged, "junit.xml"), "utf8"), passing);
+	rmSync(path.join(directory, "extra.xml"));
+	await assert.rejects(suite.stageReports(staged), /No current/);
+	const current = passing.replace("ready", "extra check");
+	writeFileSync(path.join(directory, "extra.xml"), current);
+	suite.state.reportFile += `;${suite.state.junit}`;
+	await suite.stageReports(staged);
+	assert.equal(
+		readFileSync(path.join(staged, "additional", "0.xml"), "utf8"),
+		current,
+	);
+	assert.throws(() => readFileSync(path.join(staged, "additional", "1.xml")), {
+		code: "ENOENT",
+	});
+	rmSync(suite.state.junit);
+	symlinkSync(path.join(directory, "extra.xml"), suite.state.junit);
+	await assert.rejects(suite.stageReports(staged), /without symlinks/);
 });
 
 test("rejects malformed, non-JUnit, empty, skipped-only and failed validation results", (t) => {

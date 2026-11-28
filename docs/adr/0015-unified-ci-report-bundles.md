@@ -1,6 +1,6 @@
 # ADR 0015: Use the shared CI report bundle contract
 
-- Status: accepted
+- Status: superseded by [ADR 0016](0016-register-native-container-reports.md)
 - Date: 2026-11-26
 - Supersedes: only report transfer and grouping in [ADR 0014](0014-standardize-container-image-tests.md)
 

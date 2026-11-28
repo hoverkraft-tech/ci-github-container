@@ -1,7 +1,11 @@
 import {
 	appendFileSync,
+	copyFileSync,
 	existsSync,
+	lstatSync,
+	mkdirSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	statSync,
 	writeFileSync,
@@ -58,7 +62,7 @@ export class ContainerTest {
 		);
 	}
 
-	async resolve(command) {
+	async resolve(command = new Command({ timeout: 180_000 })) {
 		const { state } = this;
 		let endpoint = process.env.DOCKER_HOST;
 		if (!endpoint || process.env.DOCKER_CONTEXT) {
@@ -107,6 +111,62 @@ export class ContainerTest {
 		if (state.identityKind === "local" && state.image !== state.imageId)
 			throw new Error("Local image identity changed.");
 		this.save();
+	}
+
+	reportDefinition(workspace, mapping) {
+		const { state } = this;
+		if (!state.imageId || !state.platform)
+			throw new Error("Resolve the image before registering its test reports.");
+		const project =
+			path
+				.relative(realpathSync(workspace), state.workingDirectory)
+				.split(path.sep)
+				.join("/") || ".";
+		return {
+			name: "Container image tests",
+			project,
+			variant: { engine: state.engine, platform: state.platform },
+			subject: {
+				kind: "image",
+				name: state.image,
+				digest: state.imageId,
+				engine: state.engine,
+				platform: state.platform,
+			},
+			reports: [
+				{ kind: "test", pattern: "junit.xml" },
+				...(state.reportFile
+					? [{ kind: "test", pattern: "additional/*.xml", optional: true }]
+					: []),
+			],
+			"path-mapping": mapping
+				? JSON.parse(mapping)
+				: state.engine === "testcontainers-node"
+					? { "/workspace/image": project }
+					: {},
+		};
+	}
+
+	async stageReports(directory) {
+		const copy = (source, destination) => {
+			if (!lstatSync(source).isFile())
+				throw new Error(
+					"Native reports must be regular files without symlinks.",
+				);
+			Reports.fingerprint(source);
+			copyFileSync(source, destination);
+		};
+		// Keep the engine's evidence even if an additional required report is missing.
+		if (existsSync(this.state.junit))
+			copy(this.state.junit, path.join(directory, "junit.xml"));
+		const files = await this.reportFiles();
+		const additional = files.filter(
+			(file) => path.resolve(file) !== path.resolve(this.state.junit),
+		);
+		if (additional.length) mkdirSync(path.join(directory, "additional"));
+		for (const [index, file] of additional.entries())
+			copy(file, path.join(directory, "additional", `${index}.xml`));
+		return files;
 	}
 
 	async node(tooling, command) {
@@ -223,7 +283,7 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 		let failure;
 		try {
 			const setup = new Command({ signal: abort.signal, timeout: 180_000 });
-			await this.resolve(setup);
+			if (!state.imageId) await this.resolve(setup);
 			if (state.engine === "testcontainers-node") {
 				for (const image of [tooling.nodeRunner, tooling.reaper])
 					await this.docker(setup, [
