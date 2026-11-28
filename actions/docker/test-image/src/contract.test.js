@@ -92,6 +92,96 @@ test("distinguishes registry manifests from local configuration IDs and rejects 
 	assert.throws(() => Configuration.platform("windows", "amd64"), /Linux/);
 });
 
+test("runs Goss as the image command by default and requires service mode for readiness", async (t) => {
+	const { root, directory } = fixture(t, { "goss.yaml": "command: {}" });
+	const inputs = { image, workingDirectory: directory };
+	const environment = { RUNNER_TEMP: root };
+	const suite = await ContainerTest.prepare(inputs, environment);
+	assert.equal(suite.state.gossMode, "image");
+	Object.assign(suite.state, { imageId: image, platform: "linux/amd64" });
+	assert.equal(suite.reportDefinition(root).variant["goss-mode"], "image");
+	await assert.rejects(
+		new Configuration(
+			{ ...inputs, gossMode: "unknown" },
+			environment,
+		).prepare(),
+		/goss-mode/,
+	);
+	writeFileSync(path.join(directory, "goss_wait.yaml"), "command: {}");
+	await assert.rejects(
+		new Configuration(inputs, environment).prepare(),
+		/requires goss-mode: service/,
+	);
+	const service = await new Configuration(
+		{ ...inputs, gossMode: "service" },
+		environment,
+	).prepare();
+	assert.equal(service.gossMode, "service");
+	rmSync(path.join(directory, "goss.yaml"));
+	writeFileSync(path.join(directory, "image.test.js"), "import 'node:test';");
+	await assert.rejects(
+		new Configuration(
+			{ ...inputs, gossMode: "service" },
+			environment,
+		).prepare(),
+		/only to Goss/,
+	);
+});
+
+test("accepts Goss security controls without allowing image, user, ownership or mount replacement", async (t) => {
+	const { root, directory } = fixture(t, { "goss.yaml": "command: {}" });
+	const file = path.join(directory, "docker-args");
+	const args = [
+		"--read-only",
+		"--cap-drop=ALL",
+		"--security-opt=no-new-privileges",
+		"--tmpfs=/certs:uid=10001,gid=10001,mode=0700",
+	];
+	writeFileSync(
+		file,
+		`# Shared with local Docker execution\r\n\r\n${args.join("\r\n")}\r\n`,
+	);
+	const inputs = { image, workingDirectory: directory };
+	const environment = { RUNNER_TEMP: root };
+	assert.deepEqual(
+		(await new Configuration(inputs, environment).prepare()).dockerArgs,
+		args,
+	);
+	for (const arg of [
+		"--entrypoint=/bin/sh",
+		"--user=0",
+		"--name=caller",
+		"--label=io.hoverkraft.container-test=other",
+		"--platform=linux/arm64",
+		"--volume=/tmp:/goss",
+		"--privileged",
+		"--security-opt=seccomp=unconfined",
+		"--tmpfs=/:rw",
+		"--tmpfs=/goss:rw",
+		"--tmpfs=/goss/child:rw",
+		"--tmpfs=/goss-bin:rw",
+		"--tmpfs=/certs/../goss:rw",
+		"--tmpfs=//goss:rw",
+		"--tmpfs=/certs:rw\u0000",
+		"--cap-drop ALL",
+		"another-image",
+		"$(touch /tmp/unsafe)",
+	]) {
+		writeFileSync(file, arg);
+		await assert.rejects(
+			new Configuration(inputs, environment).prepare(),
+			/Unsupported docker-args/,
+		);
+	}
+	writeFileSync(file, args.join("\n"));
+	rmSync(path.join(directory, "goss.yaml"));
+	writeFileSync(path.join(directory, "image.test.js"), "import 'node:test';");
+	await assert.rejects(
+		new Configuration(inputs, environment).prepare(),
+		/only to Goss/,
+	);
+});
+
 test("rejects a repetitive invalid registry without blocking", () => {
 	const result = spawnSync(
 		process.execPath,
@@ -294,6 +384,7 @@ test("diagnostic reports never turn a failed invocation into promotion evidence"
 	assert.equal(result.image, image);
 	assert.equal(result["identity-kind"], "local");
 	assert.equal(result.engine, "goss");
+	assert.equal(result["goss-mode"], "image");
 	assert.equal(result.tests.executed, 1);
 	assert.equal(result.platform, "linux/amd64");
 });

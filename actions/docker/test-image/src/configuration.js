@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -75,6 +76,42 @@ export class Configuration {
 		return [os, normalized, variant].filter(Boolean).join("/");
 	}
 
+	static dockerArgs(directory) {
+		const file = path.join(directory, "docker-args");
+		if (!existsSync(file)) return [];
+		const args = readFileSync(file, "utf8")
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter((line) => line && !line.startsWith("#"));
+		for (const arg of args) {
+			if (
+				arg === "--read-only" ||
+				/^--cap-drop=[A-Z_]+$/.test(arg) ||
+				/^--security-opt=no-new-privileges(?:=true)?$/.test(arg)
+			)
+				continue;
+			const tmpfs = /^--tmpfs=(\/[a-zA-Z0-9_./-]+):([a-zA-Z0-9_,=.-]+)$/.exec(
+				arg,
+			);
+			if (tmpfs) {
+				const target = tmpfs[1];
+				if (
+					target === path.posix.normalize(target) &&
+					target !== "/" &&
+					target !== "/goss-bin" &&
+					!target.startsWith("/goss-bin/") &&
+					target !== "/goss" &&
+					!target.startsWith("/goss/")
+				)
+					continue;
+			}
+			throw new Error(
+				`Unsupported docker-args entry: ${arg}. Use --read-only, --cap-drop=..., --security-opt=no-new-privileges or --tmpfs=/path:options; /goss and /goss-bin are reserved.`,
+			);
+		}
+		return args;
+	}
+
 	async prepare() {
 		const { inputs, environment } = this;
 		const workingDirectory = realpathSync(inputs.workingDirectory || ".");
@@ -90,6 +127,26 @@ export class Configuration {
 			workingDirectory,
 			inputs.engine || "auto",
 		);
+		const gossMode = inputs.gossMode || "image";
+		if (!["image", "service"].includes(gossMode))
+			throw new Error("goss-mode must be image or service.");
+		const dockerArgs = Configuration.dockerArgs(workingDirectory);
+		if (
+			selection.engine !== "goss" &&
+			(gossMode !== "image" ||
+				existsSync(path.join(workingDirectory, "docker-args")))
+		)
+			throw new Error(
+				"goss-mode and docker-args apply only to Goss suites; configure Testcontainers in the native suite.",
+			);
+		if (
+			selection.engine === "goss" &&
+			gossMode === "image" &&
+			existsSync(path.join(workingDirectory, "goss_wait.yaml"))
+		)
+			throw new Error(
+				"goss_wait.yaml requires goss-mode: service. Image mode runs Goss without starting the application.",
+			);
 		const timeout = String(inputs.timeout || "300");
 		if (!/^[1-9][0-9]*$/.test(timeout) || Number(timeout) > 3600)
 			throw new Error("timeout must be an integer from 1 to 3600 seconds.");
@@ -121,6 +178,8 @@ export class Configuration {
 			mkdirSync(path.join(directory, child));
 		return {
 			...selection,
+			gossMode,
+			dockerArgs,
 			image: inputs.image,
 			identityKind,
 			workingDirectory,

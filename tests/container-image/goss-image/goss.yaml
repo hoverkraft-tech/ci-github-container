@@ -1,0 +1,17 @@
+---
+command:
+  runtime-user:
+    exec: test "$(id -u):$(id -g)" = "10001:10001"
+    exit-status: 0
+  read-only-root:
+    exec: awk '$2 == "/" && $4 ~ /(^|,)ro(,|$)/ { found=1 } END { exit !found }' /proc/mounts
+    exit-status: 0
+  writable-volume:
+    exec: echo ok > /certs/smoke && test "$(cat /certs/smoke)" = ok
+    exit-status: 0
+  dropped-capabilities:
+    exec: awk '$1 == "CapEff:" { if ($2 != "0000000000000000") exit 1; found=1 } END { if (!found) exit 1 }' /proc/self/status
+    exit-status: 0
+  no-new-privileges:
+    exec: awk '$1 == "NoNewPrivs:" { if ($2 != "1") exit 1; found=1 } END { if (!found) exit 1 }' /proc/self/status
+    exit-status: 0

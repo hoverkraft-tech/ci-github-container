@@ -7603,6 +7603,42 @@ class Configuration {
 		return [os, normalized, variant].filter(Boolean).join("/");
 	}
 
+	static dockerArgs(directory) {
+		const file = external_node_path_namespaceObject.join(directory, "docker-args");
+		if (!(0,external_node_fs_namespaceObject.existsSync)(file)) return [];
+		const args = (0,external_node_fs_namespaceObject.readFileSync)(file, "utf8")
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter((line) => line && !line.startsWith("#"));
+		for (const arg of args) {
+			if (
+				arg === "--read-only" ||
+				/^--cap-drop=[A-Z_]+$/.test(arg) ||
+				/^--security-opt=no-new-privileges(?:=true)?$/.test(arg)
+			)
+				continue;
+			const tmpfs = /^--tmpfs=(\/[a-zA-Z0-9_./-]+):([a-zA-Z0-9_,=.-]+)$/.exec(
+				arg,
+			);
+			if (tmpfs) {
+				const target = tmpfs[1];
+				if (
+					target === external_node_path_namespaceObject.posix.normalize(target) &&
+					target !== "/" &&
+					target !== "/goss-bin" &&
+					!target.startsWith("/goss-bin/") &&
+					target !== "/goss" &&
+					!target.startsWith("/goss/")
+				)
+					continue;
+			}
+			throw new Error(
+				`Unsupported docker-args entry: ${arg}. Use --read-only, --cap-drop=..., --security-opt=no-new-privileges or --tmpfs=/path:options; /goss and /goss-bin are reserved.`,
+			);
+		}
+		return args;
+	}
+
 	async prepare() {
 		const { inputs, environment } = this;
 		const workingDirectory = (0,external_node_fs_namespaceObject.realpathSync)(inputs.workingDirectory || ".");
@@ -7618,6 +7654,26 @@ class Configuration {
 			workingDirectory,
 			inputs.engine || "auto",
 		);
+		const gossMode = inputs.gossMode || "image";
+		if (!["image", "service"].includes(gossMode))
+			throw new Error("goss-mode must be image or service.");
+		const dockerArgs = Configuration.dockerArgs(workingDirectory);
+		if (
+			selection.engine !== "goss" &&
+			(gossMode !== "image" ||
+				(0,external_node_fs_namespaceObject.existsSync)(external_node_path_namespaceObject.join(workingDirectory, "docker-args")))
+		)
+			throw new Error(
+				"goss-mode and docker-args apply only to Goss suites; configure Testcontainers in the native suite.",
+			);
+		if (
+			selection.engine === "goss" &&
+			gossMode === "image" &&
+			(0,external_node_fs_namespaceObject.existsSync)(external_node_path_namespaceObject.join(workingDirectory, "goss_wait.yaml"))
+		)
+			throw new Error(
+				"goss_wait.yaml requires goss-mode: service. Image mode runs Goss without starting the application.",
+			);
 		const timeout = String(inputs.timeout || "300");
 		if (!/^[1-9][0-9]*$/.test(timeout) || Number(timeout) > 3600)
 			throw new Error("timeout must be an integer from 1 to 3600 seconds.");
@@ -7649,6 +7705,8 @@ class Configuration {
 			(0,external_node_fs_namespaceObject.mkdirSync)(external_node_path_namespaceObject.join(directory, child));
 		return {
 			...selection,
+			gossMode,
+			dockerArgs,
 			image: inputs.image,
 			identityKind,
 			workingDirectory,
@@ -7709,18 +7767,22 @@ class Tooling {
 			state.platform.split("/")[1] === "amd64" ? "x86_64" : "arm64";
 		const archive = `goss_${version.slice(1)}_linux_${architecture}.tar.gz`;
 		const base = `https://github.com/goss-org/goss/releases/download/${version}`;
-		const [binary, sums, script, scriptSum] = await Promise.all([
+		const [binary, sums] = await Promise.all([
 			Tooling.download(`${base}/${archive}`),
 			Tooling.download(`${base}/goss_${version.slice(1)}_SHA256SUMS`),
-			Tooling.download(`${base}/dgoss`),
-			Tooling.download(`${base}/dgoss.sha256`),
 		]);
 		Tooling.verify(binary, sums.toString(), archive);
-		Tooling.verify(script, scriptSum.toString(), "dgoss");
 		const directory = external_node_path_namespaceObject.join(state.directory, "tools");
 		const tarball = external_node_path_namespaceObject.join(directory, archive);
 		(0,external_node_fs_namespaceObject.writeFileSync)(tarball, binary, { mode: 0o600 });
-		(0,external_node_fs_namespaceObject.writeFileSync)(external_node_path_namespaceObject.join(directory, "dgoss"), script, { mode: 0o700 });
+		if (state.gossMode === "service") {
+			const [script, scriptSum] = await Promise.all([
+				Tooling.download(`${base}/dgoss`),
+				Tooling.download(`${base}/dgoss.sha256`),
+			]);
+			Tooling.verify(script, scriptSum.toString(), "dgoss");
+			(0,external_node_fs_namespaceObject.writeFileSync)(external_node_path_namespaceObject.join(directory, "dgoss"), script, { mode: 0o700 });
+		}
 		await command.run("tar", [
 			"--extract",
 			"--gzip",
@@ -7732,7 +7794,8 @@ class Tooling {
 			"--no-same-permissions",
 			"goss",
 		]);
-		(0,external_node_fs_namespaceObject.chmodSync)(external_node_path_namespaceObject.join(directory, "goss"), 0o700);
+		// The tested image's user must be able to execute the read-only bind mount.
+		(0,external_node_fs_namespaceObject.chmodSync)(external_node_path_namespaceObject.join(directory, "goss"), 0o755);
 		return directory;
 	}
 }
@@ -7853,7 +7916,11 @@ class ContainerTest {
 		return {
 			name: "Container image tests",
 			project,
-			variant: { engine: state.engine, platform: state.platform },
+			variant: {
+				engine: state.engine,
+				platform: state.platform,
+				...(state.engine === "goss" ? { "goss-mode": state.gossMode } : {}),
+			},
 			subject: {
 				kind: "image",
 				name: state.image,
@@ -7960,11 +8027,41 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 	async goss(command) {
 		const { state } = this;
 		const directory = external_node_path_namespaceObject.join(state.directory, "tools");
+		if (state.gossMode === "image") {
+			await this.docker(
+				command,
+				[
+					"run",
+					...state.dockerArgs,
+					"--name",
+					state.runnerName,
+					"--label",
+					`${ownerLabel}=${state.id}`,
+					"--platform",
+					state.platform,
+					"--volume",
+					`${external_node_path_namespaceObject.join(directory, "goss")}:/goss-bin:ro`,
+					"--volume",
+					`${state.workingDirectory}:/goss:ro`,
+					"--entrypoint",
+					"/goss-bin",
+					state.imageId,
+					"-g",
+					"/goss/goss.yaml",
+					"validate",
+					"--format",
+					"junit",
+				],
+				{ stdoutFile: state.junit, quiet: false },
+			);
+			return;
+		}
 		await command.run(
 			"bash",
 			[
 				external_node_path_namespaceObject.join(directory, "dgoss"),
 				"run",
+				...state.dockerArgs,
 				"--name",
 				state.runnerName,
 				"--label",
@@ -8126,6 +8223,7 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 			"identity-kind": state.identityKind,
 			"image-id": state.imageId,
 			engine: state.engine,
+			...(state.engine === "goss" ? { "goss-mode": state.gossMode } : {}),
 			suite: state.workingDirectory,
 			platform: state.platform,
 			"daemon-platform": state.daemonPlatform,

@@ -125,7 +125,11 @@ export class ContainerTest {
 		return {
 			name: "Container image tests",
 			project,
-			variant: { engine: state.engine, platform: state.platform },
+			variant: {
+				engine: state.engine,
+				platform: state.platform,
+				...(state.engine === "goss" ? { "goss-mode": state.gossMode } : {}),
+			},
 			subject: {
 				kind: "image",
 				name: state.image,
@@ -232,11 +236,41 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 	async goss(command) {
 		const { state } = this;
 		const directory = path.join(state.directory, "tools");
+		if (state.gossMode === "image") {
+			await this.docker(
+				command,
+				[
+					"run",
+					...state.dockerArgs,
+					"--name",
+					state.runnerName,
+					"--label",
+					`${ownerLabel}=${state.id}`,
+					"--platform",
+					state.platform,
+					"--volume",
+					`${path.join(directory, "goss")}:/goss-bin:ro`,
+					"--volume",
+					`${state.workingDirectory}:/goss:ro`,
+					"--entrypoint",
+					"/goss-bin",
+					state.imageId,
+					"-g",
+					"/goss/goss.yaml",
+					"validate",
+					"--format",
+					"junit",
+				],
+				{ stdoutFile: state.junit, quiet: false },
+			);
+			return;
+		}
 		await command.run(
 			"bash",
 			[
 				path.join(directory, "dgoss"),
 				"run",
+				...state.dockerArgs,
 				"--name",
 				state.runnerName,
 				"--label",
@@ -398,6 +432,7 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 			"identity-kind": state.identityKind,
 			"image-id": state.imageId,
 			engine: state.engine,
+			...(state.engine === "goss" ? { "goss-mode": state.gossMode } : {}),
 			suite: state.workingDirectory,
 			platform: state.platform,
 			"daemon-platform": state.daemonPlatform,

@@ -38,18 +38,22 @@ export class Tooling {
 			state.platform.split("/")[1] === "amd64" ? "x86_64" : "arm64";
 		const archive = `goss_${version.slice(1)}_linux_${architecture}.tar.gz`;
 		const base = `https://github.com/goss-org/goss/releases/download/${version}`;
-		const [binary, sums, script, scriptSum] = await Promise.all([
+		const [binary, sums] = await Promise.all([
 			Tooling.download(`${base}/${archive}`),
 			Tooling.download(`${base}/goss_${version.slice(1)}_SHA256SUMS`),
-			Tooling.download(`${base}/dgoss`),
-			Tooling.download(`${base}/dgoss.sha256`),
 		]);
 		Tooling.verify(binary, sums.toString(), archive);
-		Tooling.verify(script, scriptSum.toString(), "dgoss");
 		const directory = path.join(state.directory, "tools");
 		const tarball = path.join(directory, archive);
 		writeFileSync(tarball, binary, { mode: 0o600 });
-		writeFileSync(path.join(directory, "dgoss"), script, { mode: 0o700 });
+		if (state.gossMode === "service") {
+			const [script, scriptSum] = await Promise.all([
+				Tooling.download(`${base}/dgoss`),
+				Tooling.download(`${base}/dgoss.sha256`),
+			]);
+			Tooling.verify(script, scriptSum.toString(), "dgoss");
+			writeFileSync(path.join(directory, "dgoss"), script, { mode: 0o700 });
+		}
 		await command.run("tar", [
 			"--extract",
 			"--gzip",
@@ -61,7 +65,8 @@ export class Tooling {
 			"--no-same-permissions",
 			"goss",
 		]);
-		chmodSync(path.join(directory, "goss"), 0o700);
+		// The tested image's user must be able to execute the read-only bind mount.
+		chmodSync(path.join(directory, "goss"), 0o755);
 		return directory;
 	}
 }

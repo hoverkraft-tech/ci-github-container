@@ -25,7 +25,7 @@ jobs:
       test: '{"comment":false,"report-group":"test-action-docker-test-image"}'
 
   integration:
-    name: Native ${{ matrix.engine }} lifecycle and reporting
+    name: Native ${{ matrix.suite }} lifecycle and reporting
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -35,9 +35,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        engine: [testcontainers-node, goss]
+        include:
+          - engine: testcontainers-node
+            suite: testcontainers-node
+            goss-mode: image
+          - engine: goss
+            suite: goss
+            goss-mode: service
+          - engine: goss
+            suite: goss-image
+            goss-mode: image
     env:
       IMAGE: ghcr.io/hoverkraft-tech/ci-github-container/application-test:0.1.0@sha256:e5cc91762bc2b09276ab2b56d88583dd11522cc80b61e63dac7b4ac0f0d04c77
+      GOSS_MODE: ${{ matrix.goss-mode }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,6 +65,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           ENGINE: ${{ matrix.engine }}
+          SUITE: ${{ matrix.suite }}
         with:
           script: |
             const fs = require('node:fs');
@@ -66,7 +77,7 @@ jobs:
             fs.mkdirSync(root, {recursive: true});
             for (const mode of ['success', 'failure', 'timeout']) {
               const directory = path.join(root, mode);
-              fs.cpSync(`tests/container-image/${process.env.ENGINE}`, directory, {recursive: true});
+              fs.cpSync(`tests/container-image/${process.env.SUITE}`, directory, {recursive: true});
               if (mode === 'success') continue;
               if (process.env.ENGINE === 'testcontainers-node') fs.writeFileSync(path.join(directory, mode), '');
               else {
@@ -76,16 +87,27 @@ jobs:
               }
             }
             await exec.exec('docker', ['pull', process.env.IMAGE]);
-            const image = await exec.getExecOutput('docker', ['image', 'inspect', '--format', '{{.Id}}', process.env.IMAGE]);
+            let reference = process.env.IMAGE;
+            if (process.env.SUITE === 'goss-image') {
+              // Any accidental application startup fails. Direct Goss must retain USER.
+              fs.writeFileSync(path.join(root, 'Dockerfile'),
+                `FROM ${reference}\nUSER 10001:10001\nENTRYPOINT ["/bin/sh", "-c", "exit 97"]\n`);
+              const iid = path.join(root, 'image-id');
+              await exec.exec('docker', ['build', '--iidfile', iid, root]);
+              reference = fs.readFileSync(iid, 'utf8').trim();
+            }
+            core.setOutput('candidate', reference);
+            const image = await exec.getExecOutput('docker', ['image', 'inspect', '--format', '{{.Id}}', reference]);
             core.setOutput('image-id', image.stdout.trim());
             await exec.exec('docker', ['create', '--name', `caller-${id}`, '--label', `org.testcontainers.session-id=${id}`, image.stdout.trim()]);
 
-      - name: Act - Validate registry candidate
+      - name: Act - Validate immutable candidate
         id: passing
         uses: $/actions/docker/test-image
         with:
-          image: ${{ env.IMAGE }}
+          image: ${{ steps.arrange.outputs.candidate }}
           working-directory: ${{ steps.arrange.outputs.root }}/success
+          goss-mode: ${{ matrix.goss-mode }}
 
       - name: Act - Retain native reports after a failing assertion
         id: failing
@@ -94,6 +116,7 @@ jobs:
         with:
           image: ${{ steps.arrange.outputs.image-id }}
           working-directory: ${{ steps.arrange.outputs.root }}/failure
+          goss-mode: ${{ matrix.goss-mode }}
 
       - name: Act - Bound execution and clean resources after timeout
         id: timeout
@@ -102,16 +125,18 @@ jobs:
         with:
           image: ${{ steps.arrange.outputs.image-id }}
           working-directory: ${{ steps.arrange.outputs.root }}/timeout
+          goss-mode: ${{ matrix.goss-mode }}
           timeout: "10"
 
-      - name: Act - Reject a short-lived image with Goss
+      - name: Act - Reject a short-lived image in Goss service mode
         id: incompatible
-        if: matrix.engine == 'goss'
+        if: matrix.goss-mode == 'service'
         continue-on-error: true
         uses: $/actions/docker/test-image
         with:
           image: docker.io/library/hello-world:latest@sha256:1e4c05b897a751332ce85c7e9449da2d93514ea2dea6dbb0e2753c9e949b2bfa
           working-directory: ${{ steps.arrange.outputs.root }}/success
+          goss-mode: service
           timeout: "10"
 
       - name: Download failed test reports
@@ -131,6 +156,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           ENGINE: ${{ matrix.engine }}
+          CANDIDATE: ${{ steps.arrange.outputs.candidate }}
           ROOT: ${{ steps.arrange.outputs.root }}
           CALLER: ${{ steps.arrange.outputs.caller }}
           PASSING: ${{ steps.passing.outputs.validation }}
@@ -151,9 +177,10 @@ jobs:
             const { pathToFileURL } = require('node:url');
             const { Reports } = await import(pathToFileURL(path.resolve('actions/docker/test-image/dist/index.js')));
             const result = JSON.parse(process.env.PASSING);
-            assert.equal(result.image, process.env.IMAGE);
-            assert.equal(result['identity-kind'], 'registry');
+            assert.equal(result.image, process.env.CANDIDATE);
+            assert.equal(result['identity-kind'], process.env.CANDIDATE.startsWith('sha256:') ? 'local' : 'registry');
             assert.equal(result.engine, process.env.ENGINE);
+            if (process.env.ENGINE === 'goss') assert.equal(result['goss-mode'], process.env.GOSS_MODE);
             assert.ok(result.tests.executed > 0);
             assert.equal(process.env.FAIL_OUTCOME, 'failure');
             assert.equal(process.env.TIMEOUT_OUTCOME, 'failure');
@@ -161,7 +188,7 @@ jobs:
             assert.equal(process.env.TIMEOUT_RESULT, '');
             assert.ok(process.env.PASS_REPORT && process.env.FAIL_REPORT && process.env.TIMEOUT_LOGS);
             assert.notEqual(process.env.PASS_REPORT, process.env.FAIL_REPORT);
-            if (process.env.ENGINE === 'goss') {
+            if (process.env.GOSS_MODE === 'service') {
               assert.equal(process.env.INCOMPATIBLE_OUTCOME, 'failure');
               assert.equal(process.env.INCOMPATIBLE_RESULT, '');
               assert.ok(process.env.INCOMPATIBLE_LOGS);
@@ -176,6 +203,7 @@ jobs:
             assert.equal(registration.check.subject.kind, 'image');
             assert.equal(registration.check.subject.digest, result['image-id']);
             assert.equal(registration.check.subject.engine, process.env.ENGINE);
+            if (process.env.ENGINE === 'goss') assert.equal(registration.check.variant['goss-mode'], process.env.GOSS_MODE);
             assert.equal(registration.check.subject.platform, result.platform);
             assert.equal(registration.check.project, path.relative(process.env.GITHUB_WORKSPACE, path.join(process.env.ROOT, 'failure')));
             assert.deepEqual(manifest.execution, registration.execution);

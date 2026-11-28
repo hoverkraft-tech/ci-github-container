@@ -6,6 +6,8 @@ Status: Accepted on 2026-11-26. Implementation is included in PR #1002.
 
 The report transfer and grouping decisions below are superseded by
 [ADR 0015](0015-unified-ci-report-bundles.md).
+The Goss execution and compatibility decisions are superseded by
+[ADR 0017](0017-run-goss-image-checks-directly.md).
 
 ## Context
 
