@@ -5,6 +5,9 @@ Date: 2026-11-28
 Status: Accepted. Supersedes the Goss execution and compatibility decisions in
 [ADR 0014](0014-standardize-container-image-tests.md).
 
+The two-mode API and dgoss execution decisions are superseded by
+[ADR 0018](0018-let-goss-suites-own-application-startup.md).
+
 ## Context
 
 The kube-certificates-syncer image checks need to verify its installed Python

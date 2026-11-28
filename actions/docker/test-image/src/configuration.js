@@ -127,25 +127,20 @@ export class Configuration {
 			workingDirectory,
 			inputs.engine || "auto",
 		);
-		const gossMode = inputs.gossMode || "image";
-		if (!["image", "service"].includes(gossMode))
-			throw new Error("goss-mode must be image or service.");
 		const dockerArgs = Configuration.dockerArgs(workingDirectory);
 		if (
 			selection.engine !== "goss" &&
-			(gossMode !== "image" ||
-				existsSync(path.join(workingDirectory, "docker-args")))
+			existsSync(path.join(workingDirectory, "docker-args"))
 		)
 			throw new Error(
-				"goss-mode and docker-args apply only to Goss suites; configure Testcontainers in the native suite.",
+				"docker-args applies only to Goss suites; configure Testcontainers in the native suite.",
 			);
 		if (
 			selection.engine === "goss" &&
-			gossMode === "image" &&
 			existsSync(path.join(workingDirectory, "goss_wait.yaml"))
 		)
 			throw new Error(
-				"goss_wait.yaml requires goss-mode: service. Image mode runs Goss without starting the application.",
+				"goss_wait.yaml is not executed. Keep startup, readiness and cleanup in a goss.yaml command or script, then remove this file.",
 			);
 		const timeout = String(inputs.timeout || "300");
 		if (!/^[1-9][0-9]*$/.test(timeout) || Number(timeout) > 3600)
@@ -178,7 +173,6 @@ export class Configuration {
 			mkdirSync(path.join(directory, child));
 		return {
 			...selection,
-			gossMode,
 			dockerArgs,
 			image: inputs.image,
 			identityKind,

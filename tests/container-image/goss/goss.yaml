@@ -1,12 +1,9 @@
 ---
-http:
-  http://localhost:8080/health/check/:
-    status: 200
-    body:
-      - OK
 command:
-  runtime-user:
-    exec: id -u
+  http-health:
+    exec: sh /goss/check-http.sh
     exit-status: 0
     stdout:
-      - "0"
+      - HTTP_STATUS=200
+      - OK
+    timeout: 20000

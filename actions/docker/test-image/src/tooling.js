@@ -46,14 +46,6 @@ export class Tooling {
 		const directory = path.join(state.directory, "tools");
 		const tarball = path.join(directory, archive);
 		writeFileSync(tarball, binary, { mode: 0o600 });
-		if (state.gossMode === "service") {
-			const [script, scriptSum] = await Promise.all([
-				Tooling.download(`${base}/dgoss`),
-				Tooling.download(`${base}/dgoss.sha256`),
-			]);
-			Tooling.verify(script, scriptSum.toString(), "dgoss");
-			writeFileSync(path.join(directory, "dgoss"), script, { mode: 0o700 });
-		}
 		await command.run("tar", [
 			"--extract",
 			"--gzip",

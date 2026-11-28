@@ -7,7 +7,6 @@ const { values } = parseArgs({
 	options: {
 		image: { type: "string" },
 		engine: { type: "string", default: "auto" },
-		"goss-mode": { type: "string", default: "image" },
 		"working-directory": { type: "string", default: "." },
 		platform: { type: "string" },
 		timeout: { type: "string", default: "300" },
@@ -21,7 +20,6 @@ try {
 		{
 			image: values.image,
 			engine: values.engine,
-			gossMode: values["goss-mode"],
 			workingDirectory: values["working-directory"],
 			platform: values.platform,
 			timeout: values.timeout,

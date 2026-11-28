@@ -17,14 +17,17 @@ description: |
     `TESTED_IMAGE_SOURCE` and `TESTED_IMAGE_PLATFORM` identify the original input and platform.
   - [Goss image example](../../../tests/container-image/goss-image/goss.yaml): use
     `goss.yaml` to check installed tools, files, permissions or application imports.
-    The default `goss-mode: image` runs Goss as the container's command and exits.
+    Goss runs as the container's command and exits after the suite finishes.
     It preserves the image's user, environment and working directory, without starting
     the application or requiring its external services. Goss and the suite are mounted
     read-only. Command assertions require `sh` in the image.
-  - [Goss service example](../../../tests/container-image/goss/goss.yaml): set
-    `goss-mode: service` for HTTP, port or running-process checks. Upstream dgoss keeps
-    the image's user and entrypoint; the container must stay running and provide `sh`.
-    Optional `goss_wait.yaml` defines readiness and is rejected in image mode.
+  - [Goss HTTP example](../../../tests/container-image/goss/goss.yaml): a native
+    `command` can call a [project-owned script](../../../tests/container-image/goss/check-http.sh)
+    that starts the application, waits for readiness, checks responses and stops it.
+    Keep these steps in the same script because Goss checks may run concurrently.
+    Consumers can adapt their Goss suites without switching to Testcontainers.
+    The suite owns application startup and cleanup; the action bounds execution and
+    removes its container. A separate `goss_wait.yaml` is rejected instead of silently ignored.
 
   Goss suites can include a [docker-args file](../../../tests/container-image/goss-image/docker-args)
   shared with local Docker execution. Put one complete option per line, without shell
@@ -50,7 +53,7 @@ description: |
   checks do not certify a later push or an entire multi-platform index.
   See [ADR 0014](../../../docs/adr/0014-standardize-container-image-tests.md) for image validation
   and [ADR 0016](../../../docs/adr/0016-register-native-container-reports.md) for reporting.
-  [ADR 0017](../../../docs/adr/0017-run-goss-image-checks-directly.md) defines Goss execution modes.
+  [ADR 0018](../../../docs/adr/0018-let-goss-suites-own-application-startup.md) defines suite-owned startup.
 
   Run the same suites locally from a checkout with Node.js 24+ and Docker. Set
   `IMAGE_DIGEST_REFERENCE` to the candidate's digest reference; tool versions come
@@ -78,12 +81,6 @@ inputs:
   engine:
     description: Test engine, auto, testcontainers-node or goss. Auto requires exactly one suite kind.
     default: auto
-  goss-mode:
-    description: |-
-      Goss execution mode. Image runs Goss directly without starting the application (default).
-      Service starts the normal entrypoint through dgoss for running-service checks and optional
-      goss_wait.yaml readiness. Both preserve the image user. Service requires a Goss suite.
-    default: image
   platform:
     description: |-
       Requested Linux image platform (amd64 or arm64, optionally with variant). Defaults to the daemon's native
@@ -92,7 +89,7 @@ inputs:
   timeout:
     description: |-
       Overall engine execution timeout in seconds, from 1 to 3600. Defaults to 300. Tool acquisition is
-      separately bounded; Goss service readiness is limited to 30 seconds or this timeout, whichever is shorter.
+      separately bounded. Native suites define any readiness waits within this limit.
     default: "300"
   report-file:
     description: |-
@@ -115,7 +112,7 @@ outputs:
     value: ${{ steps.upload-diagnostics.outputs.artifact-id }}
   validation:
     description: |-
-      Successful image validation JSON with image identity, resolved engine, Goss mode, suite, observed platform,
+      Successful image validation JSON with image identity, resolved engine, suite, observed platform,
       run/attempt, executed test counts and report/log paths. Empty on failure; a diagnostic artifact never
       establishes success.
     value: ${{ steps.validation.outputs.result }}
@@ -135,7 +132,6 @@ runs:
         DIRECTORY: ${{ steps.directory.outputs.absolute-path }}
         IMAGE: ${{ inputs.image }}
         ENGINE: ${{ inputs.engine }}
-        GOSS_MODE: ${{ inputs.goss-mode }}
         PLATFORM: ${{ inputs.platform }}
         TEST_TIMEOUT: ${{ inputs.timeout }}
         REPORT_FILE: ${{ inputs.report-file }}
@@ -147,7 +143,7 @@ runs:
           const { ContainerTest } = await import(pathToFileURL(path.join(process.env.ACTION_PATH, 'dist/index.js')));
           const test = await ContainerTest.prepare({
             workingDirectory: process.env.DIRECTORY, image: process.env.IMAGE,
-            engine: process.env.ENGINE, gossMode: process.env.GOSS_MODE, platform: process.env.PLATFORM,
+            engine: process.env.ENGINE, platform: process.env.PLATFORM,
             timeout: process.env.TEST_TIMEOUT, reportFile: process.env.REPORT_FILE,
           });
           const { state } = test;

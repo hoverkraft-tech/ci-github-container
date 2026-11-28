@@ -128,7 +128,6 @@ export class ContainerTest {
 			variant: {
 				engine: state.engine,
 				platform: state.platform,
-				...(state.engine === "goss" ? { "goss-mode": state.gossMode } : {}),
 			},
 			subject: {
 				kind: "image",
@@ -236,39 +235,9 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 	async goss(command) {
 		const { state } = this;
 		const directory = path.join(state.directory, "tools");
-		if (state.gossMode === "image") {
-			await this.docker(
-				command,
-				[
-					"run",
-					...state.dockerArgs,
-					"--name",
-					state.runnerName,
-					"--label",
-					`${ownerLabel}=${state.id}`,
-					"--platform",
-					state.platform,
-					"--volume",
-					`${path.join(directory, "goss")}:/goss-bin:ro`,
-					"--volume",
-					`${state.workingDirectory}:/goss:ro`,
-					"--entrypoint",
-					"/goss-bin",
-					state.imageId,
-					"-g",
-					"/goss/goss.yaml",
-					"validate",
-					"--format",
-					"junit",
-				],
-				{ stdoutFile: state.junit, quiet: false },
-			);
-			return;
-		}
-		await command.run(
-			"bash",
+		await this.docker(
+			command,
 			[
-				path.join(directory, "dgoss"),
 				"run",
 				...state.dockerArgs,
 				"--name",
@@ -277,34 +246,20 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 				`${ownerLabel}=${state.id}`,
 				"--platform",
 				state.platform,
+				"--volume",
+				`${path.join(directory, "goss")}:/goss-bin:ro`,
+				"--volume",
+				`${state.workingDirectory}:/goss:ro`,
+				"--entrypoint",
+				"/goss-bin",
 				state.imageId,
+				"-g",
+				"/goss/goss.yaml",
+				"validate",
+				"--format",
+				"junit",
 			],
-			{
-				cwd: state.workingDirectory,
-				log: state.log,
-				stdoutFile: state.junit,
-				quiet: false,
-				env: {
-					DOCKER_HOST: `unix://${state.socket}`,
-					DOCKER_CONTEXT: "",
-					CONTAINER_RUNTIME: "docker",
-					DEBUG: "",
-					GOSS_PATH: path.join(directory, "goss"),
-					GOSS_FILES_PATH: state.workingDirectory,
-					GOSS_FILE: "goss.yaml",
-					GOSS_FILES_STRATEGY: "mount",
-					GOSS_VARS: "",
-					GOSS_ADDITIONAL_COPY_PATH: "",
-					GOSS_OPTS: "--format junit",
-					GOSS_WAIT_OPTS: `-r ${Math.min(30, state.timeout)}s -s 1s > /dev/null`,
-					DGOSS_TEMP_DIR: directory,
-					CONTAINER_LOG_OUTPUT: path.join(
-						state.directory,
-						"diagnostics",
-						"container.log",
-					),
-				},
-			},
+			{ stdoutFile: state.junit, quiet: false },
 		);
 	}
 
@@ -432,7 +387,6 @@ reaper.sessionId = process.env.CI_CONTAINER_TEST_SESSION;
 			"identity-kind": state.identityKind,
 			"image-id": state.imageId,
 			engine: state.engine,
-			...(state.engine === "goss" ? { "goss-mode": state.gossMode } : {}),
 			suite: state.workingDirectory,
 			platform: state.platform,
 			"daemon-platform": state.daemonPlatform,

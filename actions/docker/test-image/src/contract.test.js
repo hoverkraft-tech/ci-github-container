@@ -92,39 +92,16 @@ test("distinguishes registry manifests from local configuration IDs and rejects 
 	assert.throws(() => Configuration.platform("windows", "amd64"), /Linux/);
 });
 
-test("runs Goss as the image command by default and requires service mode for readiness", async (t) => {
-	const { root, directory } = fixture(t, { "goss.yaml": "command: {}" });
+test("rejects a separate readiness file rather than silently skipping its checks", async (t) => {
+	const { root, directory } = fixture(t, {
+		"goss.yaml": "command: {}",
+		"goss_wait.yaml": "port: {}",
+	});
 	const inputs = { image, workingDirectory: directory };
 	const environment = { RUNNER_TEMP: root };
-	const suite = await ContainerTest.prepare(inputs, environment);
-	assert.equal(suite.state.gossMode, "image");
-	Object.assign(suite.state, { imageId: image, platform: "linux/amd64" });
-	assert.equal(suite.reportDefinition(root).variant["goss-mode"], "image");
-	await assert.rejects(
-		new Configuration(
-			{ ...inputs, gossMode: "unknown" },
-			environment,
-		).prepare(),
-		/goss-mode/,
-	);
-	writeFileSync(path.join(directory, "goss_wait.yaml"), "command: {}");
 	await assert.rejects(
 		new Configuration(inputs, environment).prepare(),
-		/requires goss-mode: service/,
-	);
-	const service = await new Configuration(
-		{ ...inputs, gossMode: "service" },
-		environment,
-	).prepare();
-	assert.equal(service.gossMode, "service");
-	rmSync(path.join(directory, "goss.yaml"));
-	writeFileSync(path.join(directory, "image.test.js"), "import 'node:test';");
-	await assert.rejects(
-		new Configuration(
-			{ ...inputs, gossMode: "service" },
-			environment,
-		).prepare(),
-		/only to Goss/,
+		/goss_wait.yaml is not executed/,
 	);
 });
 
@@ -384,7 +361,6 @@ test("diagnostic reports never turn a failed invocation into promotion evidence"
 	assert.equal(result.image, image);
 	assert.equal(result["identity-kind"], "local");
 	assert.equal(result.engine, "goss");
-	assert.equal(result["goss-mode"], "image");
 	assert.equal(result.tests.executed, 1);
 	assert.equal(result.platform, "linux/amd64");
 });

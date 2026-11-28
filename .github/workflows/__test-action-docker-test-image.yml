@@ -38,16 +38,10 @@ jobs:
         include:
           - engine: testcontainers-node
             suite: testcontainers-node
-            goss-mode: image
-          - engine: goss
-            suite: goss
-            goss-mode: service
           - engine: goss
             suite: goss-image
-            goss-mode: image
     env:
       IMAGE: ghcr.io/hoverkraft-tech/ci-github-container/application-test:0.1.0@sha256:e5cc91762bc2b09276ab2b56d88583dd11522cc80b61e63dac7b4ac0f0d04c77
-      GOSS_MODE: ${{ matrix.goss-mode }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,7 +101,14 @@ jobs:
         with:
           image: ${{ steps.arrange.outputs.candidate }}
           working-directory: ${{ steps.arrange.outputs.root }}/success
-          goss-mode: ${{ matrix.goss-mode }}
+
+      - name: Act - Let a Goss suite manage its application lifecycle
+        id: service
+        if: matrix.engine == 'goss'
+        uses: $/actions/docker/test-image
+        with:
+          image: ${{ env.IMAGE }}
+          working-directory: tests/container-image/goss
 
       - name: Act - Retain native reports after a failing assertion
         id: failing
@@ -116,7 +117,6 @@ jobs:
         with:
           image: ${{ steps.arrange.outputs.image-id }}
           working-directory: ${{ steps.arrange.outputs.root }}/failure
-          goss-mode: ${{ matrix.goss-mode }}
 
       - name: Act - Bound execution and clean resources after timeout
         id: timeout
@@ -125,18 +125,6 @@ jobs:
         with:
           image: ${{ steps.arrange.outputs.image-id }}
           working-directory: ${{ steps.arrange.outputs.root }}/timeout
-          goss-mode: ${{ matrix.goss-mode }}
-          timeout: "10"
-
-      - name: Act - Reject a short-lived image in Goss service mode
-        id: incompatible
-        if: matrix.goss-mode == 'service'
-        continue-on-error: true
-        uses: $/actions/docker/test-image
-        with:
-          image: docker.io/library/hello-world:latest@sha256:1e4c05b897a751332ce85c7e9449da2d93514ea2dea6dbb0e2753c9e949b2bfa
-          working-directory: ${{ steps.arrange.outputs.root }}/success
-          goss-mode: service
           timeout: "10"
 
       - name: Download failed test reports
@@ -160,6 +148,7 @@ jobs:
           ROOT: ${{ steps.arrange.outputs.root }}
           CALLER: ${{ steps.arrange.outputs.caller }}
           PASSING: ${{ steps.passing.outputs.validation }}
+          SERVICE_RESULT: ${{ steps.service.outputs.validation }}
           PASS_REPORT: ${{ steps.passing.outputs.report-artifact-id }}
           FAIL_REPORT: ${{ steps.failing.outputs.report-artifact-id }}
           FAIL_RESULT: ${{ steps.failing.outputs.validation }}
@@ -167,9 +156,6 @@ jobs:
           TIMEOUT_RESULT: ${{ steps.timeout.outputs.validation }}
           TIMEOUT_OUTCOME: ${{ steps.timeout.outcome }}
           TIMEOUT_LOGS: ${{ steps.timeout.outputs.diagnostic-artifact-id }}
-          INCOMPATIBLE_RESULT: ${{ steps.incompatible.outputs.validation }}
-          INCOMPATIBLE_OUTCOME: ${{ steps.incompatible.outcome }}
-          INCOMPATIBLE_LOGS: ${{ steps.incompatible.outputs.diagnostic-artifact-id }}
         with:
           script: |
             const assert = require('node:assert/strict');
@@ -180,7 +166,6 @@ jobs:
             assert.equal(result.image, process.env.CANDIDATE);
             assert.equal(result['identity-kind'], process.env.CANDIDATE.startsWith('sha256:') ? 'local' : 'registry');
             assert.equal(result.engine, process.env.ENGINE);
-            if (process.env.ENGINE === 'goss') assert.equal(result['goss-mode'], process.env.GOSS_MODE);
             assert.ok(result.tests.executed > 0);
             assert.equal(process.env.FAIL_OUTCOME, 'failure');
             assert.equal(process.env.TIMEOUT_OUTCOME, 'failure');
@@ -188,10 +173,11 @@ jobs:
             assert.equal(process.env.TIMEOUT_RESULT, '');
             assert.ok(process.env.PASS_REPORT && process.env.FAIL_REPORT && process.env.TIMEOUT_LOGS);
             assert.notEqual(process.env.PASS_REPORT, process.env.FAIL_REPORT);
-            if (process.env.GOSS_MODE === 'service') {
-              assert.equal(process.env.INCOMPATIBLE_OUTCOME, 'failure');
-              assert.equal(process.env.INCOMPATIBLE_RESULT, '');
-              assert.ok(process.env.INCOMPATIBLE_LOGS);
+            if (process.env.ENGINE === 'goss') {
+              const service = JSON.parse(process.env.SERVICE_RESULT);
+              assert.equal(service.engine, 'goss');
+              assert.equal(service.image, process.env.IMAGE);
+              assert.ok(service.tests.executed > 0);
             }
             const manifest = JSON.parse(require('node:fs').readFileSync(path.join(process.env.ROOT,'download','result.json'),'utf8'));
             assert.equal(manifest.version, 2);
@@ -203,7 +189,6 @@ jobs:
             assert.equal(registration.check.subject.kind, 'image');
             assert.equal(registration.check.subject.digest, result['image-id']);
             assert.equal(registration.check.subject.engine, process.env.ENGINE);
-            if (process.env.ENGINE === 'goss') assert.equal(registration.check.variant['goss-mode'], process.env.GOSS_MODE);
             assert.equal(registration.check.subject.platform, result.platform);
             assert.equal(registration.check.project, path.relative(process.env.GITHUB_WORKSPACE, path.join(process.env.ROOT, 'failure')));
             assert.deepEqual(manifest.execution, registration.execution);
