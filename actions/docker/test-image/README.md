@@ -68,7 +68,7 @@ node actions/docker/test-image/bin/test-image.mjs \
 ## Usage
 
 ```yaml
-- uses: hoverkraft-tech/ci-github-container/actions/docker/test-image@4c5b4192dbeb65dc275485450af4ebd2f39ff7a5
+- uses: hoverkraft-tech/ci-github-container/actions/docker/test-image@9263be4a86c8176d0a7cecc16aa135ccf64b06e1 # feat/unified-ci-reports
   with:
     # Fully qualified registry reference containing @sha256, or an exact local Docker sha256 image ID. Tag-only references are rejected.
     # This input is required.
